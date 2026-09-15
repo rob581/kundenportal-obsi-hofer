@@ -15,7 +15,12 @@
 
 | ID | Feature | Status | Spec | Created |
 |----|---------|--------|------|---------|
+| PROJ-1 | Dataverse-Sync-Service | Roadmap | — | 2026-09-15 |
+| PROJ-2 | Kunden-Login (Entra External ID) | Roadmap | — | 2026-09-15 |
+| PROJ-3 | Geräte-Übersicht | Roadmap | — | 2026-09-15 |
+| PROJ-4 | Prüfberichte-Liste & PDF-Download | Roadmap | — | 2026-09-15 |
+| PROJ-5 | Dashboard | Roadmap | — | 2026-09-15 |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-1
+## Next Available ID: PROJ-6
