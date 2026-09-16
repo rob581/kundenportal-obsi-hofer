@@ -141,7 +141,7 @@ Siehe Decision Log → Technical Decisions oben.
 - `src/app/api/sync/[entity]/route.test.ts` — 8 Vitest-Integrationstests (Auth, Validierung, Upsert, Soft/Hard-Delete)
 
 **Benötigte Umgebungsvariablen (noch einzutragen, `.env.local` ist geschützt und wurde nicht automatisch bearbeitet):**
-- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (Supabase-Projekt nutzt das neue Key-Format `sb_secret_...` statt des alten `service_role`-JWT)
 - `SYNC_API_KEY` (von Power Automate im Header `x-api-key` mitzuschicken)
 - Für den Backfill: `DATAVERSE_URL`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
 
