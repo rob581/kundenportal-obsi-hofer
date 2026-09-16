@@ -48,9 +48,9 @@
 ## Open Questions
 - [x] Wie soll die Sync-Verarbeitung mit "verwaisten" Referenzen umgehen (Prüfbericht trifft vor zugehörigem Gerät ein, oder übergeordneter Datensatz wird hart gelöscht während Kinder-Datensätze noch existieren)? → Gelöst durch lockere (nicht strikt erzwungene) Fremdschlüssel in der Sync-Datenbank, siehe Tech Design (2026-09-16)
 - [ ] Genauer PDF-Speicherort für Prüfberichte (Notes/Attachments vs. sonstiges) — `bmvcc_Pruefbericht` hat `IsDocumentManagementEnabled = 0` (kein SharePoint), es existiert kein Datei-/Bild-Feld unter den Attributen → sehr wahrscheinlich Dataverse Notes/Attachments (Annotationen), aber vom Nutzer noch in Dataverse zu verifizieren. Relevant für PROJ-4.
-- [ ] Wie genau wird der Admin bei einem fehlgeschlagenen Cron-Lauf benachrichtigt (E-Mail-Service, Vercel-eigenes Monitoring, o.ä.)? — für `/architecture`
-- [ ] Wie wird verhindert, dass eine unvollständige Dataverse-Antwort (z.B. abgebrochene Pagination) fälschlich zu Massen-Löschungen führt? — z.B. Sicherheitsschwelle ("nicht mehr als X% der Zeilen einer Entität auf einmal löschen") — für `/architecture`
-- [ ] Wie wird die Laufzeit bei ~30'000 Datensätzen innerhalb der Vercel-Funktionslimits gehalten (Batching, `maxDuration`, Aufteilung pro Entität)? — für `/architecture`
+- [x] Wie genau wird der Admin bei einem fehlgeschlagenen Cron-Lauf benachrichtigt? → E-Mail (Nutzerentscheidung), Dienst-Auswahl bei `/backend` (2026-09-16)
+- [x] Wie wird verhindert, dass eine unvollständige Dataverse-Antwort fälschlich zu Massen-Löschungen führt? → Sicherheitsschwelle: ab mehr als 20% "verschwundenen" Zeilen pro Entität wird nicht gelöscht, nur gewarnt (2026-09-16)
+- [x] Wie wird die Laufzeit bei ~30'000 Datensätzen innerhalb der Vercel-Funktionslimits gehalten? → Batches statt Einzelzeilen beim Supabase-Schreiben; genaue Batch-Grösse bei `/backend` final festgelegt (2026-09-16)
 
 ## Decision Log
 
@@ -86,6 +86,12 @@
 | Authentifizierung eingehender Power-Automate-Aufrufe via einzelnem Shared-Secret/API-Key im Header | Einfach in Power Automate konfigurierbar, ausreichend für Ein-Personen-Team | 2026-09-16 |
 | Backfill-Skript nutzt `@azure/msal-node` zur Authentifizierung gegen die Dataverse Web API | Einzige zusätzliche Abhängigkeit, nur für den einmaligen Erstimport benötigt | 2026-09-16 |
 | Supabase/Postgres nochmals gegen Azure Database for PostgreSQL abgewogen (bei /architecture für PROJ-2) und bestätigt | Geringerer Setup-Aufwand, bereits im Template vorbereitet; akzeptierter Kompromiss trotz fehlender Schweizer Supabase-Region | 2026-09-16 |
+| Sync-Trigger: Vercel Cron Job (`vercel.json`, täglich 03:00 Uhr) statt Power-Automate-Webhook | Kein zusätzlicher Dienst nötig, da ohnehin auf Vercel deployed wird; passt zur neuen Pull-Architektur | 2026-09-16 |
+| Cron-Endpoint wird über Vercels eigenen Cron-Secret-Mechanismus abgesichert (Vergleich des `Authorization`-Headers), nicht über den bisherigen `SYNC_API_KEY` | Der bisherige API-Key war für Power-Automate-Aufrufe gedacht; Vercel Cron hat einen eigenen, einfacheren Standard-Mechanismus dafür | 2026-09-16 |
+| Supabase-Schreibzugriffe erfolgen in Batches (z.B. 500 Zeilen pro Upsert-Aufruf) statt einer Zeile pro Aufruf | Bei ~30'000 Datensätzen wäre ein Aufruf pro Zeile zu langsam und würde das Zeitlimit einer Vercel-Funktion riskieren; Batching reduziert die Anzahl Netzwerk-Aufrufe drastisch | 2026-09-16 |
+| Löschungs-Sicherheitsschwelle: pro Entität wird nur gelöscht, wenn weniger als 20% der zuvor bekannten Zeilen fehlen — sonst nur Warnung, keine Löschung | Nutzerentscheidung; schützt vor einer fälschlich als "alles gelöscht" interpretierten unvollständigen Dataverse-Antwort | 2026-09-16 |
+| E-Mail-Versand bei fehlgeschlagenem Lauf oder ausgelöster Löschungs-Sicherheitsschwelle über einen Transaktions-E-Mail-Dienst (Auswahl bei `/backend`, z.B. Resend) | Nutzerentscheidung für aktive Benachrichtigung statt nur Logs | 2026-09-16 |
+| Die bisherigen Power-Automate-Push-Endpoints (`/api/sync/[entity]`) und das separate Backfill-Skript (`scripts/backfill-dataverse.ts`) werden bei `/backend` entfernt bzw. in die neue Cron-Route überführt | Nicht mehr Teil der Architektur; die Kernlogik (Dataverse lesen, Upsert-Mapping) wird in die neue Route verschoben statt dupliziert | 2026-09-16 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
@@ -94,25 +100,39 @@
 
 ### Datenfluss (kein UI — reines Infrastruktur-Feature)
 
-```
-Dataverse
-  └─ Power Automate Flow "Erstellt/Geändert" (je 1x pro Entität:
-     Firma, Kontakt, Standort, Gerät, Prüfbericht, Artikel, Relation)
-        └─ HTTP POST an Sync-Endpoint (mit API-Key im Header)
-  └─ Power Automate Flow "Gelöscht" (je 1x pro Entität)
-        └─ HTTP POST an Delete-Endpoint (mit API-Key im Header)
+> **Architektur-Wechsel 2026-09-16:** Ersetzt den ursprünglichen Power-Automate-Push-Ansatz (siehe Decision Log). Kein Power Automate mehr im Bild.
 
-Next.js API-Routen ("Sync-Endpoints")
-  └─ Prüfen API-Key → bei Fehler: 401, keine Änderung
-  └─ Upsert bzw. Löschen (Soft/Hard) in der Datenbank, per Dataverse-ID
+```
+Vercel Cron (täglich 03:00 Uhr, konfiguriert in vercel.json)
+  └─ HTTP GET/POST an /api/cron/sync-dataverse (mit Cron-Secret im Header,
+     von Vercel automatisch mitgeschickt und von uns geprüft)
+
+Next.js API-Route "/api/cron/sync-dataverse"
+  └─ Für jede der 7 Entitäten (Firmen, Kontakte, Artikel, Standorte,
+     Geräte, Prüfberichte, Relationen), nacheinander:
+       1. Alle aktuellen Datensätze aus der Dataverse Web API lesen
+          (paginiert, via @azure/msal-node authentifiziert)
+       2. In Batches (nicht einzeln) per Upsert in die Supabase-Tabelle
+          schreiben
+       3. Abgleich: bestehende Zeilen in Supabase, deren Dataverse-ID
+          NICHT im aktuellen Datensatz vorkommt, werden gelöscht
+          (Soft-Delete bei Prüfberichten, Hard-Delete sonst) —
+          ausser die Sicherheitsschwelle (siehe unten) schlägt an
+  └─ Bei Erfolg: Lauf-Protokoll (Anzahl pro Entität) loggen
+  └─ Bei Fehler: Fehler loggen UND E-Mail an den Admin senden
+
+Sicherheitsschwelle gegen Massen-Löschung
+  └─ Würden bei einer Entität mehr als 20% der zuvor bekannten Zeilen
+     gelöscht, wird für DIESE Entität kein Löschen ausgeführt (Upserts
+     laufen trotzdem durch), stattdessen eine Warnung geloggt + per
+     E-Mail gemeldet — vermutlich ein technisches Problem, nicht echte
+     Löschungen in Dataverse
 
 Datenbank (Supabase/Postgres) — gespiegelte Tabellen
   └─ Wird von PROJ-2 (Login-Zuordnung) und PROJ-3/4/5 (Anzeige) gelesen — nie direkt von Dataverse
-
-Backfill-Skript (einmalig, manuell gestartet)
-  └─ Liest bestehende Daten direkt aus der Dataverse Web API (via @azure/msal-node)
-  └─ Nutzt denselben Upsert-Mechanismus wie der laufende Sync
 ```
+
+Das frühere separate Backfill-Skript entfällt: derselbe Job übernimmt beim allerersten Lauf automatisch die vollständige Erstbefüllung (die Datenbank wurde am 2026-09-16 bereits einmalig darüber befüllt: 302 Firmen, 1279 Artikel, 588 Kontakte, 203 Standorte, 8243 Geräte, 24'999 Prüfberichte, 548 Relationen). Die bisherigen Power-Automate-Push-Endpoints (`/api/sync/[entity]`) werden entfernt.
 
 ### Datenmodell (auf Basis der echten Dataverse-Solution `bmvcc`)
 
@@ -130,9 +150,10 @@ Jede Tabelle speichert die jeweilige Dataverse-ID als eindeutigen Schlüssel fü
 Siehe Decision Log → Technical Decisions oben.
 
 ### Abhängigkeiten (Packages)
-- `@supabase/supabase-js` — bereits im Template vorhanden (aktuell deaktiviert), wird aktiviert
-- `zod` — bereits vorhanden, validiert eingehende Webhook-Payloads
-- `@azure/msal-node` — neu, nur fürs Backfill-Skript benötigt
+- `@supabase/supabase-js` — bereits aktiviert
+- `zod` — bereits vorhanden
+- `@azure/msal-node` — bereits vorhanden, jetzt vom täglichen Cron-Job genutzt statt nur vom (entfallenden) Backfill-Skript
+- Neu: ein E-Mail-Versand-Paket (z.B. `resend`) für die Fehler-Benachrichtigung — Auswahl bei `/backend`
 
 ### Bekannte Datenqualitäts-Hinweise für `/backend`
 - `bmvcc_equipmentrecord.bmvcc_KundenID` (Text) existiert parallel zur Standort-Relation — wird für den Sync ignoriert, könnte aber als Diagnose-Feld nützlich sein, falls ein Gerät keinen Standort hat
