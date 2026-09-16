@@ -30,7 +30,7 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle>Kundenportal</CardTitle>
           <CardDescription>
-            Melde dich an, um deine Geräte und Prüfberichte einzusehen.
+            Melden Sie sich an, um Ihre Geräte und Prüfberichte einzusehen.
           </CardDescription>
         </CardHeader>
         <CardContent>

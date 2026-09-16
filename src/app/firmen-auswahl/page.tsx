@@ -27,12 +27,12 @@ export default function FirmenAuswahlPage() {
       <main className="mx-auto max-w-md px-4 py-10">
         <h1 className="mb-1 text-xl font-semibold">Firma auswählen</h1>
         <p className="mb-6 text-sm text-muted-foreground">
-          Du bist mehreren Firmen zugeordnet. Wähle aus, welche du sehen möchtest.
+          Sie sind mehreren Firmen zugeordnet. Wählen Sie aus, welche Sie sehen möchten.
         </p>
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Deine Firmen
+              Ihre Firmen
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
