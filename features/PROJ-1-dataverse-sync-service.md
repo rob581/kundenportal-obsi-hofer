@@ -128,6 +128,32 @@ Siehe Decision Log → Technical Decisions oben.
 - `bmvcc_equipmentrecord.bmvcc_KundenID` (Text) existiert parallel zur Standort-Relation — wird für den Sync ignoriert, könnte aber als Diagnose-Feld nützlich sein, falls ein Gerät keinen Standort hat
 - `bmvcc_equipmentrecord.bmvcc_artikel_id` (int) und `cre77_artikel` (Lookup) referenzieren beide einen Artikel — vermutlich Altfeld vs. aktuelles Feld; `/backend` sollte klären, welches aktiv genutzt wird
 
+## Implementation Notes (Backend)
+
+**Erstellt:**
+- `supabase/migrations/0001_dataverse_sync_schema.sql` — 7 Tabellen (`dv_firmen`, `dv_kontakte`, `dv_artikel`, `dv_standorte`, `dv_geraete`, `dv_pruefberichte`, `dv_relationen`), RLS aktiviert (kein anon/authenticated-Zugriff, nur Service Role)
+- `src/lib/supabase-admin.ts` — Server-only Supabase-Client mit Service-Role-Key
+- `src/lib/sync/entities.ts` — Zod-Schemas + Tabellen-Mapping pro Entität
+- `src/lib/sync/auth.ts` — API-Key-Prüfung (`x-api-key`-Header gegen `SYNC_API_KEY`)
+- `src/lib/sync/service.ts` — geteilte Upsert-/Delete-Logik (von API-Route UND Backfill-Skript genutzt)
+- `src/app/api/sync/[entity]/route.ts` — `POST` (Upsert) und `DELETE` (Soft/Hard-Delete) für alle 7 Entitäten über einen gemeinsamen dynamischen Endpoint
+- `scripts/backfill-dataverse.ts` — einmaliges Backfill-Skript (`npm run backfill:dataverse`), liest via `@azure/msal-node` direkt aus der Dataverse Web API
+- `src/app/api/sync/[entity]/route.test.ts` — 8 Vitest-Integrationstests (Auth, Validierung, Upsert, Soft/Hard-Delete)
+
+**Benötigte Umgebungsvariablen (noch einzutragen, `.env.local` ist geschützt und wurde nicht automatisch bearbeitet):**
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `SYNC_API_KEY` (von Power Automate im Header `x-api-key` mitzuschicken)
+- Für den Backfill: `DATAVERSE_URL`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
+
+**Endpoint-Vertrag für Power Automate:**
+- `POST /api/sync/{entity}` mit JSON-Body = vollständiger Datensatz; `{entity}` ∈ `firmen`, `kontakte`, `artikel`, `standorte`, `geraete`, `pruefberichte`, `relationen`
+- `DELETE /api/sync/{entity}` mit JSON-Body `{ "id": "<dataverse-guid>" }`
+- Payload-Feldnamen sind bewusst vereinfacht (z.B. `name`, `status`, `letzte_pruefung`) statt der rohen `bmvcc_*`-Feldnamen — Power Automate kann diese beim Bauen des JSON-Bodys frei benennen/mappen
+
+**Abweichungen / offene Punkte:**
+- Das Backfill-Skript wurde noch nicht gegen die echte Dataverse-Umgebung getestet (keine Zugangsdaten vorhanden) — insbesondere die Lookup-Feldnamen (`_bmvcc_standort_value`, `_cre77_artikel_value` etc.) sollten vor dem produktiven Lauf mit einem einzelnen Testaufruf verifiziert werden
+- Für `bmvcc_equipmentrecord.artikel_id` wurde gemäss Datenqualitäts-Hinweis das aktuellere `cre77_artikel`-Lookup-Feld verwendet, nicht das ältere `bmvcc_artikel_id` (Int)
+
 ## QA Test Results
 _To be added by /qa_
 
