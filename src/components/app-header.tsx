@@ -1,19 +1,20 @@
-"use client";
-
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { signOut } from "../../auth";
 
-// TODO(/backend PROJ-2): replace onClick with next-auth's signOut(), which
-// clears the real session before redirecting to /login.
 export function AppHeader() {
-  const router = useRouter();
-
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
       <span className="font-semibold">OBSI Hofer GmbH — Kundenportal</span>
-      <Button variant="outline" size="sm" onClick={() => router.push("/login")}>
-        Abmelden
-      </Button>
+      <form
+        action={async () => {
+          "use server";
+          await signOut({ redirectTo: "/login" });
+        }}
+      >
+        <Button type="submit" variant="outline" size="sm">
+          Abmelden
+        </Button>
+      </form>
     </header>
   );
 }

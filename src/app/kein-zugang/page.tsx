@@ -1,7 +1,4 @@
-"use client";
-
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { redirect } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -10,14 +7,19 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { auth, signOut } from "../../../auth";
 
 const SUPPORT_EMAIL = "robert.bienz@obsi-hofer.ch";
 
-// TODO(/backend PROJ-2): this page is shown when the verified Entra email
-// doesn't match an active Kontakt (or matches one, but inaktiv). It must
-// not reveal which of the two happened — see spec Decision Log.
-export default function KeinZugangPage() {
-  const router = useRouter();
+// Shown whenever the verified Entra email doesn't map to an active
+// Kontakt with at least one linked Firma — see auth.ts / access.ts and
+// the spec Decision Log for why this stays a single generic message.
+export default async function KeinZugangPage() {
+  const session = await auth();
+  if (session?.portal?.hasAccess) {
+    redirect("/uebersicht");
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
@@ -29,15 +31,23 @@ export default function KeinZugangPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p>Bitte kontaktiere die OBSI Hofer GmbH, um Zugang zu erhalten:</p>
+          <p>Bitte kontaktieren Sie die OBSI Hofer GmbH, um Zugang zu erhalten:</p>
           <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium text-primary underline">
             {SUPPORT_EMAIL}
           </a>
         </CardContent>
         <CardFooter>
-          <Button variant="outline" className="w-full" onClick={() => router.push("/login")}>
-            Abmelden und andere E-Mail-Adresse versuchen
-          </Button>
+          <form
+            action={async () => {
+              "use server";
+              await signOut({ redirectTo: "/login" });
+            }}
+            className="w-full"
+          >
+            <Button type="submit" variant="outline" className="w-full">
+              Abmelden und andere E-Mail-Adresse versuchen
+            </Button>
+          </form>
         </CardFooter>
       </Card>
     </main>

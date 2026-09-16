@@ -1,7 +1,4 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -11,17 +8,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { auth, signIn } from "../../../auth";
 
-// TODO(/backend PROJ-2): replace the router.push placeholder below with
-// next-auth's signIn("microsoft-entra-id"), which redirects to the real
-// hosted Entra External ID sign-in page.
-export default function LoginPage() {
-  const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-
-  function handleSignIn() {
-    setIsLoading(true);
-    router.push("/firmen-auswahl");
+export default async function LoginPage() {
+  const session = await auth();
+  if (session) {
+    redirect(session.portal?.hasAccess ? "/uebersicht" : "/kein-zugang");
   }
 
   return (
@@ -34,9 +26,16 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={handleSignIn} disabled={isLoading} className="w-full">
-            {isLoading ? "Weiterleiten…" : "Mit Entra External ID anmelden"}
-          </Button>
+          <form
+            action={async () => {
+              "use server";
+              await signIn("microsoft-entra-id");
+            }}
+          >
+            <Button type="submit" className="w-full">
+              Mit Entra External ID anmelden
+            </Button>
+          </form>
         </CardContent>
         <CardFooter>
           <p className="text-xs text-muted-foreground">

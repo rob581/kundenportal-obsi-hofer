@@ -47,6 +47,7 @@
 
 ## Open Questions
 - [x] Gibt es Rollen in `bmvcc_relation.bmvcc_role_description`, die keinen Zugriff mehr rechtfertigen (z.B. "ehemalig")? → Gelöst: `bmvcc_Kontakt` hat ein eigenes Status-Feld (aktiv/inaktiv); massgeblich für Zugriff ist dieser Status, nicht die Rollenbeschreibung (2026-09-16)
+- [ ] Neuer Microsoft-Entra-External-ID-Tenant muss vom Nutzer erstellt werden (der bisherige App-Registrierungs-Versuch lag im normalen Mitarbeiter-Tenant, der keine Self-Service-Fremdanmeldung erlaubt — AADSTS90072). Blockiert den ersten echten Ende-zu-Ende-Test des Login-Flows.
 
 ## Decision Log
 
@@ -68,6 +69,9 @@
 | Keine eigene "Portal-Benutzer"-Tabelle — Kontakt/Firmen-Zuordnung wird bei jedem Login frisch aus den PROJ-1-Tabellen ermittelt und nur in der Session gehalten | Passt zur Produktentscheidung "Zuordnung wird bei jedem Login neu geprüft"; vermeidet eine zusätzliche, potenziell veraltende Tabelle | 2026-09-16 |
 | Alle Seiten außer Login/"Kein Zugang" sind serverseitig geschützt (nicht nur im Frontend versteckt) | Verhindert Datenzugriff durch reines URL-Aufrufen ohne gültige Sitzung | 2026-09-16 |
 | Speicherort der PROJ-1-Spiegeldaten bleibt Supabase/Postgres (nicht Azure Database for PostgreSQL) | Erneut abgewogen: geringerer Setup-Aufwand und bereits im Template vorbereitet, trotz fehlender Schweizer Supabase-Region — akzeptierter Kompromiss für ein Ein-Personen-Team, bestätigt PROJ-1 | 2026-09-16 |
+| NextAuth-Konfiguration aufgeteilt in `auth.config.ts` (Edge-tauglich, nur Provider, für `middleware.ts`) und `auth.ts` (voll, mit Supabase-Callback, für alles andere) | Middleware/Proxy läuft in der Edge-Runtime ohne Datenbank-Zugriff; der volle Auth-Config mit Supabase-Callback schlug dort lautlos fehl (Standard-Auth.js-Muster für DB-Callbacks) | 2026-09-16 |
+| Die eigentliche `hasAccess`-Prüfung + Firmen-Auswahl-Logik laufen in `src/app/(protected)/layout.tsx` bzw. den einzelnen Seiten (Node.js-Runtime), nicht mehr in der Middleware | Middleware kann nur die grobe "eingeloggt?"-Prüfung ohne DB-Zugriff übernehmen; die feine Zugriffsprüfung braucht Supabase | 2026-09-16 |
+| Datei heisst weiterhin `middleware.ts`, nicht `proxy.ts` | In Next.js 16.1.1 löste `proxy.ts` trotz korrekter Konvention (Root-Verzeichnis, benannter/Default-Export) nicht aus; `middleware.ts` funktioniert (laut Next.js selbst "deprecated, aber noch verfügbar") | 2026-09-16 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
@@ -121,6 +125,31 @@ Siehe Decision Log → Technical Decisions oben.
 - Echte Kontakt-/Relation-Abfrage gegen die PROJ-1-Supabase-Tabellen
 
 **Manuell verifiziert:** Alle drei Seiten + Root-Redirect liefern korrektes HTML (`curl` gegen laufenden Dev-Server), `npm run build` und `npx tsc --noEmit` fehlerfrei. Kein Playwright-Browser-Klicktest in dieser Session durchgeführt — folgt bei `/qa`.
+
+## Implementation Notes (Backend)
+
+**Erstellt:**
+- `auth.config.ts` — schlanke, Edge-taugliche NextAuth-Konfiguration (nur Entra-Provider, keine Datenbank-Callbacks) — wird ausschliesslich von `middleware.ts` genutzt
+- `auth.ts` — vollständige NextAuth-Konfiguration (Node.js-Runtime): Entra-External-ID-Provider + `jwt`/`session`-Callbacks, die bei jedem Login `getPortalAccess()` aufrufen
+- `src/lib/auth/access.ts` — `getPortalAccess(email)` (Kontakt aktiv? + verknüpfte Firmen via `dv_relationen`) und `getFirmenNamen(ids)`, beide gegen die PROJ-1-Supabase-Tabellen
+- `middleware.ts` — nur die grobe Prüfung "eingeloggt oder nicht" (Edge-Runtime, kein Datenbankzugriff möglich)
+- `src/app/(protected)/layout.tsx` — die eigentliche Zugriffsprüfung (`hasAccess`), läuft serverseitig in Node.js, redirected nach `/kein-zugang` wenn nötig
+- `src/app/(protected)/firmen-auswahl/` und `.../uebersicht/` — bisherige Seiten hierher verschoben (geschützte Route-Group)
+- `src/app/(protected)/firmen-auswahl/actions.ts` — Server Action `selectFirma`, validiert die Auswahl gegen die Session und setzt das Auswahl-Cookie
+- `src/app/api/auth/[...nextauth]/route.ts` — NextAuth-Route-Handler
+- Login-, Kein-Zugang- und Firmen-Auswahl-Seiten auf echte `signIn`/`signOut`/`auth()`-Aufrufe umgestellt (keine Platzhalter mehr)
+
+**Wichtiger technischer Fund — Next.js 16 `proxy.ts`:**
+Next.js 16 benennt `middleware.ts` in `proxy.ts` um; eine alte `middleware.ts` wird beim Build **kommentarlos ignoriert** (kein Fehler, keine Warnung, Seiten bleiben einfach ungeschützt). Zusätzlich läuft Middleware/Proxy in der **Edge-Runtime**, die keine Datenbank-Aufrufe (Supabase) zulässt — Versuche, unseren vollen `auth.ts` (mit Supabase-Callback) direkt in der Middleware zu verwenden, scheiterten dadurch lautlos. Lösung: Konfiguration aufgeteilt in eine schlanke `auth.config.ts` (nur für Middleware) und die volle `auth.ts` (für alles andere) — Standard-Muster aus der Auth.js-Dokumentation für DB-Callbacks. Die Datei heisst hier bewusst weiterhin `middleware.ts` (laut Next.js-Blog "still available... but deprecated"), da `proxy.ts` in dieser Next.js-Version (16.1.1) trotz korrekter Platzierung/Export ebenfalls nicht auslöste — im Zweifel beide Namen testen.
+
+**Blocker — Entra-Tenant-Typ falsch:**
+Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** von OBSI Hofer GmbH (demselben wie für den Dataverse-Sync), nicht in einem echten **External-ID (CIAM)**-Tenant. Ergebnis: `AADSTS90072` — fremde E-Mail-Adressen können sich nicht selbst registrieren, sie müssten manuell als Gast eingeladen werden, was der Self-Service-Anforderung widerspricht. **Nutzer muss einen separaten External-Tenant erstellen** (Entra Admin Center → Verwalten → Tenants → Neu → Typ "External") und darin die App-Registrierung wiederholen. Kosten: erste 50'000 MAU/Monat kostenlos (Quelle: [Microsoft Learn](https://learn.microsoft.com/en-us/entra/external-id/external-identities-pricing)) — bei aktuell 588 Kontakten unkritisch, Tenant muss aber trotzdem mit einer Azure-Subscription verknüpft werden.
+
+**Noch offen für den nächsten Tag:**
+- [ ] Neuer External-ID-Tenant + App-Registrierung durch den Nutzer erstellen
+- [ ] Neue `Kundenportal_AZURE_*`-Werte in `.env.local` eintragen
+- [ ] Kompletter Login-Flow im Browser einmal live durchspielen (Login → Firmen-Auswahl/direkt zu Übersicht → Abmelden; sowie der Kein-Zugang-Fall mit einer nicht hinterlegten E-Mail)
+- [ ] `.env.local.example` um die neuen Variablen ergänzen (`AUTH_SECRET`, `Kundenportal_AZURE_CLIENT_ID/SECRET/TENANT_ID`) — Nutzer muss das selbst tun, `.env.local.example` ist für mich gesperrt
 
 ## Deployment
 _To be added by /deploy_
