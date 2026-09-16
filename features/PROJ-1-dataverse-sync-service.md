@@ -75,6 +75,7 @@
 | Next.js API-Routen als Sync-/Delete-Endpoints, Supabase/Postgres als Spiegel-Datenbank | Bereits Teil des Templates/Stacks, kein separates Backend-Hosting nötig | 2026-09-16 |
 | Authentifizierung eingehender Power-Automate-Aufrufe via einzelnem Shared-Secret/API-Key im Header | Einfach in Power Automate konfigurierbar, ausreichend für Ein-Personen-Team | 2026-09-16 |
 | Backfill-Skript nutzt `@azure/msal-node` zur Authentifizierung gegen die Dataverse Web API | Einzige zusätzliche Abhängigkeit, nur für den einmaligen Erstimport benötigt | 2026-09-16 |
+| Supabase/Postgres nochmals gegen Azure Database for PostgreSQL abgewogen (bei /architecture für PROJ-2) und bestätigt | Geringerer Setup-Aufwand, bereits im Template vorbereitet; akzeptierter Kompromiss trotz fehlender Schweizer Supabase-Region | 2026-09-16 |
 
 ---
 <!-- Sections below are added by subsequent skills -->

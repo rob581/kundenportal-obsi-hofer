@@ -63,12 +63,47 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| NextAuth.js (Auth.js) mit Microsoft-Entra-External-ID-Provider | Standard-Lösung im Next.js-Ökosystem für OIDC-Logins, übernimmt Redirects, Token-Prüfung und sichere Session-Cookies | 2026-09-16 |
+| Zugriffsprüfung (Kontakt aktiv? + Relation zu Firma) läuft als eigener Schritt direkt nach dem Entra-Login, bevor eine gültige Portal-Sitzung entsteht | Trennt "bei Microsoft angemeldet" klar von "hat Zugriff auf Kundendaten" | 2026-09-16 |
+| Keine eigene "Portal-Benutzer"-Tabelle — Kontakt/Firmen-Zuordnung wird bei jedem Login frisch aus den PROJ-1-Tabellen ermittelt und nur in der Session gehalten | Passt zur Produktentscheidung "Zuordnung wird bei jedem Login neu geprüft"; vermeidet eine zusätzliche, potenziell veraltende Tabelle | 2026-09-16 |
+| Alle Seiten außer Login/"Kein Zugang" sind serverseitig geschützt (nicht nur im Frontend versteckt) | Verhindert Datenzugriff durch reines URL-Aufrufen ohne gültige Sitzung | 2026-09-16 |
+| Speicherort der PROJ-1-Spiegeldaten bleibt Supabase/Postgres (nicht Azure Database for PostgreSQL) | Erneut abgewogen: geringerer Setup-Aufwand und bereits im Template vorbereitet, trotz fehlender Schweizer Supabase-Region — akzeptierter Kompromiss für ein Ein-Personen-Team, bestätigt PROJ-1 | 2026-09-16 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+App (mit Auth-Schutz)
+├── Login-Seite
+│   └── "Mit Entra External ID anmelden" → leitet zur gehosteten Entra-Anmeldeseite weiter
+├── Nach erfolgreichem Entra-Login: serverseitige Zugriffsprüfung
+│   ├── Kein aktiver, passender Kontakt gefunden
+│   │   └── "Kein Zugang"-Seite (Meldung + Kontakt-Link + "Abmelden/andere E-Mail versuchen")
+│   ├── Genau eine zugeordnete Firma
+│   │   └── direkte Weiterleitung zur Firma-Übersicht (PROJ-3/4/5)
+│   └── Mehrere zugeordnete Firmen
+│       └── Firmen-Auswahl-Seite (Liste zum Anklicken)
+└── Navigation (eingeloggter Zustand)
+    └── "Abmelden"-Button
+```
+
+### Datenmodell (in Textform)
+
+Es wird keine eigene "Portal-Benutzer"-Tabelle angelegt. Bei jedem Login läuft dieser Ablauf:
+1. Die verifizierte E-Mail aus dem Entra-Token wird gegen die (aus PROJ-1 gespiegelten) Kontakt-Daten abgeglichen (Status muss aktiv sein)
+2. Ist der Kontakt aktiv, werden über die Relation-Tabelle alle zugeordneten Firmen ermittelt
+3. Kontakt-ID + Liste der Firmen + aktuell gewählte Firma werden nur für die Dauer der Sitzung gespeichert (Session), nicht dauerhaft in der Datenbank
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+- `next-auth` — Authentifizierung inkl. Entra-External-ID-Anbindung
+- `@supabase/supabase-js` — bereits vorhanden (PROJ-1), für den Abgleich gegen Kontakt/Relation/Firma
 
 ## QA Test Results
 _To be added by /qa_
