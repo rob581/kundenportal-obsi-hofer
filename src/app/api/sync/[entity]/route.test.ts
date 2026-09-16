@@ -16,12 +16,13 @@ vi.mock("@/lib/supabase-admin", () => ({
 
 import { POST, DELETE } from "./route";
 
-function makeRequest(body: unknown, apiKey?: string) {
+function makeRequest(body: unknown, apiKey?: string, forwardedFor?: string) {
   return new Request("http://localhost/api/sync/geraete", {
     method: "POST",
     headers: {
       "content-type": "application/json",
       ...(apiKey !== undefined ? { "x-api-key": apiKey } : {}),
+      ...(forwardedFor !== undefined ? { "x-forwarded-for": forwardedFor } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -97,5 +98,25 @@ describe("DELETE /api/sync/[entity]", () => {
       "id",
       "pb-1"
     );
+  });
+});
+
+describe("rate limiting", () => {
+  it("returns 429 after exceeding the per-IP request budget", async () => {
+    const ip = "203.0.113.42";
+
+    for (let i = 0; i < 30; i++) {
+      const res = await POST(makeRequest({ id: `budget-${i}` }, "test-secret", ip), paramsFor("geraete"));
+      expect(res.status).toBe(200);
+    }
+
+    const blocked = await POST(makeRequest({ id: "budget-31" }, "test-secret", ip), paramsFor("geraete"));
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers.get("Retry-After")).not.toBeNull();
+  });
+
+  it("does not rate-limit a different IP", async () => {
+    const res = await POST(makeRequest({ id: "other-ip" }, "test-secret", "198.51.100.7"), paramsFor("geraete"));
+    expect(res.status).toBe(200);
   });
 });

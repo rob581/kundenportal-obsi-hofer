@@ -1,7 +1,6 @@
 // Server-only Supabase client using the secret key (Supabase's new API key
 // format, sb_secret_...). Bypasses Row Level Security — never import this
 // from client components, never expose SUPABASE_SECRET_KEY to the browser.
-import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let cachedClient: SupabaseClient | null = null;
