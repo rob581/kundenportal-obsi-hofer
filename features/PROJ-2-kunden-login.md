@@ -105,8 +105,22 @@ Siehe Decision Log → Technical Decisions oben.
 - `next-auth` — Authentifizierung inkl. Entra-External-ID-Anbindung
 - `@supabase/supabase-js` — bereits vorhanden (PROJ-1), für den Abgleich gegen Kontakt/Relation/Firma
 
-## QA Test Results
-_To be added by /qa_
+## Implementation Notes (Frontend)
+
+**Erstellt (Platzhalter-Verhalten, ohne echte Auth — folgt bei `/backend`):**
+- `src/app/login/page.tsx` — Login-Seite mit "Mit Entra External ID anmelden"-Button
+- `src/app/kein-zugang/page.tsx` — generische "Kein Zugang"-Meldung + Kontakt-E-Mail (`robert.bienz@obsi-hofer.ch`) + "Abmelden/andere E-Mail versuchen"
+- `src/app/firmen-auswahl/page.tsx` — Firmen-Auswahl mit Platzhalter-Firmenliste
+- `src/components/app-header.tsx` — wiederverwendbarer Header mit "Abmelden"-Button, wird auch von PROJ-3/4/5 genutzt werden
+- `src/app/page.tsx` — Root-Route leitet jetzt auf `/login` weiter (ersetzt die Next.js-Default-Startseite)
+- `src/app/layout.tsx` — Titel/Description aktualisiert, `<Toaster />` eingebunden (für Firmen-Auswahl-Feedback)
+
+**Bewusst noch nicht gebaut (folgt bei `/backend`):**
+- Echte Entra-External-ID-Anbindung (`next-auth`) — Buttons navigieren aktuell nur zwischen den Platzhalter-Seiten (mit `TODO(/backend PROJ-2)`-Kommentaren markiert)
+- Serverseitiger Schutz der Seiten (aktuell sind alle Routen ohne Session erreichbar)
+- Echte Kontakt-/Relation-Abfrage gegen die PROJ-1-Supabase-Tabellen
+
+**Manuell verifiziert:** Alle drei Seiten + Root-Redirect liefern korrektes HTML (`curl` gegen laufenden Dev-Server), `npm run build` und `npx tsc --noEmit` fehlerfrei. Kein Playwright-Browser-Klicktest in dieser Session durchgeführt — folgt bei `/qa`.
 
 ## Deployment
 _To be added by /deploy_
