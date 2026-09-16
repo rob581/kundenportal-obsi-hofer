@@ -1,10 +1,10 @@
 # Product Requirements Document
 
 ## Vision
-Self-Service-Kundenportal für die OBSI Hofer AG, über das Kunden jederzeit den aktuellen Status ihrer sicherheitsrelevanten Geräte sowie die zugehörigen Prüfberichte einsehen und als PDF herunterladen können – als Ersatz für die heutige manuelle Aufbereitung in Excel und den Versand per E-Mail.
+Self-Service-Kundenportal für die OBSI Hofer GmbH, über das Kunden jederzeit den aktuellen Status ihrer sicherheitsrelevanten Geräte sowie die zugehörigen Prüfberichte einsehen und als PDF herunterladen können – als Ersatz für die heutige manuelle Aufbereitung in Excel und den Versand per E-Mail.
 
 ## Target Users
-Bestehende Kunden der OBSI Hofer AG, die den Prüfstatus und die Prüfberichte ihrer Geräte einsehen wollen, ohne dafür bei OBSI Hofer nachfragen zu müssen. Zugang wird manuell freigeschaltet (keine Selbstregistrierung), da die Zuordnung über den bestehenden Dataverse-Account/Kontakt erfolgt.
+Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte ihrer Geräte einsehen wollen, ohne dafür bei OBSI Hofer nachfragen zu müssen. Zugang wird manuell freigeschaltet (keine Selbstregistrierung), da die Zuordnung über den bestehenden Dataverse-Account/Kontakt erfolgt.
 
 ## Core Features (Roadmap)
 

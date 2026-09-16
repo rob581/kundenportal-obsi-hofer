@@ -40,7 +40,7 @@ export default function LoginPage() {
         </CardContent>
         <CardFooter>
           <p className="text-xs text-muted-foreground">
-            OBSI Hofer AG — nur für bestehende Kunden.
+            OBSI Hofer GmbH — nur für bestehende Kunden.
           </p>
         </CardFooter>
       </Card>

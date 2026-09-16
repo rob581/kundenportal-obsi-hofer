@@ -3,7 +3,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
-  title: "OBSI Hofer AG Kundenportal",
+  title: "OBSI Hofer GmbH Kundenportal",
   description: "Geräte und Prüfberichte im Überblick",
 };
 

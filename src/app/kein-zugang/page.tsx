@@ -29,7 +29,7 @@ export default function KeinZugangPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
-          <p>Bitte kontaktiere die OBSI Hofer AG, um Zugang zu erhalten:</p>
+          <p>Bitte kontaktiere die OBSI Hofer GmbH, um Zugang zu erhalten:</p>
           <a href={`mailto:${SUPPORT_EMAIL}`} className="font-medium text-primary underline">
             {SUPPORT_EMAIL}
           </a>
