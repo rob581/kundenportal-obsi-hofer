@@ -1,96 +1,16 @@
-// One-off backfill: reads existing records directly from the Dataverse Web
-// API and upserts them into the Supabase mirror tables via the same
-// upsertRecord() function the sync API routes use. Run manually, once,
-// before Power Automate starts sending live change events (see PROJ-1).
-//
-// Usage: npm run backfill:dataverse
-//
-// Required env vars (read from .env.local): DATAVERSE_URL, AZURE_TENANT_ID,
-// AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, SUPABASE_URL, SUPABASE_SECRET_KEY
-//
-// NOTE: the Dataverse lookup ("_<name>_value") field names below are based
-// on the exported solution's attribute names and may not exactly match the
-// live relationship schema names — verify against the real environment
-// (e.g. via a single test request) before running against production data.
+// Dataverse Web API always uses the fully-lowercase LogicalName for every
+// attribute — the mixed-case names visible in the solution designer
+// (SchemaName, e.g. "bmvcc_ArtikelId") are display-only. Verified against
+// the real environment on 2026-09-16.
 
-import { ConfidentialClientApplication } from "@azure/msal-node";
-import { upsertRecord } from "../src/lib/sync/service";
-
-try {
-  process.loadEnvFile(".env.local");
-} catch {
-  // Fine if .env.local doesn't exist (e.g. vars already set in the shell/CI)
-}
-
-const DATAVERSE_URL = requireEnv("DATAVERSE_URL").replace(/\/$/, "");
-
-function requireEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`Missing required environment variable: ${name}`);
-  return value;
-}
-
-async function getAccessToken(): Promise<string> {
-  const msalClient = new ConfidentialClientApplication({
-    auth: {
-      clientId: requireEnv("AZURE_CLIENT_ID"),
-      authority: `https://login.microsoftonline.com/${requireEnv("AZURE_TENANT_ID")}`,
-      clientSecret: requireEnv("AZURE_CLIENT_SECRET"),
-    },
-  });
-
-  const result = await msalClient.acquireTokenByClientCredential({
-    scopes: [`${DATAVERSE_URL}/.default`],
-  });
-
-  if (!result?.accessToken) throw new Error("Failed to acquire Dataverse access token");
-  return result.accessToken;
-}
-
-async function fetchAll(
-  token: string,
-  entitySet: string,
-  select: string[]
-): Promise<Record<string, unknown>[]> {
-  const records: Record<string, unknown>[] = [];
-  let url: string | null =
-    `${DATAVERSE_URL}/api/data/v9.2/${entitySet}?$select=${select.join(",")}`;
-
-  while (url) {
-    const res: Response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-        "OData-MaxVersion": "4.0",
-        "OData-Version": "4.0",
-      },
-    });
-    if (!res.ok) {
-      throw new Error(`Dataverse request failed (${res.status}): ${await res.text()}`);
-    }
-    const body: { value: Record<string, unknown>[]; "@odata.nextLink"?: string } =
-      await res.json();
-    records.push(...body.value);
-    url = body["@odata.nextLink"] ?? null;
-  }
-
-  return records;
-}
-
-type Job = {
+export type SyncJob = {
   slug: string;
   entitySet: string;
   select: string[];
   map: (raw: Record<string, unknown>) => { id: string } & Record<string, unknown>;
 };
 
-// NOTE: Dataverse's Web API always uses the fully-lowercase LogicalName for
-// every attribute — the mixed-case names visible in the solution designer
-// (SchemaName, e.g. "bmvcc_ArtikelId") are display-only. Verified against
-// the real environment on 2026-09-16; every select/map key below is the
-// actual LogicalName, confirmed via a live request per entity.
-
-const jobs: Job[] = [
+export const SYNC_JOBS: SyncJob[] = [
   {
     slug: "firmen",
     entitySet: "bmvcc_firmas",
@@ -231,6 +151,9 @@ const jobs: Job[] = [
       ergebnis: r.bmvcc_inspectionresult ?? null,
       pruefer: r.bmvcc_inspector ?? null,
       ist_archiviert: r.bmvcc_isarchived ?? false,
+      // Undelete: if a previously soft-deleted Pruefbericht is present
+      // again in this full pull, it is active in Dataverse again.
+      deleted_at: null,
     }),
   },
   {
@@ -245,24 +168,3 @@ const jobs: Job[] = [
     }),
   },
 ];
-
-async function main() {
-  const token = await getAccessToken();
-
-  for (const job of jobs) {
-    console.log(`Fetching ${job.entitySet}...`);
-    const rawRecords = await fetchAll(token, job.entitySet, job.select);
-    console.log(`  ${rawRecords.length} records — upserting into "${job.slug}"`);
-
-    for (const raw of rawRecords) {
-      await upsertRecord(job.slug, job.map(raw));
-    }
-  }
-
-  console.log("Backfill complete.");
-}
-
-main().catch((err) => {
-  console.error("Backfill failed:", err);
-  process.exit(1);
-});

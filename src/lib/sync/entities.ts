@@ -1,10 +1,12 @@
 import { z } from "zod";
 
-// One entry per Power Automate flow. `slug` is the URL segment used in
-// /api/sync/[entity]. `table` is the mirrored Supabase table (see
-// supabase/migrations/0001_dataverse_sync_schema.sql). `softDelete` follows
-// the PROJ-1 decision: only Pruefberichte are soft-deleted, everything else
-// is hard-deleted.
+// One entry per Dataverse entity synced by the daily cron job (see
+// src/lib/sync/jobs.ts for how each is fetched/mapped). `table` is the
+// mirrored Supabase table (see supabase/migrations/0001_dataverse_sync_schema.sql).
+// `schema` validates a mapped row before it's written — catches mapping
+// bugs early with a clear error instead of an obscure Postgres one.
+// `softDelete` follows the PROJ-1 decision: only Pruefberichte are
+// soft-deleted, everything else is hard-deleted during reconciliation.
 
 const firmaSchema = z.object({
   id: z.string().min(1),
@@ -71,6 +73,7 @@ const pruefberichtSchema = z.object({
   ergebnis: z.string().nullable().optional(),
   pruefer: z.string().nullable().optional(),
   ist_archiviert: z.boolean().nullable().optional(),
+  deleted_at: z.string().nullable().optional(),
 });
 
 const relationSchema = z.object({
@@ -78,10 +81,6 @@ const relationSchema = z.object({
   firma_id: z.string().min(1),
   kontakt_id: z.string().min(1),
   rolle: z.string().nullable().optional(),
-});
-
-export const deleteSchema = z.object({
-  id: z.string().min(1),
 });
 
 export type EntityConfig = {

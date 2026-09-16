@@ -153,7 +153,7 @@ Siehe Decision Log → Technical Decisions oben.
 - `@supabase/supabase-js` — bereits aktiviert
 - `zod` — bereits vorhanden
 - `@azure/msal-node` — bereits vorhanden, jetzt vom täglichen Cron-Job genutzt statt nur vom (entfallenden) Backfill-Skript
-- Neu: ein E-Mail-Versand-Paket (z.B. `resend`) für die Fehler-Benachrichtigung — Auswahl bei `/backend`
+- E-Mail-Versand: kein neues Paket nötig — direkter Aufruf der Resend-REST-API per `fetch` (bei `/backend` entschieden)
 
 ### Bekannte Datenqualitäts-Hinweise für `/backend`
 - `bmvcc_equipmentrecord.bmvcc_KundenID` (Text) existiert parallel zur Standort-Relation — wird für den Sync ignoriert, könnte aber als Diagnose-Feld nützlich sein, falls ein Gerät keinen Standort hat
@@ -161,29 +161,37 @@ Siehe Decision Log → Technical Decisions oben.
 
 ## Implementation Notes (Backend)
 
+> Diese Sektion wurde am 2026-09-16 komplett neu geschrieben — der ursprüngliche Power-Automate-Push-Ansatz (Endpoints, Backfill-Skript) wurde durch den täglichen Vercel-Cron-Job ersetzt, siehe Decision Log.
+
+**Entfernt:** `src/app/api/sync/[entity]/`, `src/lib/sync/auth.ts`, `src/lib/sync/rate-limit.ts(.test.ts)`, `src/lib/sync/service.ts`, `scripts/backfill-dataverse.ts`, das `backfill:dataverse`-npm-Skript, die `tsx`-Dev-Dependency.
+
 **Erstellt:**
-- `supabase/migrations/0001_dataverse_sync_schema.sql` — 7 Tabellen (`dv_firmen`, `dv_kontakte`, `dv_artikel`, `dv_standorte`, `dv_geraete`, `dv_pruefberichte`, `dv_relationen`), RLS aktiviert (kein anon/authenticated-Zugriff, nur Service Role)
-- `src/lib/supabase-admin.ts` — Server-only Supabase-Client mit Service-Role-Key
-- `src/lib/sync/entities.ts` — Zod-Schemas + Tabellen-Mapping pro Entität
-- `src/lib/sync/auth.ts` — API-Key-Prüfung (`x-api-key`-Header gegen `SYNC_API_KEY`)
-- `src/lib/sync/service.ts` — geteilte Upsert-/Delete-Logik (von API-Route UND Backfill-Skript genutzt)
-- `src/app/api/sync/[entity]/route.ts` — `POST` (Upsert) und `DELETE` (Soft/Hard-Delete) für alle 7 Entitäten über einen gemeinsamen dynamischen Endpoint
-- `scripts/backfill-dataverse.ts` — einmaliges Backfill-Skript (`npm run backfill:dataverse`), liest via `@azure/msal-node` direkt aus der Dataverse Web API
-- `src/app/api/sync/[entity]/route.test.ts` — 8 Vitest-Integrationstests (Auth, Validierung, Upsert, Soft/Hard-Delete)
+- `vercel.json` — Cron-Konfiguration, täglich 03:00 Uhr (`0 3 * * *`)
+- `src/app/api/cron/sync-dataverse/route.ts` — `GET`-Endpoint, den Vercel Cron täglich aufruft; prüft `CRON_SECRET`, ruft `runDataverseSync()` auf, verschickt bei Fehler/Warnung eine E-Mail (`maxDuration = 300`)
+- `src/lib/sync/dataverse-client.ts` — Token-Beschaffung (`@azure/msal-node`, mit einfachem In-Memory-Cache) + paginiertes Lesen aus der Dataverse Web API
+- `src/lib/sync/jobs.ts` — die 7 Entitäts-Jobs (Entity-Set, `$select`-Felder, Mapping-Funktion) — Feldnamen live gegen die echte Dataverse-Umgebung verifiziert
+- `src/lib/sync/batch.ts` — `batchUpsert`/`batchDelete`/`batchSoftDelete` (Chunks à 500 Zeilen statt einzelner Aufrufe) sowie `fetchAllIds` (paginiertes Lesen bestehender IDs)
+- `src/lib/sync/reconcile.ts` — reine Funktionen für die Differenz-Berechnung und die 20%-Sicherheitsschwelle
+- `src/lib/sync/notify.ts` — E-Mail-Versand bei Fehler/Schwellenwert-Warnung via Resend-REST-API (`fetch`, kein SDK)
+- `src/lib/sync/run-sync.ts` — Orchestrierung: pro Entität bestehende IDs lesen → Dataverse lesen → Batch-Upsert → Differenz-Abgleich → Löschen oder Warnen
+- Tests: `src/lib/sync/reconcile.test.ts`, `src/lib/sync/run-sync.test.ts` (gemockte Dataverse-/Supabase-Aufrufe, inkl. Schwellenwert-Szenario), `src/app/api/cron/sync-dataverse/route.test.ts` (Auth, Erfolg, Warnung, Fehler) — 15 Tests, alle grün
 
-**Benötigte Umgebungsvariablen (noch einzutragen, `.env.local` ist geschützt und wurde nicht automatisch bearbeitet):**
-- `SUPABASE_URL`, `SUPABASE_SECRET_KEY` (Supabase-Projekt nutzt das neue Key-Format `sb_secret_...` statt des alten `service_role`-JWT)
-- `SYNC_API_KEY` (von Power Automate im Header `x-api-key` mitzuschicken)
-- Für den Backfill: `DATAVERSE_URL`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`
+**Umgebungsvariablen:**
+- `SUPABASE_URL`, `SUPABASE_SECRET_KEY` — unverändert
+- `CRON_SECRET` — vom Nutzer gesetzt, wird gegen den `Authorization: Bearer`-Header geprüft
+- `DATAVERSE_URL`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` — unverändert, jetzt vom Cron-Job statt vom (entfallenen) Backfill-Skript genutzt
+- `RESEND_API_KEY`, `ALERT_EMAIL_TO` — neu, für die E-Mail-Benachrichtigung
+- `SYNC_API_KEY` wird nicht mehr benötigt (kann aus `.env.local` entfernt werden)
 
-**Endpoint-Vertrag für Power Automate:**
-- `POST /api/sync/{entity}` mit JSON-Body = vollständiger Datensatz; `{entity}` ∈ `firmen`, `kontakte`, `artikel`, `standorte`, `geraete`, `pruefberichte`, `relationen`
-- `DELETE /api/sync/{entity}` mit JSON-Body `{ "id": "<dataverse-guid>" }`
-- Payload-Feldnamen sind bewusst vereinfacht (z.B. `name`, `status`, `letzte_pruefung`) statt der rohen `bmvcc_*`-Feldnamen — Power Automate kann diese beim Bauen des JSON-Bodys frei benennen/mappen
+**Live gegen die echte Umgebung verifiziert (2026-09-16):**
+- Voller Lauf über alle 7 Entitäten (~35'000 Datensätze) in ~21 Sekunden, HTTP 200 — weit innerhalb gängiger Vercel-Funktionslimits
+- Löschungs-Erkennung: eine absichtlich eingefügte Test-Zeile in `dv_firmen` wurde beim nächsten Lauf korrekt erkannt und entfernt
+- Auth: 401 ohne `CRON_SECRET`
+- Ein einzelner Lauf schlug einmalig mit `TypeError: fetch failed` fehl (transienter Netzwerkfehler beim Batch-Upsert), der sofortige Retry lief fehlerfrei durch — falls das im Produktivbetrieb wiederholt auftritt, wäre eine Retry-Logik in `run-sync.ts` sinnvoll (aktuell nicht vorhanden)
 
 **Abweichungen / offene Punkte:**
-- Das Backfill-Skript wurde noch nicht gegen die echte Dataverse-Umgebung getestet (keine Zugangsdaten vorhanden) — insbesondere die Lookup-Feldnamen (`_bmvcc_standort_value`, `_cre77_artikel_value` etc.) sollten vor dem produktiven Lauf mit einem einzelnen Testaufruf verifiziert werden
-- Für `bmvcc_equipmentrecord.artikel_id` wurde gemäss Datenqualitäts-Hinweis das aktuellere `cre77_artikel`-Lookup-Feld verwendet, nicht das ältere `bmvcc_artikel_id` (Int)
+- Kein automatischer Retry bei einem transienten Fehler innerhalb eines Laufs (siehe oben) — für MVP akzeptiert, da der nächste tägliche Lauf es ohnehin erneut versucht
+- `RESEND_API_KEY`/`ALERT_EMAIL_TO` wurden vom Nutzer gesetzt, aber der tatsächliche E-Mail-Versand bei einem echten Fehlschlag wurde noch nicht end-to-end getestet (nur der Aufruf-Pfad im Code)
 
 ## QA Test Results
 
