@@ -35,6 +35,7 @@ describe("GET /api/cron/sync-dataverse", () => {
     runDataverseSyncMock.mockResolvedValue({
       entities: [{ slug: "firmen", fetched: 302, deleted: 0, skippedDueToThreshold: false }],
       warnings: [],
+      errors: [],
     });
 
     const res = await GET(makeRequest("test-cron-secret"));
@@ -48,6 +49,7 @@ describe("GET /api/cron/sync-dataverse", () => {
     runDataverseSyncMock.mockResolvedValue({
       entities: [{ slug: "geraete", fetched: 100, deleted: 0, skippedDueToThreshold: true }],
       warnings: ['"geraete": 50/100 Zeilen fehlen'],
+      errors: [],
     });
 
     const res = await GET(makeRequest("test-cron-secret"));
@@ -55,7 +57,22 @@ describe("GET /api/cron/sync-dataverse", () => {
     expect(sendSyncAlertEmailMock).toHaveBeenCalledTimes(1);
   });
 
-  it("sends an alert email and returns 500 when the sync throws", async () => {
+  it("sends an alert email and returns 200 (partial success) when one entity errored", async () => {
+    runDataverseSyncMock.mockResolvedValue({
+      entities: [{ slug: "firmen", fetched: 302, deleted: 0, skippedDueToThreshold: false }],
+      warnings: [],
+      errors: ['"artikel": fetch failed'],
+    });
+
+    const res = await GET(makeRequest("test-cron-secret"));
+    expect(res.status).toBe(200);
+    expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
+      "Dataverse-Sync: Probleme beim täglichen Lauf",
+      expect.stringContaining("artikel")
+    );
+  });
+
+  it("sends an alert email and returns 500 when the sync throws entirely", async () => {
     runDataverseSyncMock.mockRejectedValue(new Error("Dataverse unreachable"));
 
     const res = await GET(makeRequest("test-cron-secret"));
@@ -66,14 +83,19 @@ describe("GET /api/cron/sync-dataverse", () => {
     );
   });
 
-  // QA BUG-1: a missing CRON_SECRET (e.g. forgotten Vercel env var) throws
-  // before the try/catch instead of returning a graceful error response —
-  // no log, no alert email, just an unhandled rejection. This test
-  // documents the current (broken) behavior; once fixed it should instead
-  // assert a clean 500 (or 401) JSON response with no throw.
-  it("BUG: throws unhandled instead of responding gracefully when CRON_SECRET is unset", async () => {
+  // Fix for QA BUG-1: a missing CRON_SECRET (e.g. forgotten Vercel env var)
+  // used to throw before the try/catch — no log, no alert email, just an
+  // unhandled rejection. Now the auth check runs inside the same
+  // try/catch as the sync, so this is treated like any other failure.
+  it("logs and emails an alert instead of crashing when CRON_SECRET is unset", async () => {
     delete process.env.CRON_SECRET;
-    await expect(GET(makeRequest("anything"))).rejects.toThrow("Missing CRON_SECRET");
-    expect(sendSyncAlertEmailMock).not.toHaveBeenCalled();
+
+    const res = await GET(makeRequest("anything"));
+
+    expect(res.status).toBe(500);
+    expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
+      "Dataverse-Sync fehlgeschlagen",
+      expect.stringContaining("Missing CRON_SECRET")
+    );
   });
 });

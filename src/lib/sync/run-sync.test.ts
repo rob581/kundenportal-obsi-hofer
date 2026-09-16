@@ -146,26 +146,32 @@ describe("runDataverseSync", () => {
     expect(result.warnings).toHaveLength(1);
   });
 
-  // QA BUG-2: entities are synced sequentially with no per-entity error
-  // isolation. A transient failure on one entity (this actually happened
-  // live on "geraete" during backend testing) aborts every entity that
-  // comes after it in the list for that whole run, even though they are
-  // otherwise independent. This test documents the current behavior;
-  // once fixed, "kontakte" (and later entities) should still run even
-  // when "artikel" fails.
-  it("BUG: a failure on one entity prevents every later entity from syncing that run", async () => {
+  // Fix for QA BUG-2: entities used to sync sequentially with no per-entity
+  // error isolation, so a transient failure on one entity (this actually
+  // happened live on "geraete" during backend testing) aborted every
+  // entity after it for that whole run. Each entity is now isolated: a
+  // failure is collected as an error, and every other entity still runs.
+  it("isolates a failure on one entity so every other entity still syncs", async () => {
     resetTable("dv_firmen", []);
+    resetTable("dv_kontakte", []);
     fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string) => {
       if (entitySet === "bmvcc_artikels") throw new Error("transient network error");
       if (entitySet === "bmvcc_firmas") return [{ bmvcc_firmaid: "f1", bmvcc_name: "Firma A" }];
+      if (entitySet === "bmvcc_kontakts") return [{ bmvcc_kontaktid: "k1", statecode: 0 }];
       return [];
     });
 
-    await expect(runDataverseSync()).rejects.toThrow("transient network error");
+    const result = await runDataverseSync();
 
-    // firmen (processed before artikel) did complete...
+    // firmen (processed before artikel) completed...
     expect(tables["dv_firmen"]?.has("f1")).toBe(true);
-    // ...but kontakte (processed after artikel) was never even attempted.
-    expect(fetchAllDataverseRecordsMock).not.toHaveBeenCalledWith("bmvcc_kontakts", expect.anything());
+    // ...and kontakte (processed after the failing artikel job) still ran too.
+    expect(tables["dv_kontakte"]?.has("k1")).toBe(true);
+
+    const artikelSummary = result.entities.find((e) => e.slug === "artikel");
+    expect(artikelSummary).toBeUndefined(); // failed entity has no summary
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain("artikel");
+    expect(result.errors[0]).toContain("transient network error");
   });
 });

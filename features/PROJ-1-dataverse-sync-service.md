@@ -218,7 +218,7 @@ Siehe Decision Log → Technical Decisions oben.
 - [x] Live verifiziert (ohne Header → 401) + Unit-Test für falschen Wert
 
 #### AC-5: Fehlgeschlagener Lauf wird protokolliert + Admin benachrichtigt
-- [ ] BUG: Teilweise erfüllt — bei einem Fehler **innerhalb** von `runDataverseSync()` funktioniert das (siehe Unit-Test). Bei fehlendem `CRON_SECRET` (Konfigurationsfehler) gibt es aber **weder Log noch E-Mail** — siehe BUG-1
+- [x] Gefixt (siehe BUG-1 unten) und per Test bestätigt: Auth-Prüfung läuft jetzt innerhalb desselben try/catch wie der Sync, auch ein fehlendes `CRON_SECRET` löst jetzt Log + E-Mail aus
 
 #### AC-6: Erster Lauf übernimmt automatisch die Erstbefüllung
 - [x] Faktisch bereits erfolgt — die Datenbank war vor dem allerersten Cron-Lauf leer und wurde vollständig befüllt (ursprünglich über das jetzt entfallene Backfill-Skript, das dieselbe Upsert-Logik nutzte)
@@ -259,9 +259,9 @@ Siehe Decision Log → Technical Decisions oben.
   2. Cron-Endpoint aufrufen
   3. Erwartet: irgendeine Fehlerantwort, idealerweise mit Log + Admin-E-Mail
   4. Tatsächlich: `isAuthorized()` wirft eine Exception **vor** dem try/catch-Block in der Route — kein Log über `console.error`, keine E-Mail, nur ein generischer unbehandelter Next.js-Fehler
-- **Bestätigt durch:** neuen Test `"BUG: throws unhandled instead of responding gracefully when CRON_SECRET is unset"` in `route.test.ts`
-- **Warum das wichtig ist:** widerspricht direkt AC-5 ("Admin wird benachrichtigt") — ausgerechnet im Konfigurationsfehler-Fall bleibt der Ausfall unbemerkt, bis jemand händisch nachschaut
-- **Priority:** Fix before deployment
+- **Bestätigt durch:** Test in `route.test.ts` (ursprünglich als Bug-Beleg geschrieben, jetzt auf das korrigierte Verhalten angepasst)
+- **Warum das wichtig ist:** widersprach direkt AC-5 ("Admin wird benachrichtigt") — ausgerechnet im Konfigurationsfehler-Fall blieb der Ausfall unbemerkt
+- **Status:** ✅ Gefixt am 2026-09-16 — Auth-Prüfung läuft jetzt innerhalb des try/catch-Blocks; ein fehlendes `CRON_SECRET` löst jetzt `console.error` + Alarm-E-Mail aus und liefert HTTP 500 statt eines unbehandelten Absturzes
 
 #### BUG-2: Ein fehlgeschlagener Entity-Job verhindert das Sync aller nachfolgenden Entitäten im selben Lauf
 - **Severity:** High
@@ -269,16 +269,16 @@ Siehe Decision Log → Technical Decisions oben.
   1. Der Job für eine Entität (z.B. Artikel) schlägt fehl (dies ist während der Entwicklung tatsächlich einmal live passiert, mit einem transienten `TypeError: fetch failed` bei Geräte)
   2. Erwartet: die übrigen, unabhängigen Entitäten (Standorte, Geräte, Prüfberichte, Relationen) werden trotzdem synchronisiert
   3. Tatsächlich: `runDataverseSync()` verarbeitet die 7 Entitäten in einer einzigen Schleife ohne Try/Catch pro Job — ein Fehler bricht die gesamte restliche Schleife ab, alle danach kommenden Entitäten werden diesen Lauf gar nicht erst versucht
-- **Bestätigt durch:** neuen Test `"BUG: a failure on one entity prevents every later entity from syncing that run"` in `run-sync.test.ts`
-- **Warum das wichtig ist:** genau dieses Verhalten trat während der Implementierung real auf; ein einzelner transienter Netzwerkfehler bei einer Entität lässt mehrere andere, an sich fehlerfreie Entitäten einen ganzen Tag lang veraltet
-- **Priority:** Fix before deployment — Vorschlag: pro Entität try/catch, alle Fehler sammeln und am Ende in einer E-Mail zusammenfassen, statt beim ersten Fehler ganz abzubrechen
+- **Bestätigt durch:** Test in `run-sync.test.ts` (ursprünglich als Bug-Beleg geschrieben, jetzt auf das korrigierte Verhalten angepasst)
+- **Warum das wichtig ist:** genau dieses Verhalten trat während der Implementierung real auf; ein einzelner transienter Netzwerkfehler bei einer Entität liess mehrere andere, an sich fehlerfreie Entitäten einen ganzen Tag lang veralten
+- **Status:** ✅ Gefixt am 2026-09-16 — jede Entität läuft jetzt in einem eigenen try/catch (`syncOneEntity`); ein Fehler wird in `errors` gesammelt und per E-Mail gemeldet, alle anderen Entitäten laufen trotzdem weiter. Live gegen die echte Umgebung erneut verifiziert (voller Lauf über alle 7 Entitäten, 200 OK, keine Fehler)
 
 ### Summary
-- **Acceptance Criteria:** 6/7 vollständig bestanden, 1 teilweise (AC-5, siehe BUG-1)
-- **Bugs Found:** 2 total (2 High, davon 0 behoben)
-- **Security:** Grundsätzlich solide, ein Low-Finding (Timing-Vergleich, praktisch irrelevant)
-- **Production Ready:** NO
-- **Recommendation:** Beide High-Bugs sollten vor dem produktiven Go-Live behoben werden — BUG-1, weil ausgerechnet der Ausfallmelde-Mechanismus selbst lautlos versagen kann, und BUG-2, weil er real reproduziert wurde und die Zuverlässigkeit des täglichen Syncs direkt untergräbt. Beide sind mit überschaubarem Aufwand behebbar (try/catch pro Job in `run-sync.ts`, try/catch um die Auth-Prüfung in der Route).
+- **Acceptance Criteria:** 7/7 vollständig bestanden
+- **Bugs Found:** 2 total, beide behoben (2 High → 0 offen)
+- **Security:** Grundsätzlich solide, ein Low-Finding (Timing-Vergleich, praktisch irrelevant, keine Aktion nötig)
+- **Production Ready:** YES (aus Sicht von PROJ-1 selbst — unabhängig davon steht das eigentliche Vercel-Deployment inkl. Cron noch aus, siehe `/deploy`)
+- **Recommendation:** Beide High-Bugs sind behoben und verifiziert. Vor dem produktiven Einsatz noch offen: echtes Vercel-Deployment mit Cron-Konfiguration, sowie ein Ende-zu-Ende-Test des tatsächlichen E-Mail-Versands bei einem echten Fehlschlag (bisher nur der Code-Pfad getestet, siehe Implementation Notes).
 
 ## Deployment
 _To be added by /deploy_

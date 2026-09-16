@@ -14,17 +14,21 @@ function isAuthorized(request: Request): boolean {
 }
 
 export async function GET(request: Request) {
-  if (!isAuthorized(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  // isAuthorized() throws if CRON_SECRET itself is missing (misconfiguration).
+  // That must still be logged and alerted on, not crash unhandled — so the
+  // auth check runs inside the same try/catch as the sync itself.
   try {
+    if (!isAuthorized(request)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const result = await runDataverseSync();
 
-    if (result.warnings.length > 0) {
+    const allIssues = [...result.warnings, ...result.errors];
+    if (allIssues.length > 0) {
       await sendSyncAlertEmail(
-        "Dataverse-Sync: Löschungs-Sicherheitsschwelle ausgelöst",
-        result.warnings.join("\n")
+        "Dataverse-Sync: Probleme beim täglichen Lauf",
+        allIssues.join("\n")
       );
     }
 
