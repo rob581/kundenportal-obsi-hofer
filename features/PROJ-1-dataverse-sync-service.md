@@ -66,6 +66,7 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Fremdschlüssel-Spalten (`geraet_id`, `standort_id`, `artikel_id`, `firma_id`, `kontakt_id`) haben KEINEN Datenbank-Constraint (kein `references`), nur einen Index | QA-Fund (BUG-1): echte FK-Constraints erzwingen bei jedem Insert eine existierende Eltern-Zeile, was Out-of-Order-Sync-Events (explizit vorgesehen) zum Scheitern brachte; Referenzintegrität bleibt Aufgabe von Dataverse als Source of Truth | 2026-09-16 |
 | Kunden-Zuordnung für Geräte läuft über `bmvcc_equipmentrecord.bmvcc_Standort` → `bmvcc_organizationlocation.bmvcc_BexioFirma` → `bmvcc_firma` | Geräte haben keinen direkten Lookup auf Firma, nur ein unzuverlässiges Textfeld (`bmvcc_KundenID`); der Standort-Lookup ist die einzige echte Dataverse-Relation dorthin | 2026-09-16 |
 | Login-Zuordnung (Kontakt → Kunde) läuft über die Junction-Entität `bmvcc_relation` (Firma↔Person mit Rolle), nicht über `bmvcc_Kontakt.bmvcc_parent_account` | Ein Kontakt kann laut Datenmodell zu mehreren Firmen gehören; `bmvcc_relation` bildet das korrekt ab, das einfache Parent-Lookup nicht | 2026-09-16 |
 | Gerätestatus wird aus `bmvcc_equipmentrecord.bmvcc_Betriebsmittelstatus` übernommen (feste Werteliste laut Nutzer, auch wenn das Feld technisch nvarchar ist) | Wird für die Dashboard-Gruppierung "Anzahl Geräte pro Status" (PROJ-5) benötigt | 2026-09-16 |
@@ -194,7 +195,7 @@ Siehe Decision Log → Technical Decisions oben.
 - [x] Idempotent — zweiter identischer Aufruf verändert nichts Unerwartetes
 
 #### EC-3: Prüfbericht trifft vor zugehörigem Gerät ein (Reihenfolge nicht garantiert)
-- [ ] **BUG (Critical) — siehe BUG-1.** Die im Tech Design dokumentierte Lösung ("lockere/nicht strikt erzwungene Fremdschlüssel") ist in der SQL-Migration NICHT so umgesetzt, wie beschrieben — die Fremdschlüssel sind zwar `nullable`, aber weiterhin als echte `references`-Constraints angelegt. Postgres erzwingt bei jedem NICHT-NULL-Wert weiterhin, dass die referenzierte Zeile existiert. Genau der Fall, den die Architektur explizit abfangen sollte, schlägt fehl.
+- [x] BUG-1 gefixt (siehe unten) und am 2026-09-16 live erneut verifiziert: Prüfbericht mit nicht-existierendem `geraet_id` wird jetzt korrekt gespeichert (HTTP 200, Zeile vorhanden)
 
 #### EC-4: Übergeordneter Datensatz wird hart gelöscht, Kinder existieren noch
 - [x] Verifiziert: `ON DELETE SET NULL` funktioniert korrekt — nach Hard-Delete des Geräts wurde `geraet_id` beim zugehörigen (soft-gelöschten) Prüfbericht automatisch auf `null` gesetzt
@@ -219,6 +220,7 @@ Siehe Decision Log → Technical Decisions oben.
   3. Tatsächlich: HTTP 500, der Datensatz wird gar nicht gespeichert (Postgres-Fehler `insert or update on table "dv_pruefberichte" violates foreign key constraint`)
 - **Ursache:** `supabase/migrations/0001_dataverse_sync_schema.sql` definiert die Fremdschlüssel als echte `references ... on delete set null` — das steuert nur das Verhalten beim Löschen der Eltern-Zeile, verhindert aber nicht, dass Postgres beim Einfügen eine existierende Eltern-Zeile verlangt
 - **Priority:** Fix before deployment (widerspricht einer explizit dokumentierten und vom Nutzer bestätigten Architektur-Entscheidung; betrifft mehrere Beziehungen: Prüfbericht→Gerät, Gerät→Standort, Gerät→Artikel, Standort→Firma, Relation→Firma/Kontakt)
+- **Status:** ✅ Gefixt am 2026-09-16 (`supabase/migrations/0002_dataverse_sync_loose_foreign_keys.sql` entfernt die FK-Constraints, Spalten bleiben als normale, indizierte IDs bestehen). Live gegen das echte Supabase-Projekt erneut verifiziert.
 
 #### BUG-2: Kein Rate-Limiting auf dem Sync-Endpoint
 - **Severity:** Medium
