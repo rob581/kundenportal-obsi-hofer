@@ -8,15 +8,16 @@
 - None
 
 ## User Stories
-- Als Kunde möchte ich, dass meine Geräte- und Prüfberichtsdaten im Portal aktuell sind, sobald sich etwas in Dataverse ändert, damit ich mich auf die angezeigten Informationen verlassen kann.
-- Als OBSI Hofer AG möchte ich, dass Änderungen in Dataverse automatisch ins Portal übernommen werden, ohne manuellen Exportschritt.
-- Als OBSI Hofer AG (Admin) möchte ich bei einem endgültig fehlgeschlagenen Sync benachrichtigt werden, damit ich den betroffenen Datensatz manuell nachziehen kann.
+- Als Kunde möchte ich, dass meine Geräte- und Prüfberichtsdaten im Portal spätestens einen Tag nach einer Änderung in Dataverse aktuell sind, damit ich mich auf die angezeigten Informationen verlassen kann.
+- Als OBSI Hofer AG möchte ich, dass Dataverse-Daten automatisch täglich ins Portal übernommen werden, ohne manuellen Exportschritt.
+- Als OBSI Hofer AG (Admin) möchte ich benachrichtigt werden, wenn der tägliche Sync-Lauf fehlschlägt, damit ich das zeitnah beheben kann, bevor die Portal-Daten zu stark veralten.
 
 ## Out of Scope
-- Polling-basierter/zeitgesteuerter Sync — ersetzt durch ereignisgesteuerten Push via Power Automate
-- Wiederkehrender/automatischer Backfill — nur einmaliger, manuell angestossener Erstimport
+- Ereignisgesteuerter Push via Power Automate — **Entscheidung am 2026-09-16 geändert**: ersetzt durch einen täglichen, vollständigen Pull-Sync (Vercel Cron Job), siehe Decision Log
+- Separates einmaliges Backfill-Skript — der tägliche Job übernimmt Erstbefüllung und laufenden Sync einheitlich (der bisherige einmalige Lauf hat die Datenbank am 2026-09-16 bereits initial befüllt: ~302 Firmen, 588 Kontakte, 1279 Artikel, 203 Standorte, 8243 Geräte, 19'693 Prüfberichte)
+- Inkrementeller Sync (nur geänderte Datensätze seit letztem Lauf) — bewusst nicht gewählt, siehe Decision Log
 - Bidirektionaler Sync (Schreiben vom Portal zurück nach Dataverse) — Portal ist read-only (siehe PRD)
-- Konfliktbehandlung bei gleichzeitigen Änderungen — Dataverse ist immer Source of Truth, eingehende Daten überschreiben den Datenbankstand ohne Merge-Logik
+- Konfliktbehandlung bei gleichzeitigen Änderungen — Dataverse ist immer Source of Truth, jeder Lauf überschreibt den Datenbankstand vollständig ohne Merge-Logik
 - Echtzeit-Benachrichtigung an Kunden bei neuen Daten — Non-Goal laut PRD, evtl. späteres Feature
 - Login/Zugriffssteuerung — siehe PROJ-2
 - Anzeige der Daten im Portal — siehe PROJ-3, PROJ-4, PROJ-5
@@ -25,28 +26,31 @@
 
 **Format:** Angenommen [Vorbedingung] / Wenn [Aktion] / Dann [Ergebnis]
 
-- [ ] Angenommen ein Gerät, Prüfbericht, Kunde/Account oder Artikel wird in Dataverse erstellt oder geändert, wenn der zugehörige Power-Automate-Flow auslöst, dann wird der vollständige aktuelle Datensatz inkl. Fremdschlüssel per authentifiziertem Webhook-Aufruf an den Sync-Endpoint gesendet und dort per Upsert gespeichert
-- [ ] Angenommen ein Prüfbericht wird in Dataverse gelöscht, wenn der zugehörige Lösch-Flow auslöst, dann wird der Prüfbericht in der Datenbank als gelöscht markiert (Soft-Delete), nicht physisch entfernt
-- [ ] Angenommen ein Gerät, Kunde/Account oder Artikel wird in Dataverse gelöscht, wenn der zugehörige Lösch-Flow auslöst, dann wird der entsprechende Datensatz in der Datenbank endgültig entfernt (Hard-Delete)
-- [ ] Angenommen ein Webhook-Aufruf enthält keinen oder einen falschen API-Key, wenn der Sync-Endpoint den Request empfängt, dann wird der Request mit HTTP 401 abgelehnt und es werden keine Daten verändert
-- [ ] Angenommen der Sync-Endpoint ist temporär nicht erreichbar, wenn Power Automate einen Aufruf sendet, dann wiederholt Power Automate den Aufruf automatisch über die Standard-Retry-Logik; schlägt dies endgültig fehl, wird der Verantwortliche per E-Mail benachrichtigt
-- [ ] Angenommen der initiale Backfill wird ausgeführt, wenn das Backfill-Skript läuft, dann werden alle bestehenden Kunden/Accounts, Geräte, Prüfberichte und Artikel inkl. Relationen einmalig in die Datenbank übernommen
-- [ ] Angenommen ein Datensatz wird per Sync empfangen und existiert bereits in der Datenbank, wenn der Upsert verarbeitet wird, dann wird der bestehende Datensatz aktualisiert statt dupliziert
+- [ ] Angenommen es ist 03:00 Uhr, wenn der tägliche Vercel-Cron-Job auslöst, dann werden alle Datensätze aller 7 Entitäten (Firmen, Kontakte, Artikel, Standorte, Geräte, Prüfberichte, Relationen) vollständig aus Dataverse gelesen und per Upsert in die Datenbank übernommen
+- [ ] Angenommen ein Prüfbericht existierte beim letzten Lauf noch, kommt im aktuellen Lauf aber nicht mehr aus Dataverse zurück, wenn der Abgleich nach dem Lesen durchgeführt wird, dann wird der Prüfbericht in der Datenbank als gelöscht markiert (Soft-Delete), nicht physisch entfernt
+- [ ] Angenommen ein Datensatz einer anderen Entität existierte beim letzten Lauf noch, kommt im aktuellen Lauf aber nicht mehr zurück, wenn der Abgleich durchgeführt wird, dann wird er endgültig aus der Datenbank entfernt (Hard-Delete)
+- [ ] Angenommen der Cron-Endpoint wird ohne oder mit falschem Secret aufgerufen, dann wird der Request mit HTTP 401 abgelehnt und es läuft kein Sync
+- [ ] Angenommen der tägliche Lauf schlägt fehl (z.B. Dataverse nicht erreichbar), dann wird der Fehler protokolliert und der Verantwortliche benachrichtigt (genauer Mechanismus: siehe Open Questions)
+- [ ] Angenommen der tägliche Job läuft zum ersten Mal überhaupt, wenn er ausgeführt wird, dann übernimmt er die vollständige Erstbefüllung ohne separates Skript
+- [ ] Angenommen ein Datensatz wird gelesen und existiert bereits in der Datenbank, wenn der Upsert verarbeitet wird, dann wird der bestehende Datensatz aktualisiert statt dupliziert
 
 ## Edge Cases
-- Zwei Änderungen am selben Datensatz treffen kurz hintereinander ein (Race Condition) → Last-Write-Wins, da bei jedem Trigger der vollständige Datensatz übertragen wird
-- Derselbe Trigger wird doppelt gesendet (z.B. Power-Automate-Retry nach einem Aufruf, der eigentlich erfolgreich war) → unkritisch, da Upsert idempotent ist
-- Ein Prüfbericht wird synchronisiert, bevor das zugehörige Gerät in der Datenbank existiert (Reihenfolge der Flows nicht garantiert) → siehe Open Questions, technische Lösung in `/architecture`
-- Ein Kunde/Account oder Gerät wird hart gelöscht, obwohl noch abhängige Geräte/Prüfberichte referenzieren → siehe Open Questions, technische Lösung in `/architecture`
-- Backfill-Skript wird nach dem Go-Live versehentlich ein zweites Mal ausgeführt → muss idempotent sein (gleiches Upsert-Verhalten wie laufender Sync)
+- Der tägliche Job wird aus irgendeinem Grund zweimal am selben Tag ausgelöst → unkritisch, da jeder Lauf vollständig und idempotent ist (Upsert + Abgleich)
+- Ein Prüfbericht existiert in der Datenbank, dessen Gerät im selben Lauf noch nicht verarbeitet wurde (Reihenfolge innerhalb eines Laufs) → lockere Fremdschlüssel (siehe Tech Design) lösen das weiterhin unabhängig von der Verarbeitungsreihenfolge
+- Dataverse liefert bei einem Lauf aus einem technischen Grund nur einen Teil der Datensätze einer Entität (z.B. abgebrochene Pagination) → Risiko fälschlicher Löschungen; siehe Open Questions
+- Der Job überschreitet die maximale Laufzeit einer Vercel-Funktion bei ~30'000 Datensätzen → siehe Open Questions, technische Lösung in `/architecture` (Batching statt einzelner Zeilen)
+- Ein Kunde/Account oder Gerät verschwindet aus Dataverse, obwohl noch abhängige Geräte/Prüfberichte darauf referenzieren → unkritisch dank loser Fremdschlüssel (ON DELETE SET NULL bereits verifiziert)
 
 ## Technical Requirements (optional)
-- Sicherheit: Authentifizierung eingehender Webhook-Aufrufe via Shared Secret/API-Key im HTTP-Header
-- Datenaktualität: near-real-time, begrenzt durch Power-Automate-Ausführungszeit (kein fixes SLA in v1)
+- Sicherheit: Authentifizierung des Cron-Aufrufs via Secret (Vercel Cron unterstützt das nativ, z.B. `Authorization`-Header)
+- Datenaktualität: maximal 24 Stunden Verzögerung (täglicher Lauf um 03:00 Uhr), kein Echtzeit-Anspruch mehr
 
 ## Open Questions
 - [x] Wie soll die Sync-Verarbeitung mit "verwaisten" Referenzen umgehen (Prüfbericht trifft vor zugehörigem Gerät ein, oder übergeordneter Datensatz wird hart gelöscht während Kinder-Datensätze noch existieren)? → Gelöst durch lockere (nicht strikt erzwungene) Fremdschlüssel in der Sync-Datenbank, siehe Tech Design (2026-09-16)
 - [ ] Genauer PDF-Speicherort für Prüfberichte (Notes/Attachments vs. sonstiges) — `bmvcc_Pruefbericht` hat `IsDocumentManagementEnabled = 0` (kein SharePoint), es existiert kein Datei-/Bild-Feld unter den Attributen → sehr wahrscheinlich Dataverse Notes/Attachments (Annotationen), aber vom Nutzer noch in Dataverse zu verifizieren. Relevant für PROJ-4.
+- [ ] Wie genau wird der Admin bei einem fehlgeschlagenen Cron-Lauf benachrichtigt (E-Mail-Service, Vercel-eigenes Monitoring, o.ä.)? — für `/architecture`
+- [ ] Wie wird verhindert, dass eine unvollständige Dataverse-Antwort (z.B. abgebrochene Pagination) fälschlich zu Massen-Löschungen führt? — z.B. Sicherheitsschwelle ("nicht mehr als X% der Zeilen einer Entität auf einmal löschen") — für `/architecture`
+- [ ] Wie wird die Laufzeit bei ~30'000 Datensätzen innerhalb der Vercel-Funktionslimits gehalten (Batching, `maxDuration`, Aufteilung pro Entität)? — für `/architecture`
 
 ## Decision Log
 
@@ -61,6 +65,11 @@
 | Fehlerbehandlung nutzt Power Automates eingebaute Retry-Logik + E-Mail-Benachrichtigung bei endgültigem Fehlschlag | Ausreichend robust für MVP-Umfang; eigene Dead-Letter-Queue wäre Overengineering | 2026-09-16 |
 | Löschungen lösen einen separaten Flow pro Entität aus; Prüfberichte werden Soft-Deleted, andere Entitäten Hard-Deleted | Prüfberichte sind sicherheitsrelevante Nachweise und sollen nachvollziehbar bleiben; andere Entitäten benötigen das nicht | 2026-09-16 |
 | Bei jedem Trigger wird der vollständige Datensatz (nicht nur Delta) übertragen | Einfacher in Power Automate zu bauen, macht den Sync-Endpoint robuster gegen verlorene Events (reines Upsert, keine Feld-Merge-Logik nötig) | 2026-09-16 |
+| **Architektur-Wechsel:** Sync erfolgt ab jetzt über einen täglichen, vollständigen Pull-Job (Vercel Cron, 03:00 Uhr) statt über ereignisgesteuerten Power-Automate-Push. Ersetzt die entsprechenden Entscheidungen vom 2026-09-15 oben. | Nutzerentscheidung — Power Automate soll nicht genutzt werden; bei ~30'000 Datensätzen ist tägliche Aktualität ausreichend für den Anwendungsfall (Inspektionen sind keine Echtzeit-Ereignisse) | 2026-09-16 |
+| Löschungs-Erkennung erfolgt per Differenz-Abgleich (Datensätze, die im aktuellen Lauf nicht mehr zurückkommen, gelten als gelöscht) statt über explizite Lösch-Events | Ohne Power Automate gibt es keine expliziten Lösch-Trigger mehr; ein voller Re-Sync kann Löschungen so trotzdem zuverlässig erkennen | 2026-09-16 |
+| Die Power-Automate-Push-Endpoints (`/api/sync/[entity]`) werden entfernt | Nicht mehr genutzt; ungenutzter, API-Key-geschützter Endpoint wäre unnötige Angriffsfläche und Wartungsaufwand. Bei Bedarf über Git-History wiederherstellbar | 2026-09-16 |
+| Kein separates Backfill-Skript mehr — der tägliche Job übernimmt auch die Erstbefüllung einheitlich | Einfacher: nur ein Mechanismus zu warten/testen statt zwei. Die Datenbank wurde am 2026-09-16 bereits einmalig über das (jetzt zu ersetzende) Backfill-Skript befüllt | 2026-09-16 |
+| Voller Re-Sync jeden Tag statt inkrementellem Sync (z.B. via "geändert am"-Filter) | Bei ~30'000 Datensätzen unkritisch von der Datenmenge her; ermöglicht zuverlässige Löschungs-Erkennung ohne zusätzlichen Änderungsverfolgungs-Mechanismus | 2026-09-16 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
