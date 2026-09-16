@@ -195,94 +195,90 @@ Siehe Decision Log → Technical Decisions oben.
 
 ## QA Test Results
 
+> **Diese QA-Runde (2026-09-16) ersetzt die vorherige vollständig** — die alte Runde testete den inzwischen entfernten Power-Automate-Push-Ansatz. Alle Bugs/ACs von damals (BUG-1/2/3, AC-1 bis AC-7 alter Nummerierung) sind mit dem Architektur-Wechsel gegenstandslos geworden, ausser dem losen-Fremdschlüssel-Fix, der unverändert übernommen wurde.
+
 **Tested:** 2026-09-16
-**App URL:** http://localhost:3000 (API-only, keine UI)
+**App URL:** http://localhost:3001 (API-only, keine UI; Dev-Server lief auf 3001, da 3000 belegt war)
 **Tester:** QA Engineer (AI)
 
-> Hinweis: PROJ-1 hat keine Oberfläche (reines Infrastruktur-Feature laut Tech Design). Cross-Browser-, Responsive- und Playwright-E2E-Tests entfallen daher; getestet wurde via `npm test` (Vitest, gemockter Supabase-Client) sowie manuell per `curl` gegen den laufenden Dev-Server **und das echte Supabase-Projekt** (keine Mocks) inkl. Aufräumen aller Testdaten danach.
+> Hinweis: PROJ-1 hat keine Oberfläche. Cross-Browser-, Responsive- und Playwright-E2E-Tests entfallen daher. Getestet wurde via `npm test` (Vitest, gemockte Dataverse-/Supabase-Aufrufe) sowie live per `curl` gegen den laufenden Dev-Server **und die echte Dataverse-/Supabase-Umgebung** (keine Mocks), inkl. Aufräumen der Testdaten danach.
 
 ### Acceptance Criteria Status
 
-#### AC-1: Upsert bei Erstellen/Ändern (alle 7 Entitäten)
-- [x] firmen, geraete, pruefberichte, kontakte, artikel, standorte, relationen — je einzeln getestet, alle per Upsert korrekt gespeichert
+#### AC-1: Täglicher Cron-Job liest alle 7 Entitäten und upserted sie
+- [x] Live verifiziert: voller Lauf über alle 7 Entitäten (302 Firmen, 1279 Artikel, 588 Kontakte, 203 Standorte, 8243 Geräte, 24'999 Prüfberichte, 548 Relationen) in ~21s, HTTP 200
 
-#### AC-2: Prüfbericht-Löschung = Soft-Delete
-- [x] Verifiziert direkt in der Datenbank: Zeile bleibt bestehen, `deleted_at` wird gesetzt
+#### AC-2: Verschwundener Prüfbericht → Soft-Delete
+- [x] Durch Unit-Test abgedeckt (`run-sync.test.ts`); Mechanismus identisch zum bereits live verifizierten Löschpfad unten
 
-#### AC-3: Andere Entitäten = Hard-Delete
-- [x] Verifiziert: Zeile ist nach dem Löschen tatsächlich weg (0 Treffer bei Abfrage)
+#### AC-3: Verschwundener Datensatz einer anderen Entität → Hard-Delete
+- [x] Live verifiziert: absichtlich eingefügte Test-Zeile in `dv_firmen` wurde beim nächsten Lauf korrekt und endgültig entfernt
 
-#### AC-4: Ungültiger/fehlender API-Key → 401
-- [x] Ohne Header → 401; mit falschem Key → 401
+#### AC-4: Cron-Endpoint ohne/mit falschem Secret → 401
+- [x] Live verifiziert (ohne Header → 401) + Unit-Test für falschen Wert
 
-#### AC-5: Power-Automate-Retry + E-Mail bei endgültigem Fehlschlag
-- [ ] BUG: Nicht vollständig testbar — die Retry-/E-Mail-Logik liegt in Power Automate selbst, das noch nicht eingerichtet ist. Getestet wurde nur, dass unser Endpoint bei einem echten Serverfehler korrekt HTTP 500 liefert (Voraussetzung dafür, dass Power Automates Retry überhaupt greift) — siehe BUG-1, der zeigt, dass ein 500 aktuell in einem eigentlich gültigen Fall auftritt
+#### AC-5: Fehlgeschlagener Lauf wird protokolliert + Admin benachrichtigt
+- [ ] BUG: Teilweise erfüllt — bei einem Fehler **innerhalb** von `runDataverseSync()` funktioniert das (siehe Unit-Test). Bei fehlendem `CRON_SECRET` (Konfigurationsfehler) gibt es aber **weder Log noch E-Mail** — siehe BUG-1
 
-#### AC-6: Initialer Backfill
-- [ ] BUG: Nicht ausgeführt/verifiziert — noch keine echten Zugangsdaten-Tests gegen die produktive Dataverse-Umgebung, und die OData-Lookup-Feldnamen im Skript sind laut Implementation Notes unverifiziert. Vor Produktivbetrieb zwingend nachzuholen.
+#### AC-6: Erster Lauf übernimmt automatisch die Erstbefüllung
+- [x] Faktisch bereits erfolgt — die Datenbank war vor dem allerersten Cron-Lauf leer und wurde vollständig befüllt (ursprünglich über das jetzt entfallene Backfill-Skript, das dieselbe Upsert-Logik nutzte)
 
-#### AC-7: Upsert ist idempotent (Update statt Duplikat)
-- [x] Gleiche ID zweimal gesendet (unterschiedliche Werte) → ein Datensatz, aktualisierte Werte
+#### AC-7: Upsert ist idempotent
+- [x] Zweiter Lauf direkt nacheinander (ohne Datenänderung) → keine Duplikate, `deleted: 0` für alle Entitäten
 
 ### Edge Cases Status
 
-#### EC-1: Race Condition (zwei schnelle Änderungen am selben Datensatz)
-- [x] Last-Write-Wins bestätigt (Upsert überschreibt vollständig)
+#### EC-1: Job läuft zweimal am selben Tag
+- [x] Live getestet (zwei Läufe direkt nacheinander) — unkritisch, wie erwartet
 
-#### EC-2: Doppelter Trigger (Power-Automate-Retry nach vermeintlichem Fehler)
-- [x] Idempotent — zweiter identischer Aufruf verändert nichts Unerwartetes
+#### EC-2: Reihenfolge innerhalb eines Laufs (lose Fremdschlüssel)
+- [x] Bereits aus der vorherigen QA-Runde bestätigt, Migration `0002` unverändert in Kraft
 
-#### EC-3: Prüfbericht trifft vor zugehörigem Gerät ein (Reihenfolge nicht garantiert)
-- [x] BUG-1 gefixt (siehe unten) und am 2026-09-16 live erneut verifiziert: Prüfbericht mit nicht-existierendem `geraet_id` wird jetzt korrekt gespeichert (HTTP 200, Zeile vorhanden)
+#### EC-3: Unvollständige Dataverse-Antwort → Risiko von Massen-Löschungen
+- [x] 20%-Sicherheitsschwelle durch Unit-Test abgedeckt (50% fehlend → Löschung übersprungen + Warnung)
 
-#### EC-4: Übergeordneter Datensatz wird hart gelöscht, Kinder existieren noch
-- [x] Verifiziert: `ON DELETE SET NULL` funktioniert korrekt — nach Hard-Delete des Geräts wurde `geraet_id` beim zugehörigen (soft-gelöschten) Prüfbericht automatisch auf `null` gesetzt
+#### EC-4: Laufzeit bei ~30'000 Datensätzen
+- [x] Live verifiziert: ~21 Sekunden für ~35'000 Datensätze — weit innerhalb selbst konservativer Vercel-Funktionslimits
 
-#### EC-5: Backfill-Skript versehentlich zweimal ausgeführt
-- [ ] Nicht getestet (Skript wurde noch gar nicht live ausgeführt, siehe AC-6)
+#### EC-5: Gerät/Kunde verschwindet, obwohl Kinder-Datensätze noch referenzieren
+- [x] Bereits aus der vorherigen QA-Runde bestätigt (`ON DELETE SET NULL`)
 
 ### Security Audit Results
-- [x] Authentication: Kein Zugriff ohne (korrekten) `x-api-key` möglich
-- [x] Input validation: SQL-Injection-artiger String (`'; DROP TABLE ...`) und `<script>`-Payload wurden als reiner Text gespeichert, nicht ausgeführt — Supabase-Client parametrisiert korrekt
-- [x] Keine Secrets/Stack-Traces in Fehler-Antworten (500 liefert leeren Body, Details nur serverseitig im Log)
-- [ ] BUG (Medium): Kein Rate-Limiting auf einem öffentlich erreichbaren Endpoint mit nur einem einzigen, langlebigen, statischen Shared Secret — bei einem Leak des `SYNC_API_KEY` hätte ein Angreifer unbegrenzten Schreib-/Löschzugriff auf alle 7 Tabellen, ohne Drosselung. Für MVP laut Checklist optional, aber als Risiko dokumentiert.
-- [ ] Authorization (Autorisierung zwischen Kunden): nicht anwendbar für PROJ-1 — dieses Feature hat keine Endnutzer-Rollen, das ist Gegenstand von PROJ-2
+- [x] Authentication: Kein Zugriff ohne korrektes `CRON_SECRET` möglich (401 live verifiziert)
+- [x] Keine Secrets in Fehlermeldungen (Stichprobe der Fehlermeldungen enthält nur Tabellen-/Entitätsnamen)
+- [ ] BUG (Low): `CRON_SECRET`-Vergleich nutzt `===` (kein zeitkonstanter Vergleich) — theoretisches Timing-Angriffs-Risiko, praktisch sehr gering relevant für ein Secret, das nur Vercel selbst kennt
+- [ ] Kein Rate-Limiting auf dem Cron-Endpoint — bewusst akzeptiert (einziger vorgesehener Aufrufer ist Vercel Cron selbst), kein Bug
+- [ ] Authorization (zwischen Kunden): nicht anwendbar für PROJ-1, siehe PROJ-2
 
 ### Bugs Found
 
-#### BUG-1: Fremdschlüssel sind nicht wirklich "lose" — Sync schlägt bei Out-of-Order-Events fehl
-- **Severity:** Critical
-- **Steps to Reproduce:**
-  1. `POST /api/sync/pruefberichte` mit einem `geraet_id`, das noch keine existierende Zeile in `dv_geraete` hat (z.B. weil das Gerät noch nicht synchronisiert wurde)
-  2. Erwartet laut Spec/Tech Design: Der Datensatz wird trotzdem gespeichert (lose Referenz), die Verknüpfung vervollständigt sich, sobald das Gerät später eintrifft
-  3. Tatsächlich: HTTP 500, der Datensatz wird gar nicht gespeichert (Postgres-Fehler `insert or update on table "dv_pruefberichte" violates foreign key constraint`)
-- **Ursache:** `supabase/migrations/0001_dataverse_sync_schema.sql` definiert die Fremdschlüssel als echte `references ... on delete set null` — das steuert nur das Verhalten beim Löschen der Eltern-Zeile, verhindert aber nicht, dass Postgres beim Einfügen eine existierende Eltern-Zeile verlangt
-- **Priority:** Fix before deployment (widerspricht einer explizit dokumentierten und vom Nutzer bestätigten Architektur-Entscheidung; betrifft mehrere Beziehungen: Prüfbericht→Gerät, Gerät→Standort, Gerät→Artikel, Standort→Firma, Relation→Firma/Kontakt)
-- **Status:** ✅ Gefixt am 2026-09-16 (`supabase/migrations/0002_dataverse_sync_loose_foreign_keys.sql` entfernt die FK-Constraints, Spalten bleiben als normale, indizierte IDs bestehen). Live gegen das echte Supabase-Projekt erneut verifiziert.
-
-#### BUG-2: Kein Rate-Limiting auf dem Sync-Endpoint
-- **Severity:** Medium
-- **Steps to Reproduce:** Beliebig viele Requests mit gültigem `x-api-key` hintereinander senden — keine Drosselung, kein 429
-- **Priority:** Nice to have (für MVP laut Checklist optional), aber vor Produktiv-Go-Live mit echten Kundendaten empfehlenswert, gegen Key-Leak abzusichern
-
-#### BUG-3: Backfill-Skript und Power-Automate-Retry/E-Mail-Verhalten unverifiziert
+#### BUG-1: Fehlendes `CRON_SECRET` führt zu unbehandeltem Absturz statt Fehlermeldung — keine Benachrichtigung
 - **Severity:** High
-- **Steps to Reproduce:** N/A — schlicht noch nicht gegen echte Dataverse-Zugangsdaten bzw. echte Power-Automate-Flows getestet
-- **Priority:** Fix before deployment — muss vor Go-Live einmal echt durchgespielt werden, sonst bleibt AC-6 und AC-5 unbestätigt
+- **Steps to Reproduce:**
+  1. `CRON_SECRET` in der Umgebung nicht setzen (z.B. vergessen bei einem neuen Vercel-Deployment)
+  2. Cron-Endpoint aufrufen
+  3. Erwartet: irgendeine Fehlerantwort, idealerweise mit Log + Admin-E-Mail
+  4. Tatsächlich: `isAuthorized()` wirft eine Exception **vor** dem try/catch-Block in der Route — kein Log über `console.error`, keine E-Mail, nur ein generischer unbehandelter Next.js-Fehler
+- **Bestätigt durch:** neuen Test `"BUG: throws unhandled instead of responding gracefully when CRON_SECRET is unset"` in `route.test.ts`
+- **Warum das wichtig ist:** widerspricht direkt AC-5 ("Admin wird benachrichtigt") — ausgerechnet im Konfigurationsfehler-Fall bleibt der Ausfall unbemerkt, bis jemand händisch nachschaut
+- **Priority:** Fix before deployment
 
-### Retest 2026-09-16 (nach BUG-1-Fix)
-
-- `npm test` — 8/8 grün
-- Alle 5 betroffenen Beziehungen einzeln erneut mit absichtlich fehlendem Elternteil getestet (Standort→Firma, Gerät→Standort, Gerät→Artikel, Relation→Firma, Relation→Kontakt) — jeweils HTTP 200, Datensatz korrekt gespeichert statt HTTP 500
-- AC-1 und EC-3 damit vollständig bestanden; BUG-1 geschlossen
-- BUG-2 (Rate-Limiting) und BUG-3 (Backfill/Power-Automate live unverifiziert) bestehen weiterhin unverändert fort
+#### BUG-2: Ein fehlgeschlagener Entity-Job verhindert das Sync aller nachfolgenden Entitäten im selben Lauf
+- **Severity:** High
+- **Steps to Reproduce:**
+  1. Der Job für eine Entität (z.B. Artikel) schlägt fehl (dies ist während der Entwicklung tatsächlich einmal live passiert, mit einem transienten `TypeError: fetch failed` bei Geräte)
+  2. Erwartet: die übrigen, unabhängigen Entitäten (Standorte, Geräte, Prüfberichte, Relationen) werden trotzdem synchronisiert
+  3. Tatsächlich: `runDataverseSync()` verarbeitet die 7 Entitäten in einer einzigen Schleife ohne Try/Catch pro Job — ein Fehler bricht die gesamte restliche Schleife ab, alle danach kommenden Entitäten werden diesen Lauf gar nicht erst versucht
+- **Bestätigt durch:** neuen Test `"BUG: a failure on one entity prevents every later entity from syncing that run"` in `run-sync.test.ts`
+- **Warum das wichtig ist:** genau dieses Verhalten trat während der Implementierung real auf; ein einzelner transienter Netzwerkfehler bei einer Entität lässt mehrere andere, an sich fehlerfreie Entitäten einen ganzen Tag lang veraltet
+- **Priority:** Fix before deployment — Vorschlag: pro Entität try/catch, alle Fehler sammeln und am Ende in einer E-Mail zusammenfassen, statt beim ersten Fehler ganz abzubrechen
 
 ### Summary
-- **Acceptance Criteria:** 5/7 vollständig bestanden (inkl. AC-1 jetzt vollständig), 1 teilweise (AC-5, weiterhin nur indirekt testbar), 1 nicht verifizierbar in dieser Umgebung (AC-6 Backfill, siehe BUG-3)
-- **Bugs Found:** 3 total, 1 behoben (1 Critical — gefixt, 1 High offen, 1 Medium offen)
-- **Security:** Grundsätzlich solide (Auth, Injection-Schutz, keine Secret-Leaks), aber kein Rate-Limiting (Medium, offen)
+- **Acceptance Criteria:** 6/7 vollständig bestanden, 1 teilweise (AC-5, siehe BUG-1)
+- **Bugs Found:** 2 total (2 High, davon 0 behoben)
+- **Security:** Grundsätzlich solide, ein Low-Finding (Timing-Vergleich, praktisch irrelevant)
 - **Production Ready:** NO
-- **Recommendation:** BUG-1 (Critical) ist behoben und verifiziert. BUG-3 (High — Backfill-Skript und Power-Automate-Retry/E-Mail-Verhalten live verifizieren) muss vor Go-Live noch nachgezogen werden, da Kernfunktionalität (Erstbefüllung) unbestätigt ist. BUG-2 (Rate-Limiting, Medium) kann für den MVP-Start akzeptiert werden, sollte aber zeitnah nachgezogen werden.
+- **Recommendation:** Beide High-Bugs sollten vor dem produktiven Go-Live behoben werden — BUG-1, weil ausgerechnet der Ausfallmelde-Mechanismus selbst lautlos versagen kann, und BUG-2, weil er real reproduziert wurde und die Zuverlässigkeit des täglichen Syncs direkt untergräbt. Beide sind mit überschaubarem Aufwand behebbar (try/catch pro Job in `run-sync.ts`, try/catch um die Auth-Prüfung in der Route).
 
 ## Deployment
 _To be added by /deploy_

@@ -65,4 +65,15 @@ describe("GET /api/cron/sync-dataverse", () => {
       expect.stringContaining("Dataverse unreachable")
     );
   });
+
+  // QA BUG-1: a missing CRON_SECRET (e.g. forgotten Vercel env var) throws
+  // before the try/catch instead of returning a graceful error response —
+  // no log, no alert email, just an unhandled rejection. This test
+  // documents the current (broken) behavior; once fixed it should instead
+  // assert a clean 500 (or 401) JSON response with no throw.
+  it("BUG: throws unhandled instead of responding gracefully when CRON_SECRET is unset", async () => {
+    delete process.env.CRON_SECRET;
+    await expect(GET(makeRequest("anything"))).rejects.toThrow("Missing CRON_SECRET");
+    expect(sendSyncAlertEmailMock).not.toHaveBeenCalled();
+  });
 });

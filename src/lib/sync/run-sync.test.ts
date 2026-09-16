@@ -145,4 +145,27 @@ describe("runDataverseSync", () => {
     expect(firmenSummary?.skippedDueToThreshold).toBe(true);
     expect(result.warnings).toHaveLength(1);
   });
+
+  // QA BUG-2: entities are synced sequentially with no per-entity error
+  // isolation. A transient failure on one entity (this actually happened
+  // live on "geraete" during backend testing) aborts every entity that
+  // comes after it in the list for that whole run, even though they are
+  // otherwise independent. This test documents the current behavior;
+  // once fixed, "kontakte" (and later entities) should still run even
+  // when "artikel" fails.
+  it("BUG: a failure on one entity prevents every later entity from syncing that run", async () => {
+    resetTable("dv_firmen", []);
+    fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string) => {
+      if (entitySet === "bmvcc_artikels") throw new Error("transient network error");
+      if (entitySet === "bmvcc_firmas") return [{ bmvcc_firmaid: "f1", bmvcc_name: "Firma A" }];
+      return [];
+    });
+
+    await expect(runDataverseSync()).rejects.toThrow("transient network error");
+
+    // firmen (processed before artikel) did complete...
+    expect(tables["dv_firmen"]?.has("f1")).toBe(true);
+    // ...but kontakte (processed after artikel) was never even attempted.
+    expect(fetchAllDataverseRecordsMock).not.toHaveBeenCalledWith("bmvcc_kontakts", expect.anything());
+  });
 });
