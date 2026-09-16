@@ -232,12 +232,19 @@ Siehe Decision Log → Technical Decisions oben.
 - **Steps to Reproduce:** N/A — schlicht noch nicht gegen echte Dataverse-Zugangsdaten bzw. echte Power-Automate-Flows getestet
 - **Priority:** Fix before deployment — muss vor Go-Live einmal echt durchgespielt werden, sonst bleibt AC-6 und AC-5 unbestätigt
 
+### Retest 2026-09-16 (nach BUG-1-Fix)
+
+- `npm test` — 8/8 grün
+- Alle 5 betroffenen Beziehungen einzeln erneut mit absichtlich fehlendem Elternteil getestet (Standort→Firma, Gerät→Standort, Gerät→Artikel, Relation→Firma, Relation→Kontakt) — jeweils HTTP 200, Datensatz korrekt gespeichert statt HTTP 500
+- AC-1 und EC-3 damit vollständig bestanden; BUG-1 geschlossen
+- BUG-2 (Rate-Limiting) und BUG-3 (Backfill/Power-Automate live unverifiziert) bestehen weiterhin unverändert fort
+
 ### Summary
-- **Acceptance Criteria:** 4/7 vollständig bestanden, 1 teilweise (AC-5, blockiert durch BUG-1), 2 nicht verifizierbar in dieser Umgebung (AC-6 Backfill, siehe BUG-3)
-- **Bugs Found:** 3 total (1 Critical, 1 High, 1 Medium)
-- **Security:** Grundsätzlich solide (Auth, Injection-Schutz, keine Secret-Leaks), aber kein Rate-Limiting (Medium)
+- **Acceptance Criteria:** 5/7 vollständig bestanden (inkl. AC-1 jetzt vollständig), 1 teilweise (AC-5, weiterhin nur indirekt testbar), 1 nicht verifizierbar in dieser Umgebung (AC-6 Backfill, siehe BUG-3)
+- **Bugs Found:** 3 total, 1 behoben (1 Critical — gefixt, 1 High offen, 1 Medium offen)
+- **Security:** Grundsätzlich solide (Auth, Injection-Schutz, keine Secret-Leaks), aber kein Rate-Limiting (Medium, offen)
 - **Production Ready:** NO
-- **Recommendation:** BUG-1 (Critical) muss vor jedem produktiven Go-Live behoben werden — sonst führt jedes real vorkommende Out-of-Order-Sync-Event (die Architektur geht explizit davon aus, dass das passiert) zu Datenverlust. BUG-3 (Backfill/Power-Automate live verifizieren) ebenfalls vor Go-Live nötig. BUG-2 (Rate-Limiting) kann für den MVP-Start akzeptiert, sollte aber zeitnah nachgezogen werden.
+- **Recommendation:** BUG-1 (Critical) ist behoben und verifiziert. BUG-3 (High — Backfill-Skript und Power-Automate-Retry/E-Mail-Verhalten live verifizieren) muss vor Go-Live noch nachgezogen werden, da Kernfunktionalität (Erstbefüllung) unbestätigt ist. BUG-2 (Rate-Limiting, Medium) kann für den MVP-Start akzeptiert werden, sollte aber zeitnah nachgezogen werden.
 
 ## Deployment
 _To be added by /deploy_
