@@ -155,7 +155,87 @@ Siehe Decision Log → Technical Decisions oben.
 - Für `bmvcc_equipmentrecord.artikel_id` wurde gemäss Datenqualitäts-Hinweis das aktuellere `cre77_artikel`-Lookup-Feld verwendet, nicht das ältere `bmvcc_artikel_id` (Int)
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-16
+**App URL:** http://localhost:3000 (API-only, keine UI)
+**Tester:** QA Engineer (AI)
+
+> Hinweis: PROJ-1 hat keine Oberfläche (reines Infrastruktur-Feature laut Tech Design). Cross-Browser-, Responsive- und Playwright-E2E-Tests entfallen daher; getestet wurde via `npm test` (Vitest, gemockter Supabase-Client) sowie manuell per `curl` gegen den laufenden Dev-Server **und das echte Supabase-Projekt** (keine Mocks) inkl. Aufräumen aller Testdaten danach.
+
+### Acceptance Criteria Status
+
+#### AC-1: Upsert bei Erstellen/Ändern (alle 7 Entitäten)
+- [x] firmen, geraete, pruefberichte, kontakte, artikel, standorte, relationen — je einzeln getestet, alle per Upsert korrekt gespeichert
+
+#### AC-2: Prüfbericht-Löschung = Soft-Delete
+- [x] Verifiziert direkt in der Datenbank: Zeile bleibt bestehen, `deleted_at` wird gesetzt
+
+#### AC-3: Andere Entitäten = Hard-Delete
+- [x] Verifiziert: Zeile ist nach dem Löschen tatsächlich weg (0 Treffer bei Abfrage)
+
+#### AC-4: Ungültiger/fehlender API-Key → 401
+- [x] Ohne Header → 401; mit falschem Key → 401
+
+#### AC-5: Power-Automate-Retry + E-Mail bei endgültigem Fehlschlag
+- [ ] BUG: Nicht vollständig testbar — die Retry-/E-Mail-Logik liegt in Power Automate selbst, das noch nicht eingerichtet ist. Getestet wurde nur, dass unser Endpoint bei einem echten Serverfehler korrekt HTTP 500 liefert (Voraussetzung dafür, dass Power Automates Retry überhaupt greift) — siehe BUG-1, der zeigt, dass ein 500 aktuell in einem eigentlich gültigen Fall auftritt
+
+#### AC-6: Initialer Backfill
+- [ ] BUG: Nicht ausgeführt/verifiziert — noch keine echten Zugangsdaten-Tests gegen die produktive Dataverse-Umgebung, und die OData-Lookup-Feldnamen im Skript sind laut Implementation Notes unverifiziert. Vor Produktivbetrieb zwingend nachzuholen.
+
+#### AC-7: Upsert ist idempotent (Update statt Duplikat)
+- [x] Gleiche ID zweimal gesendet (unterschiedliche Werte) → ein Datensatz, aktualisierte Werte
+
+### Edge Cases Status
+
+#### EC-1: Race Condition (zwei schnelle Änderungen am selben Datensatz)
+- [x] Last-Write-Wins bestätigt (Upsert überschreibt vollständig)
+
+#### EC-2: Doppelter Trigger (Power-Automate-Retry nach vermeintlichem Fehler)
+- [x] Idempotent — zweiter identischer Aufruf verändert nichts Unerwartetes
+
+#### EC-3: Prüfbericht trifft vor zugehörigem Gerät ein (Reihenfolge nicht garantiert)
+- [ ] **BUG (Critical) — siehe BUG-1.** Die im Tech Design dokumentierte Lösung ("lockere/nicht strikt erzwungene Fremdschlüssel") ist in der SQL-Migration NICHT so umgesetzt, wie beschrieben — die Fremdschlüssel sind zwar `nullable`, aber weiterhin als echte `references`-Constraints angelegt. Postgres erzwingt bei jedem NICHT-NULL-Wert weiterhin, dass die referenzierte Zeile existiert. Genau der Fall, den die Architektur explizit abfangen sollte, schlägt fehl.
+
+#### EC-4: Übergeordneter Datensatz wird hart gelöscht, Kinder existieren noch
+- [x] Verifiziert: `ON DELETE SET NULL` funktioniert korrekt — nach Hard-Delete des Geräts wurde `geraet_id` beim zugehörigen (soft-gelöschten) Prüfbericht automatisch auf `null` gesetzt
+
+#### EC-5: Backfill-Skript versehentlich zweimal ausgeführt
+- [ ] Nicht getestet (Skript wurde noch gar nicht live ausgeführt, siehe AC-6)
+
+### Security Audit Results
+- [x] Authentication: Kein Zugriff ohne (korrekten) `x-api-key` möglich
+- [x] Input validation: SQL-Injection-artiger String (`'; DROP TABLE ...`) und `<script>`-Payload wurden als reiner Text gespeichert, nicht ausgeführt — Supabase-Client parametrisiert korrekt
+- [x] Keine Secrets/Stack-Traces in Fehler-Antworten (500 liefert leeren Body, Details nur serverseitig im Log)
+- [ ] BUG (Medium): Kein Rate-Limiting auf einem öffentlich erreichbaren Endpoint mit nur einem einzigen, langlebigen, statischen Shared Secret — bei einem Leak des `SYNC_API_KEY` hätte ein Angreifer unbegrenzten Schreib-/Löschzugriff auf alle 7 Tabellen, ohne Drosselung. Für MVP laut Checklist optional, aber als Risiko dokumentiert.
+- [ ] Authorization (Autorisierung zwischen Kunden): nicht anwendbar für PROJ-1 — dieses Feature hat keine Endnutzer-Rollen, das ist Gegenstand von PROJ-2
+
+### Bugs Found
+
+#### BUG-1: Fremdschlüssel sind nicht wirklich "lose" — Sync schlägt bei Out-of-Order-Events fehl
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. `POST /api/sync/pruefberichte` mit einem `geraet_id`, das noch keine existierende Zeile in `dv_geraete` hat (z.B. weil das Gerät noch nicht synchronisiert wurde)
+  2. Erwartet laut Spec/Tech Design: Der Datensatz wird trotzdem gespeichert (lose Referenz), die Verknüpfung vervollständigt sich, sobald das Gerät später eintrifft
+  3. Tatsächlich: HTTP 500, der Datensatz wird gar nicht gespeichert (Postgres-Fehler `insert or update on table "dv_pruefberichte" violates foreign key constraint`)
+- **Ursache:** `supabase/migrations/0001_dataverse_sync_schema.sql` definiert die Fremdschlüssel als echte `references ... on delete set null` — das steuert nur das Verhalten beim Löschen der Eltern-Zeile, verhindert aber nicht, dass Postgres beim Einfügen eine existierende Eltern-Zeile verlangt
+- **Priority:** Fix before deployment (widerspricht einer explizit dokumentierten und vom Nutzer bestätigten Architektur-Entscheidung; betrifft mehrere Beziehungen: Prüfbericht→Gerät, Gerät→Standort, Gerät→Artikel, Standort→Firma, Relation→Firma/Kontakt)
+
+#### BUG-2: Kein Rate-Limiting auf dem Sync-Endpoint
+- **Severity:** Medium
+- **Steps to Reproduce:** Beliebig viele Requests mit gültigem `x-api-key` hintereinander senden — keine Drosselung, kein 429
+- **Priority:** Nice to have (für MVP laut Checklist optional), aber vor Produktiv-Go-Live mit echten Kundendaten empfehlenswert, gegen Key-Leak abzusichern
+
+#### BUG-3: Backfill-Skript und Power-Automate-Retry/E-Mail-Verhalten unverifiziert
+- **Severity:** High
+- **Steps to Reproduce:** N/A — schlicht noch nicht gegen echte Dataverse-Zugangsdaten bzw. echte Power-Automate-Flows getestet
+- **Priority:** Fix before deployment — muss vor Go-Live einmal echt durchgespielt werden, sonst bleibt AC-6 und AC-5 unbestätigt
+
+### Summary
+- **Acceptance Criteria:** 4/7 vollständig bestanden, 1 teilweise (AC-5, blockiert durch BUG-1), 2 nicht verifizierbar in dieser Umgebung (AC-6 Backfill, siehe BUG-3)
+- **Bugs Found:** 3 total (1 Critical, 1 High, 1 Medium)
+- **Security:** Grundsätzlich solide (Auth, Injection-Schutz, keine Secret-Leaks), aber kein Rate-Limiting (Medium)
+- **Production Ready:** NO
+- **Recommendation:** BUG-1 (Critical) muss vor jedem produktiven Go-Live behoben werden — sonst führt jedes real vorkommende Out-of-Order-Sync-Event (die Architektur geht explizit davon aus, dass das passiert) zu Datenverlust. BUG-3 (Backfill/Power-Automate live verifizieren) ebenfalls vor Go-Live nötig. BUG-2 (Rate-Limiting) kann für den MVP-Start akzeptiert, sollte aber zeitnah nachgezogen werden.
 
 ## Deployment
 _To be added by /deploy_

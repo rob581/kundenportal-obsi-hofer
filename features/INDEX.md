@@ -15,7 +15,7 @@
 
 | ID | Feature | Status | Spec | Created |
 |----|---------|--------|------|---------|
-| PROJ-1 | Dataverse-Sync-Service | In Progress | [Spec](../features/PROJ-1-dataverse-sync-service.md) | 2026-09-15 |
+| PROJ-1 | Dataverse-Sync-Service | In Review | [Spec](../features/PROJ-1-dataverse-sync-service.md) | 2026-09-15 |
 | PROJ-2 | Kunden-Login (Entra External ID) | Architected | [Spec](../features/PROJ-2-kunden-login.md) | 2026-09-15 |
 | PROJ-3 | Geräte-Übersicht | Roadmap | — | 2026-09-15 |
 | PROJ-4 | Prüfberichte-Liste & PDF-Download | Roadmap | — | 2026-09-15 |
