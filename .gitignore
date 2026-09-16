@@ -37,3 +37,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Dataverse solution export (reference only, not app source)
+/bmvcc/
+bmvcc.zip
