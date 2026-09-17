@@ -43,6 +43,8 @@ Dieses Projekt wird über die strukturierten Skills dieses Repos entwickelt — 
 /deploy                Auf Vercel deployen
 ```
 
+`/design` kann jederzeit ausgeführt werden, um das visuelle Design-System (`docs/design-system.md`) zu definieren oder anzupassen — `/frontend` liest diese Datei automatisch, sobald sie existiert.
+
 Details zu Konventionen (Commit-Format, Feature-Tracking, Coding Rules) stehen in [`CLAUDE.md`](CLAUDE.md).
 
 ## Scripts

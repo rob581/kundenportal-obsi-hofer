@@ -19,7 +19,7 @@ src/
   components/
     ui/             shadcn/ui components (NEVER recreate these)
   hooks/            Custom React hooks
-  lib/              Utilities (supabase.ts, utils.ts)
+  lib/              Utilities (supabase-admin.ts, utils.ts)
 features/           Feature specifications (PROJ-X-name.md)
   INDEX.md          Feature status overview
 docs/
@@ -38,6 +38,7 @@ docs/
 7. `/deploy` - Deploy to Vercel + production-ready checks
 
 Use `/refine PROJ-X` at any point to revisit and improve an existing feature spec.
+Use `/design` at any point to define or update the visual design system (`docs/design-system.md`) — `/frontend` reads it automatically once it exists.
 
 ## Feature Tracking
 
