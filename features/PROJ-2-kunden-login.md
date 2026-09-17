@@ -160,10 +160,13 @@ Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** v
 **2026-09-17 nachgetragen — Abmelden korrigiert:**
 - [x] "Abmelden" setzte nur unsere eigene Sitzung zurück, nicht die von Microsoft — beim erneuten Anmelden blieb die zuletzt genutzte E-Mail vorausgefüllt/erinnert. Gefixt mit "federated logout": `src/lib/auth/sign-out.ts` beendet zusätzlich die Tenant-eigene Sitzung über den `end_session_endpoint` des Discovery-Dokuments. Live verifiziert: nach Abmelden wird beim nächsten Login-Versuch keine E-Mail mehr vorausgefüllt.
 
+**2026-09-17 nachgetragen — Erfolgsfall + Firmen-Auswahl live verifiziert:**
+- [x] Temporärer Test-Kontakt in Supabase angelegt: `test-kontakt-robert-1` (E-Mail `robert.bienz@cloudcab.ch`, aktiv, verknüpft mit zwei Firmen "4Viertel" und "Hauswartprofis AG") — **bewusst nicht gelöscht**, bleibt für weitere Tests (PROJ-3/4/5) bestehen. Kein echter Dataverse-Datensatz, taucht beim nächsten PROJ-1-Sync-Lauf ggf. wieder verschwunden auf, falls die IDs nicht in Dataverse existieren — dann vor PROJ-3-Tests neu anlegen.
+- [x] Firmen-Auswahl mit zwei Firmen live getestet — korrekte Liste, Auswahl führt zu `/uebersicht` mit der richtigen Firma
+- [x] Direkter Erfolgsfall bestätigt: aktiver Kontakt + Firma → landet korrekt auf `/uebersicht`
+
 **Noch offen:**
 - [ ] `.env.local.example` um die neuen Variablen ergänzen (`AUTH_SECRET`, `Kundenportal_AZURE_CLIENT_ID/SECRET/TENANT_ID`) — Nutzer muss das selbst tun, `.env.local.example` ist für mich gesperrt
-- [ ] Den erfolgreichen Fall (aktiver Kontakt mit Firma → landet auf `/uebersicht`) noch mit einer echten, in Supabase hinterlegten Kontakt-E-Mail live testen — bisher nur der "Kein Zugang"-Fall bestätigt
-- [ ] Firmen-Auswahl bei mehreren Firmen noch nicht live durchgeklickt
 
 ## Deployment
 _To be added by /deploy_
