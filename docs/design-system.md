@@ -10,9 +10,9 @@ Nüchtern & vertrauenswürdig: klar, ruhig, wenig Ablenkung. Passt zu B2B-Kunden
 
 | Token | Value | Hex (Referenz) | Usage |
 |-------|-------|-----------------|-------|
-| `--primary` | `214 52% 25%` | `#1E3A5F` (dunkles Stahlblau) | Primäre Buttons, Links, aktive Elemente |
+| `--primary` | `212 64% 40%` | `#2563A8`-artig (klares, mittleres Stahlblau) | Primäre Buttons, Links, aktive Elemente |
 | `--primary-foreground` | `0 0% 98%` | — | Text/Icons auf `--primary`-Hintergrund |
-| `--ring` | `214 52% 25%` | `#1E3A5F` | Fokus-Ring (matcht Primärfarbe) |
+| `--ring` | `212 64% 40%` | `#2563A8`-artig | Fokus-Ring (matcht Primärfarbe) |
 | `--destructive` | `0 84.2% 60.2%` | unverändert (shadcn-Default) | Fehlerzustände, destruktive Aktionen **und** Status "keine Freigabe" (siehe Component Conventions) |
 | `--status-success` | `142 71% 29%` | `#1A7A3C`-artig (dunkles Grün) | Status "Freigabe" |
 | `--status-success-foreground` | `0 0% 98%` | — | Text auf `--status-success`-Hintergrund |
@@ -43,7 +43,7 @@ Vorerst nicht unterstützt — alle bisher gebauten Seiten (PROJ-1 bis PROJ-4) g
 |-------|--------------|-------|
 | Bestehende OBSI-Marke matchen? | Nein, freie Palette | 2026-09-17 |
 | Visuelle Grundhaltung | Nüchtern & vertrauenswürdig | 2026-09-17 |
-| Primärfarbe | `#1E3A5F` (dunkles Stahlblau) | 2026-09-17 |
+| Primärfarbe | `#1E3A5F` (dunkles Stahlblau) gewählt, dann als optisch zu nah am neutralen Standard korrigiert auf `#2563A8`-artiges klareres Stahlblau | 2026-09-17 |
 | Typografie | System-Standard beibehalten | 2026-09-17 |
 | Radius | shadcn-Standard (`0.5rem`) beibehalten | 2026-09-17 |
 | Dark Mode | Vorerst nur hell | 2026-09-17 |
