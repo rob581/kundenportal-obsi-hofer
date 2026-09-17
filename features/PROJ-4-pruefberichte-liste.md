@@ -120,6 +120,7 @@ Bevor der Backend-Teil von PROJ-4 gebaut werden kann, braucht `dv_pruefberichte`
 - **Wie im Tech Design festgelegt:** kein eigener `firmaId`-Parameter an der Prüfberichte-Abfrage — die Autorisierung ist bereits durch den vorgelagerten `getGeraetById`-Aufruf der Detailseite sichergestellt (Prüfberichte werden erst nach dessen erfolgreichem, nicht-null Ergebnis geladen). Kein separater API-Endpoint nötig, wie bei PROJ-3.
 - 6 neue Integrationstests in `src/lib/pruefberichte/queries.test.ts` (gleiches Fluent-Mock-Muster wie `src/lib/geraete/queries.test.ts`): Filterung nach Gerät, Ausschluss Soft-gelöschter Berichte, archivierte Berichte werden normal zurückgegeben, Sortierung (inkl. Berichte ohne Datum), Bemerkungen/Prüfer werden durchgereicht, leeres Ergebnis für ein Gerät ohne Berichte.
 - `npx tsc --noEmit` und `npx vitest run` (44 Tests total, davon 6 neu) laufen fehlerfrei durch; manueller Smoke-Test bestätigt weiterhin keinen Server-Fehler auf der Geräte-Detailseite ohne Session.
+- **Live verifiziert (2026-09-17):** Manueller Sync-Lauf gegen die echte Dataverse-/Supabase-Umgebung ausgeführt (`pruefberichte`-Batch schlug beim ersten Versuch mit dem bekannten transienten `TypeError: fetch failed` fehl, siehe PROJ-1 Implementation Notes; Retry lief sauber durch). Nutzer hat danach eine Geräte-Detailseite mit echten Prüfberichten aufgerufen — Bemerkungen werden korrekt angezeigt.
 
 ## QA Test Results
 _To be added by /qa_
