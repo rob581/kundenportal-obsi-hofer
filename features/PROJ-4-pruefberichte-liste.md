@@ -113,6 +113,14 @@ Bevor der Backend-Teil von PROJ-4 gebaut werden kann, braucht `dv_pruefberichte`
 - `npx tsc --noEmit` und `npx vitest run` (38 Tests, unverändert) laufen fehlerfrei durch; manueller Smoke-Test bestätigt, dass die Detailseite ohne Session weiterhin korrekt zu `/login` umleitet (kein Server-Fehler).
 - Noch offen (für `/backend`): PROJ-1-Ergänzung (`bemerkungen`-Spalte + Sync-Mapping von `bmvcc_remark`), danach echte Supabase-Abfrage für `getPruefberichteFuerGeraet` inkl. Sortierung/Soft-Delete-Filterung in der Datenbank.
 
+## Implementation Notes (Backend)
+
+- **PROJ-1-Ergänzung zuerst umgesetzt** (additiv, wie im Tech Design vorgesehen): Migration `supabase/migrations/0003_pruefberichte_bemerkungen.sql` fügt die Spalte `bemerkungen` zu `dv_pruefberichte` hinzu (vom Nutzer im Supabase SQL Editor ausgeführt); `src/lib/sync/entities.ts` (`pruefberichtSchema`) und `src/lib/sync/jobs.ts` (Pruefberichte-Job) um `bemerkungen`/`bmvcc_remark` ergänzt. Keine bestehenden Sync-Tests mussten angepasst werden, da keiner davon einzelne Pruefbericht-Felder hart codiert prüft.
+- `src/lib/pruefberichte/queries.ts` ersetzt die Mock-Data-Schicht mit einer echten Supabase-Abfrage: `dv_pruefberichte` gefiltert nach `geraet_id`, ohne Soft-gelöschte Einträge (`deleted_at is null`), archivierte Berichte inklusive, sortiert nach `pruefdatum` absteigend (Berichte ohne Datum sortieren ans Ende, kein Vorrang wie bei "nie geprüften Geräten" in PROJ-3, da hier keine akute Handlungsdringlichkeit signalisiert wird).
+- **Wie im Tech Design festgelegt:** kein eigener `firmaId`-Parameter an der Prüfberichte-Abfrage — die Autorisierung ist bereits durch den vorgelagerten `getGeraetById`-Aufruf der Detailseite sichergestellt (Prüfberichte werden erst nach dessen erfolgreichem, nicht-null Ergebnis geladen). Kein separater API-Endpoint nötig, wie bei PROJ-3.
+- 6 neue Integrationstests in `src/lib/pruefberichte/queries.test.ts` (gleiches Fluent-Mock-Muster wie `src/lib/geraete/queries.test.ts`): Filterung nach Gerät, Ausschluss Soft-gelöschter Berichte, archivierte Berichte werden normal zurückgegeben, Sortierung (inkl. Berichte ohne Datum), Bemerkungen/Prüfer werden durchgereicht, leeres Ergebnis für ein Gerät ohne Berichte.
+- `npx tsc --noEmit` und `npx vitest run` (44 Tests total, davon 6 neu) laufen fehlerfrei durch; manueller Smoke-Test bestätigt weiterhin keinen Server-Fehler auf der Geräte-Detailseite ohne Session.
+
 ## QA Test Results
 _To be added by /qa_
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraetById } from "@/lib/geraete/queries";
-import { getPruefberichteFuerGeraet } from "@/lib/pruefberichte/mock-data";
+import { getPruefberichteFuerGeraet } from "@/lib/pruefberichte/queries";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
