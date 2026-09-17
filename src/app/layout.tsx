@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "OBSI Hofer GmbH Kundenportal",
@@ -14,10 +13,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de">
-      <body className="antialiased">
-        {children}
-        <Toaster />
-      </body>
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

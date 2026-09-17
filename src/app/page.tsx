@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 
-// TODO(/backend PROJ-2): once middleware checks for a real session, this
-// should redirect to /login only when unauthenticated, and to the device
-// overview (PROJ-3) otherwise.
+// /login itself redirects an already-authenticated visitor onward (to
+// /uebersicht or /kein-zugang), so this can unconditionally send everyone
+// there first.
 export default function Home() {
   redirect("/login");
 }
