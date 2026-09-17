@@ -49,7 +49,7 @@
 - Performance: Paginierte Abfrage (nicht die komplette Geräteliste einer Firma auf einmal laden)
 
 ## Open Questions
-- [ ] Genaue Liste/Bedeutung der vorkommenden Status-Werte in `bmvcc_Betriebsmittelstatus` ist nicht abschliessend bekannt (siehe PROJ-1 Decision Log) — relevant für sinnvolle Filter-Beschriftungen, wird bei `/architecture` oder `/frontend` anhand echter Daten geprüft
+- [x] Genaue Liste/Bedeutung der vorkommenden Status-Werte in `bmvcc_Betriebsmittelstatus` → bei `/architecture` anhand der echten Daten geprüft: "Freigabe" (83%), "keine Freigabe" (14%), "letzte Freigabe"/"Letzte Freigabe" (2%, uneinheitliche Gross-/Kleinschreibung), kein Status gesetzt (0,6%) (2026-09-17)
 
 ## Decision Log
 
@@ -68,12 +68,53 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| `/uebersicht` (bisheriger PROJ-2-Platzhalter) wird die echte Geräte-Übersicht; Detailseite unter `/uebersicht/geraete/[id]` | Ist bereits die vorgesehene Landing-Page nach Firma-Auswahl, kein zusätzlicher Redirect nötig | 2026-09-17 |
+| Server Components lesen direkt aus Supabase, kein separater API-Endpoint | Reine Leseoperation, passt zum bestehenden Muster (Firmen-Auswahl macht das schon so) | 2026-09-17 |
+| Firma-Einschränkung erfolgt vollständig im Server-Code (eigene WHERE-Bedingungen), nicht über Datenbank-RLS-Policies | Die PROJ-1-Tabellen haben RLS ohne jegliche Freigabe für anon/authenticated — nur der Service-Role-Schlüssel darf überhaupt lesen; die Firma-Einschränkung muss daher explizit im Code erfolgen | 2026-09-17 |
+| Kein automatischer Datenbank-Join zwischen Gerät und Standort (PostgREST-Embedding) — stattdessen zweistufige Abfrage (erst Standorte der Firma, dann Geräte dieser Standorte) | Seit PROJ-1 BUG-1-Fix gibt es keine echten Fremdschlüssel-Constraints zwischen den Tabellen mehr, wodurch Supabase/PostgREST keine automatische Verknüpfung erkennen kann | 2026-09-17 |
+| Filter/Suche/Seite werden als URL-Suchparameter geführt, nicht als reiner Client-State | Zustand bleibt beim Neuladen/Teilen erhalten; Server Component kann die Datenbankabfrage direkt anhand der URL bauen | 2026-09-17 |
+| Status-Filter-Optionen werden bei jedem Laden dynamisch aus den tatsächlichen Werten der Firma ermittelt, mit Gross-/Kleinschreibungs-Normalisierung beim Gruppieren | Echte Daten zeigen inkonsistente Schreibweisen ("letzte Freigabe" vs. "Letzte Freigabe") — ohne Normalisierung erschienen zwei Filter für denselben Status | 2026-09-17 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+/uebersicht (ersetzt den PROJ-2-Platzhalter)
+├── AppHeader (bestehend)
+├── Filterleiste
+│   ├── Status-Filter (Dropdown, Optionen aus den echten Daten der Firma)
+│   └── Suchfeld (Gerätename/Seriennummer)
+├── Geräte-Tabelle
+│   ├── Spalten: Gerätename, Status, Standort, Datum letzte Prüfung
+│   ├── Zeile anklickbar → Detailseite
+│   ├── Leer-Zustand ("keine Geräte") bzw. "keine Ergebnisse für Suche"
+│   └── Fehler-Zustand mit "Erneut versuchen"
+└── Pagination (25 pro Seite)
+
+/uebersicht/geraete/[id] (neue Detailseite)
+├── AppHeader
+├── Zurück-Link
+└── Detail-Karte: Seriennummer, Barcode, Hersteller/Norm (Artikel), Standort, Lagerort, Zubehör, Bemerkungen, Status, Prüfdaten
+```
+
+### Datenmodell (in Textform)
+
+- Bei jedem Aufruf liest der Server Geräte aus der PROJ-1-Tabelle `dv_geraete`, eingeschränkt auf die Standorte der aktuell gewählten Firma (zweistufig: erst `dv_standorte` nach `firma_id`, dann `dv_geraete` nach den gefundenen Standort-IDs)
+- Filter (Status, Suche) und Seite werden als URL-Parameter geführt (`?status=...&suche=...&seite=2`)
+- Detailseite liest einen einzelnen Geräte-Datensatz plus verknüpften Artikel- und Standort-Namen (ebenfalls per separater Abfrage, kein automatischer Join)
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+Keine neuen — nutzt die bereits installierten shadcn-Komponenten (Table, Input, Select, Pagination) und die vorhandene Supabase-Anbindung (`@supabase/supabase-js`, `src/lib/supabase-admin.ts`).
+
+### Datenfund für `/frontend` und `/backend`
+Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842), "keine Freigabe" (1174), "letzte Freigabe"/"Letzte Freigabe" (172+2, uneinheitliche Schreibung), kein Status (53, `null`). Beim Gruppieren für den Filter case-insensitiv vergleichen.
 
 ## QA Test Results
 _To be added by /qa_
