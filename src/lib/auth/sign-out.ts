@@ -1,8 +1,10 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { signOut } from "../../../auth";
+
+const SELECTED_FIRMA_COOKIE = "obsi_selected_firma";
 
 // Plain signOut() only clears OUR session cookie — the Entra External ID
 // tenant keeps its own "stay signed in?" session, so the next login
@@ -11,6 +13,13 @@ import { signOut } from "../../../auth";
 // tenant's own end_session_endpoint afterwards) clears that too.
 export async function signOutEverywhere(): Promise<void> {
   await signOut({ redirect: false });
+
+  // The Firma-Auswahl cookie has no maxAge, so it survives sign-out as long
+  // as the browser stays open — without clearing it here, a customer with
+  // multiple Firmen who signs out and back in (as a different contact, or
+  // just to switch) would silently land back on the previously selected
+  // Firma instead of the selection screen.
+  (await cookies()).delete(SELECTED_FIRMA_COOKIE);
 
   const tenantId = process.env.Kundenportal_AZURE_TENANT_ID;
   const requestHeaders = await headers();

@@ -223,6 +223,13 @@ Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** v
 - **Ursache:** `vitest.config.ts` hatte keine `exclude`-Regel für `tests/` (das laut `CLAUDE.md` ausschliesslich für Playwright-E2E-Tests reserviert ist)
 - **Status:** ✅ Gefixt (2026-09-17): `tests/` zur `exclude`-Liste in `vitest.config.ts` hinzugefügt (inkl. der Standard-Vitest-Ausschlüsse, die durch eine eigene `exclude`-Angabe sonst überschrieben würden)
 
+#### BUG-3: Firma-Auswahl-Cookie überlebt Abmelden, dadurch keine erneute Firmen-Auswahl beim nächsten Login
+- **Severity:** Medium
+- **Gefunden:** 2026-09-17, vom Nutzer beim manuellen Testen von PROJ-3 gemeldet ("nach dem Abmelden und neu Anmelden kommt wieder die zuletzt angezeigte Firma nicht die Firmenauswahl")
+- **Steps to Reproduce:** Als Kontakt mit mehreren Firmen anmelden, eine Firma auswählen, über "Abmelden" ausloggen, danach (im selben Browser) erneut anmelden → landet direkt wieder auf der zuvor gewählten Firma statt auf `/firmen-auswahl`
+- **Ursache:** `obsi_selected_firma` wird beim Setzen (`firmen-auswahl/actions.ts`) ohne `maxAge`/`expires` gesetzt (reines Session-Cookie), und `signOutEverywhere()` (`src/lib/auth/sign-out.ts`) hat bisher ausschliesslich die NextAuth-Session beendet, nie dieses Cookie gelöscht — es überlebt daher jedes Abmelden, solange der Browser offen bleibt
+- **Status:** ✅ Gefixt (2026-09-17): `signOutEverywhere()` löscht das `obsi_selected_firma`-Cookie jetzt explizit vor dem Redirect zum Entra-Logout
+
 ### Hinweis zur QA-Konvention
 Beide Bugs wurden in dieser Session direkt behoben statt nur dokumentiert — abweichend von der üblichen QA-Regel "nur finden, nicht fixen". Grund: Beide blockierten eine verlässliche weitere Testdurchführung (BUG-2 verhinderte `npm test`, BUG-1 wurde erst durch gezieltes Debugging während der Sicherheitsprüfung sichtbar und liess sich mit calculated risk sofort schliessen). Bitte kurz gegenprüfen, ob das so in Ordnung ist.
 
@@ -232,7 +239,7 @@ Beide Bugs wurden in dieser Session direkt behoben statt nur dokumentiert — ab
 
 ### Summary
 - **Acceptance Criteria:** 7/7 abgedeckt (6 live verifiziert, 1 durch Architektur/Unit-Test)
-- **Bugs Found:** 2 total, beide behoben (0 High/Critical offen, 1 Medium-Fund zu Rate-Limiting bewusst akzeptiert)
+- **Bugs Found:** 3 total, alle behoben (0 High/Critical offen, 1 Medium-Fund zu Rate-Limiting bewusst akzeptiert); BUG-3 kam erst nach dem ursprünglichen `/qa`-Lauf hinzu, gemeldet während des manuellen PROJ-3-Tests am 2026-09-17
 - **Security:** Solide — Routen-Schutz, Cookie-Sicherheit, Autorisierung gegen Firma-Manipulation, keine Secret-Leaks, kein XSS-Vektor
 - **Production Ready:** JA, mit einem Vorbehalt — BUG-1s Vercel-Verhalten sollte bei `/deploy` verifiziert werden, bevor es als endgültig gelöst gilt
 - **Recommendation:** Status auf "Approved" setzen. Bei `/deploy`: gezielt prüfen, ob Middleware auf Vercel greift (z.B. mit demselben "bedingungsloser Redirect"-Test), da das lokal nie funktioniert hat.
