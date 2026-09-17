@@ -1,6 +1,6 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-17
 **Last Updated:** 2026-09-17
 
@@ -141,7 +141,90 @@ Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842)
 - `npx tsc --noEmit` und `npx vitest run` (36 Tests total) laufen fehlerfrei durch; manueller Smoke-Test bestätigt weiterhin keinen Server-Fehler auf `/uebersicht` ohne Session. Echter End-to-End-Test mit dem vorhandenen Test-Kontakt (`test-kontakt-robert-1`) steht noch aus (Nutzer-Review).
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-17
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Wie schon bei PROJ-2 lässt sich der echte Entra-External-ID-Login nicht automatisiert/wiederholbar durchspielen (dafür bräuchte es einen dauerhaften echten Kundenzugang). Was ohne echten Login automatisiert prüfbar ist — Routen-Schutz, Daten-/Filter-/Sortier-/Paginierungslogik, Autorisierung — wurde automatisiert getestet (Vitest-Integrationstests gegen die echte Query-Logik, Playwright für den Routen-Schutz). Die tatsächlich angezeigten Inhalte (Geräteliste, Filter, Detailseite, "Firma wechseln") wurden vom Nutzer während der Backend-Phase live mit dem Test-Kontakt `test-kontakt-robert-1` gegen echte Daten geprüft und als funktionierend bestätigt (siehe Chat-Verlauf 2026-09-17).
+
+### Acceptance Criteria Status
+
+#### AC-1: Geräteliste zeigt Gerätename, Status, Standort, Datum letzte Prüfung für die Firma
+- [x] Verifiziert durch Integrationstest (`getGeraeteList` gibt nur Geräte der Standorte der übergebenen Firma zurück) + live vom Nutzer bestätigt
+
+#### AC-2: Leermeldung bei Firma ohne Geräte
+- [x] Datenlayer verifiziert (Firma ohne Standorte → `total: 0`, `items: []`); UI-Zweig für die Leermeldung durch Code-Review bestätigt (kein automatisierter Render-Test ohne echten Login möglich)
+
+#### AC-3: Status-Filter zeigt nur passende Geräte
+- [x] Integrationstest grün (case-insensitive exakter Match)
+
+#### AC-4: Freitextsuche nach Gerätename/Seriennummer
+- [x] Integrationstest grün (beide Felder geprüft)
+
+#### AC-5: Status-Filter UND Suchbegriff kombiniert (UND-Verknüpfung)
+- [x] Neuer Integrationstest in dieser QA-Runde ergänzt (`combines status filter and search term with AND`) — grün; deckt sowohl "nur ein Kriterium passt → kein Treffer" als auch "beide passen → Treffer" ab
+
+#### AC-6: Paginierung bei mehr als 25 Geräten
+- [x] Neuer Integrationstest mit 30 simulierten Geräten ergänzt — Seite 1: 25 Einträge, Seite 2: 5 Einträge, `total: 30`, keine Überschneidung/Lücke zwischen den Seiten
+
+#### AC-7: Detailseite zeigt alle verfügbaren Felder
+- [x] Feld-für-Feld-Abgleich zwischen `getGeraetById`-Rückgabe und Detailseiten-JSX durch Code-Review; Zugriffskontrolle durch 3 Integrationstests abgedeckt (fremde Firma, unbekannte ID, Gerät ohne Standort); Rendering live vom Nutzer bestätigt
+
+#### AC-8: Standard-Sortierung (neueste Prüfung zuerst, nie geprüft ganz oben)
+- [x] Integrationstest grün
+
+#### AC-9: Fehler-Zustand mit "Erneut versuchen", Header/Abmelden bleiben nutzbar
+- [x] Code-Review bestätigt: `<AppHeader />` wird ausserhalb des try/catch-Zweigs gerendert, ist im Fehlerfall also immer vorhanden. Ein echter Datenbank-Ausfall wurde nicht künstlich provoziert (gleiche Konvention wie bei PROJ-1/2: kein mutwilliges Lahmlegen der Produktions-Supabase-Instanz)
+
+### Edge Cases Status
+
+#### EC-1: Gerät ohne Standort
+- [x] Integrationstest `getGeraetById` → `null` bei fehlendem Standort
+
+#### EC-2: Freitext-Statuswerte, dynamische Filter-Optionen
+- [x] Integrationstest: case-insensitive Deduplizierung über alle Geräte der Firma; Sortierung der Optionen zusätzlich verbessert (siehe BUG-1 unten aus der Backend-Phase, bereits behoben)
+
+#### EC-3: Firma-Wechsel setzt Filter/Suche zurück
+- [x] Code-Review: sowohl `selectFirma` als auch der neue `changeFirma` redirecten auf bare Pfade (`/uebersicht` bzw. `/firmen-auswahl`) ohne Query-Parameter — Filter/Suche sind danach zwingend zurückgesetzt
+
+#### EC-4: Sehr lange Gerätenamen/Bemerkungen/Standortnamen in der Tabelle
+- [ ] **BUG-1 gefunden** (siehe unten) — Spec verspricht "werden gekürzt", tatsächlich nur horizontales Scrollen über die shadcn-Table-Standardkomponente
+
+#### EC-5: Suchbegriff ohne Treffer
+- [x] Code-Review + Integrationstests (Suchbegriffe ohne Match liefern ein leeres Array) bestätigen die Grundlage für die eigene "Keine Ergebnisse für..."-Meldung
+
+### Security Audit Results
+- [x] Authentication: Beide neuen PROJ-3-Routen ohne Session → Redirect zu `/login` (2 neue Playwright-Tests, inkl. Test, dass Filter-/Suche-/Seite-Query-Parameter den Session-Check nicht umgehen)
+- [x] Autorisierung/IDOR: `getGeraetById` verweigert den Zugriff auf ein Gerät, dessen Standort zu einer anderen Firma gehört — liefert `null`, identisch zum "unbekannte ID"-Fall (3 Integrationstests: fremde Firma, unbekannte ID, kein Standort)
+- [x] Cookie-Manipulation: `getCurrentFirmaId` validiert den `obsi_selected_firma`-Cookie-Wert gegen `session.portal.firmaIds`; ungültiger/fremder Wert → Redirect zu `/firmen-auswahl` (Code-Review; identische, bereits in PROJ-2 auditierte Logik, jetzt zusätzlich von der Detailseite genutzt)
+- [x] Keine Secrets im Client-Code: `getSupabaseAdmin` (Service-Role-Key) wird von keiner `"use client"`-Datei importiert (per Grep geprüft)
+- [x] Injection: Freitextsuche escaped `,`/`(`/`)` vor dem Einsetzen in PostgRESTs `.or()`-Filterliste, verhindert das Einschleusen zusätzlicher Filterbedingungen über die Suche
+- [x] XSS: Suchbegriff wird ausschliesslich über JSX-Textinterpolation ausgegeben (React escaped automatisch), kein `dangerouslySetInnerHTML` im gesamten Feature
+- [x] Rate-Limiting: kein neuer öffentlicher API-Endpoint — reine Server-Component-Seiten hinter der bestehenden Login-Pflicht, gleiches Risikoprofil wie PROJ-2 (dort bereits geprüft/akzeptiert)
+
+### Bugs Found
+
+#### BUG-1: Tabellenzellen kürzen lange Texte nicht wie im Spec beschrieben
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Gerät mit sehr langem Gerätenamen/Standortnamen in der Geräte-Übersicht anzeigen
+  2. Auf einem schmalen Viewport (z.B. 375px) betrachten
+  3. Erwartet (laut Edge Case in diesem Spec): Zellen "brechen sauber um bzw. werden gekürzt"
+  4. Tatsächlich: Keine `truncate`/Kürzungs-Klassen auf den `TableCell`-Inhalten — die shadcn-`Table`-Komponente wickelt lediglich die gesamte Tabelle in einen `overflow-auto`-Container, wodurch bei sehr langen Inhalten horizontal gescrollt statt umgebrochen/gekürzt wird
+- **Priority:** Nice to have — kein Blocker, da die Tabelle dadurch nicht sichtbar "kaputt" geht (funktionierender Scroll-Fallback), nur nicht exakt wie im Spec-Wortlaut beschrieben; guter Kandidat für einen späteren `/design`-Polish-Durchgang zusammen mit dem Rest des visuellen Feinschliffs
+
+### Automatisierte Tests
+- **Unit-/Integrationstests (Vitest):** 38/38 grün gesamt. Für PROJ-3: 13 Tests in `src/lib/geraete/queries.test.ts` (11 aus der Backend-Phase + 2 in dieser QA-Runde ergänzt: kombinierter Status+Suche-Filter, Paginierung über 25 Geräte hinaus) — decken Firma-Isolation, Filter, Suche, Sortierung, Paginierung und alle drei "kein Zugriff"-Fälle von `getGeraetById` ab
+- **E2E-Tests (Playwright):** 12/12 grün gesamt (Chromium + Mobile Safari). Neu für PROJ-3 in `tests/PROJ-3-geraete-uebersicht.spec.ts`: Routen-Schutz für die Detailseite, sowie dass Filter-/Suche-/Seite-Query-Parameter den Session-Check nicht umgehen
+- **Regression:** Alle bisherigen PROJ-1- (5 Sync-Tests) und PROJ-2-Tests (7 Access-Unit-Tests, 4 E2E-Tests) weiterhin grün — keine Regressionen durch PROJ-3
+
+### Summary
+- **Acceptance Criteria:** 9/9 abgedeckt (Datenlayer + Code-Review automatisiert geprüft; UI-Verhalten zusätzlich vom Nutzer live gegen echte Daten bestätigt)
+- **Bugs Found:** 1 total (0 Critical, 0 High, 0 Medium, 1 Low) — nicht blockierend
+- **Security:** Solide — Firma-Isolation doppelt abgesichert (Datenbankebene über `getGeraetById`/`getGeraeteList` + Cookie-Validierung), kein Secret-Leak, kein Injection- oder XSS-Vektor gefunden
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen. BUG-1 (Tabellen-Trunkierung) optional bei einem künftigen `/design`-Durchgang mitnehmen, kein Grund für einen Deployment-Aufschub.
 
 ## Deployment
 _To be added by /deploy_

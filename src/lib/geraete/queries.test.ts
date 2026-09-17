@@ -212,6 +212,52 @@ describe("getGeraeteList", () => {
     expect(result.items.map((g) => g.id)).toEqual(["g3", "g1", "g2"]);
   });
 
+  it("combines status filter and search term with AND (AC: beide Kriterien kombiniert)", async () => {
+    seedZweiFirmen();
+
+    // g1 matches the status alone, but not the search term alone — only a
+    // device matching BOTH may be returned.
+    const result = await getGeraeteList("f1", { status: "Freigabe", suche: "Rauchmelder" });
+
+    expect(result.items).toEqual([]);
+
+    const matchesBoth = await getGeraeteList("f1", { status: "Freigabe", suche: "Feuerlöscher" });
+    expect(matchesBoth.items.map((g) => g.id)).toEqual(["g1"]);
+  });
+
+  it("paginates at 25 items per page across a larger result set", async () => {
+    tableData.dv_standorte = [{ id: STANDORT_A, name: "Hauptlager Zürich", firma_id: "f1" }];
+    tableData.dv_geraete = Array.from({ length: 30 }, (_, i) => ({
+      id: `bulk-${i}`,
+      name: `Gerät ${i}`,
+      seriennummer: `SN-${i}`,
+      barcode: null,
+      status: "Freigabe",
+      letzte_pruefung: `2026-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      ablegereife: null,
+      herstelljahr: null,
+      standort_id: STANDORT_A,
+      artikel_id: null,
+      lagerort: null,
+      pruefer: null,
+      zubehoer: null,
+      bemerkungen: null,
+    }));
+
+    const page1 = await getGeraeteList("f1", { seite: 1 });
+    expect(page1.items.length).toBe(25);
+    expect(page1.total).toBe(30);
+    expect(page1.pageSize).toBe(25);
+    expect(page1.page).toBe(1);
+
+    const page2 = await getGeraeteList("f1", { seite: 2 });
+    expect(page2.items.length).toBe(5);
+    expect(page2.total).toBe(30);
+
+    const combinedIds = new Set([...page1.items, ...page2.items].map((g) => g.id));
+    expect(combinedIds.size).toBe(30);
+  });
+
   it("does not populate Artikel fields in the list (list view doesn't need them)", async () => {
     seedZweiFirmen();
 

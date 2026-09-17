@@ -17,7 +17,7 @@
 |----|---------|--------|------|---------|
 | PROJ-1 | Dataverse-Sync-Service | Approved | [Spec](../features/PROJ-1-dataverse-sync-service.md) | 2026-09-15 |
 | PROJ-2 | Kunden-Login (Entra External ID) | Approved | [Spec](../features/PROJ-2-kunden-login.md) | 2026-09-15 |
-| PROJ-3 | Geräte-Übersicht | In Progress | [Spec](../features/PROJ-3-geraete-uebersicht.md) | 2026-09-15 |
+| PROJ-3 | Geräte-Übersicht | Approved | [Spec](../features/PROJ-3-geraete-uebersicht.md) | 2026-09-15 |
 | PROJ-4 | Prüfberichte-Liste & PDF-Download | Roadmap | — | 2026-09-15 |
 | PROJ-5 | Dashboard | Roadmap | — | 2026-09-15 |
 
