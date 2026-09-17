@@ -18,7 +18,12 @@ const SUPPORT_EMAIL = "robert.bienz@obsi-hofer.ch";
 // the spec Decision Log for why this stays a single generic message.
 export default async function KeinZugangPage() {
   const session = await auth();
-  if (session?.portal?.hasAccess) {
+  // Don't rely on middleware alone for this (see middleware.ts QA note) —
+  // without any session there's nothing meaningful to show here either.
+  if (!session) {
+    redirect("/login");
+  }
+  if (session.portal?.hasAccess) {
     redirect("/uebersicht");
   }
 

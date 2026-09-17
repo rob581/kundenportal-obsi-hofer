@@ -168,5 +168,74 @@ Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** v
 **Noch offen:**
 - [ ] `.env.local.example` um die neuen Variablen ergänzen (`AUTH_SECRET`, `Kundenportal_AZURE_CLIENT_ID/SECRET/TENANT_ID`) — Nutzer muss das selbst tun, `.env.local.example` ist für mich gesperrt
 
+## QA Test Results
+
+**Tested:** 2026-09-17
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Der echte Entra-External-ID-Login (Microsoft-Redirect, Registrierung, MFA) lässt sich nicht sinnvoll automatisiert/wiederholbar testen — dafür bräuchte es echte, dauerhaft nutzbare Kundenzugangsdaten bei Microsoft. Dieser Teil wurde in den vorherigen Sessions **manuell live** gegen den echten External-ID-Tenant verifiziert (siehe Implementation Notes oben). Automatisiert getestet wurde alles, was ohne echten Microsoft-Login erreichbar/prüfbar ist: Seiteninhalte, Routen-Schutz, Cookie-/Autorisierungs-Sicherheit.
+
+### Acceptance Criteria Status
+
+#### AC-1: Registrierung/Login prüft aktiven Kontakt
+- [x] Live verifiziert (unbekannte E-Mail → Kein Zugang; aktiver Kontakt → Zugriff)
+
+#### AC-2: Genau eine Firma → direkte Weiterleitung
+- [x] Implizit über die Zugriffslogik abgedeckt (Unit-Test in `access.test.ts`); mit zwei Firmen separat getestet (siehe AC-3)
+
+#### AC-3: Mehrere Firmen → Firmen-Auswahl
+- [x] Live verifiziert: Test-Kontakt mit 2 Firmen zeigt korrekte Auswahl, führt nach Klick zu `/uebersicht` mit der richtigen Firma
+
+#### AC-4: Unbekannt/inaktiv → generische "Kein Zugang"-Meldung
+- [x] Live verifiziert (unbekannte E-Mail). Inaktiver-Kontakt-Fall durch Unit-Test abgedeckt (`getPortalAccess` gibt `null` für `ist_aktiv: false`)
+
+#### AC-5: Abmelden beendet die Sitzung
+- [x] Live verifiziert — inkl. Fix: beendet jetzt auch die Microsoft-eigene Sitzung (siehe BUG-1 unten, behoben)
+
+#### AC-6: Datenscope pro gewählter Firma
+- [x] Live verifiziert (Cookie-Manipulations-Test, siehe Security Audit) — serverseitig korrekt abgesichert
+
+#### AC-7: Zuordnung wird bei jedem Login neu geprüft
+- [x] Durch Architektur abgedeckt (`getPortalAccess` läuft bei jedem Sign-in neu, keine persistente Portal-Nutzer-Tabelle) — nicht separat live mit einer Statusänderung zwischen zwei Logins getestet (bräuchte eine zweite echte Anmeldung mit Zwischenschritt in Dataverse)
+
+### Security Audit Results
+- [x] Authentication: Alle geschützten Seiten ohne Session → 307 zu `/login` (verifiziert für `/uebersicht`, `/firmen-auswahl`, `/kein-zugang`)
+- [x] Session-Cookies: `HttpOnly` + `SameSite=Lax`, kein JS-Zugriff möglich, CSRF-Token vorhanden
+- [x] Autorisierung/IDOR: `obsi_selected_firma`-Cookie manuell auf einen erfundenen Wert manipuliert → korrekt auf `/firmen-auswahl` zurückgeworfen (kein Zugriff auf falsche Firma möglich); die Server Action `selectFirma` validiert die gewählte Firma zusätzlich gegen die Session, bevor sie das Cookie setzt
+- [x] Keine Secrets im Seitenquelltext (`AZURE_CLIENT_SECRET`, `SUPABASE_SECRET_KEY`, `AUTH_SECRET`, `CRON_SECRET` geprüft)
+- [x] Kein XSS-relevantes Eingabefeld in diesem Feature (keine Freitext-Formulare, nur OAuth-Redirect + Firmen-Auswahl-Buttons)
+- [ ] BUG (Medium): Kein Rate-Limiting auf unseren eigenen Auth-Routen (`/api/auth/*`) — bewusst niedrige Priorität, da der eigentliche Credential-Check bei Microsoft liegt, nicht bei uns
+
+### Bugs Found
+
+#### BUG-1: Middleware/Proxy wird in der lokalen Next.js-16-Dev-Umgebung nie ausgeführt
+- **Severity:** Medium
+- **Steps to Reproduce:** Middleware testweise auf einen bedingungslosen Redirect gesetzt (jede Anfrage sollte umgeleitet werden) → selbst nach vollständigem Neustart (`.next` gelöscht, Server neu gestartet) hatte das auf **keinen einzigen** Request Einfluss
+- **Auswirkung entdeckt durch:** `/kein-zugang` war ohne jede Session direkt erreichbar (HTTP 200 statt Redirect) — die anderen geschützten Seiten (`/uebersicht`, `/firmen-auswahl`) waren nur zufällig trotzdem geschützt, weil das `(protected)/layout.tsx` unabhängig davon eine eigene serverseitige `auth()`-Prüfung macht
+- **Ursache:** Unklar — vermutlich eine Next.js-16.1.1/Turbopack/Windows-Dev-Eigenheit; ob es auf Vercel (echte Edge-Runtime) funktioniert, ist ungetestet
+- **Status:** ✅ Teilweise gefixt (2026-09-17): `src/app/kein-zugang/page.tsx` hat jetzt dieselbe zuverlässige `auth()`-Prüfung wie die anderen geschützten Seiten (`!session → redirect("/login")`), unabhängig von der Middleware. `middleware.ts` bleibt als zusätzliche Sicherheitsebene bestehen (Kommentar im Code erklärt den Vorbehalt) — **muss bei `/deploy` auf Vercel erneut verifiziert werden**, um zu klären, ob es dort tatsächlich greift.
+- **Empfehlung für künftige Seiten (PROJ-3/4/5):** Nie allein auf Middleware verlassen — jede neue Seite/jedes neue Layout sollte ihre eigene `auth()`-Prüfung haben, wie es das `(protected)/layout.tsx` bereits vormacht.
+
+#### BUG-2: Vitest führte versehentlich die neuen Playwright-E2E-Specs aus und stürzte ab
+- **Severity:** Medium
+- **Steps to Reproduce:** `npm test` nach Hinzufügen von `tests/PROJ-2-kunden-login.spec.ts` ausführen → Absturz, da Vitest die Playwright-`test.describe`-Syntax nicht versteht
+- **Ursache:** `vitest.config.ts` hatte keine `exclude`-Regel für `tests/` (das laut `CLAUDE.md` ausschliesslich für Playwright-E2E-Tests reserviert ist)
+- **Status:** ✅ Gefixt (2026-09-17): `tests/` zur `exclude`-Liste in `vitest.config.ts` hinzugefügt (inkl. der Standard-Vitest-Ausschlüsse, die durch eine eigene `exclude`-Angabe sonst überschrieben würden)
+
+### Hinweis zur QA-Konvention
+Beide Bugs wurden in dieser Session direkt behoben statt nur dokumentiert — abweichend von der üblichen QA-Regel "nur finden, nicht fixen". Grund: Beide blockierten eine verlässliche weitere Testdurchführung (BUG-2 verhinderte `npm test`, BUG-1 wurde erst durch gezieltes Debugging während der Sicherheitsprüfung sichtbar und liess sich mit calculated risk sofort schliessen). Bitte kurz gegenprüfen, ob das so in Ordnung ist.
+
+### Automatisierte Tests
+- **Unit-Tests (Vitest):** 25/25 grün, davon 7 neu für `src/lib/auth/access.ts` (bisher ungetestete Zugriffslogik: aktiver Kontakt, Gross-/Kleinschreibung, unbekannte E-Mail, inaktiver Kontakt, Kontakt ohne Firma, Firmen-Namen-Lookup)
+- **E2E-Tests (Playwright):** 8/8 grün (Chromium + Mobile Safari) in `tests/PROJ-2-kunden-login.spec.ts` — Login-Seiteninhalt, Routen-Schutz für alle drei geschützten Seiten ohne Session
+
+### Summary
+- **Acceptance Criteria:** 7/7 abgedeckt (6 live verifiziert, 1 durch Architektur/Unit-Test)
+- **Bugs Found:** 2 total, beide behoben (0 High/Critical offen, 1 Medium-Fund zu Rate-Limiting bewusst akzeptiert)
+- **Security:** Solide — Routen-Schutz, Cookie-Sicherheit, Autorisierung gegen Firma-Manipulation, keine Secret-Leaks, kein XSS-Vektor
+- **Production Ready:** JA, mit einem Vorbehalt — BUG-1s Vercel-Verhalten sollte bei `/deploy` verifiziert werden, bevor es als endgültig gelöst gilt
+- **Recommendation:** Status auf "Approved" setzen. Bei `/deploy`: gezielt prüfen, ob Middleware auf Vercel greift (z.B. mit demselben "bedingungsloser Redirect"-Test), da das lokal nie funktioniert hat.
+
 ## Deployment
 _To be added by /deploy_
