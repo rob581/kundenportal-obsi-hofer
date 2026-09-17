@@ -74,6 +74,7 @@
 | Datei heisst weiterhin `middleware.ts`, nicht `proxy.ts` | In Next.js 16.1.1 löste `proxy.ts` trotz korrekter Konvention (Root-Verzeichnis, benannter/Default-Export) nicht aus; `middleware.ts` funktioniert (laut Next.js selbst "deprecated, aber noch verfügbar") | 2026-09-16 |
 | Issuer-URL für den Entra-Provider: `https://<tenant-id>.ciamlogin.com/<tenant-id>/v2.0` statt `https://login.microsoftonline.com/<tenant-id>/v2.0` | Letzteres verursachte `AADSTS500208` beim Token-Austausch für den External-ID-Tenant; die `ciamlogin.com`-Domain mit Tenant-ID (nicht Firmenname) als Subdomain entspricht dem tatsächlichen `issuer`-Feld im OIDC-Discovery-Dokument, das Auth.js strikt validiert | 2026-09-17 |
 | Login-Button-Text vereinfacht auf "Anmelden" statt "Mit Entra External ID anmelden" | Kunden kennen den Begriff "Entra External ID" nicht — internes Microsoft-Fachjargon gehört nicht in kundenseitige UI | 2026-09-17 |
+| "Abmelden" nutzt "federated logout" (zusätzlicher Redirect zum `end_session_endpoint` des Tenants), statt nur `signOut()` unserer eigenen Session | `signOut()` allein beendet nur unsere App-Session; die Tenant-eigene Microsoft-Sitzung blieb bestehen und füllte beim nächsten Login-Versuch automatisch die zuletzt verwendete E-Mail wieder ein | 2026-09-17 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
@@ -156,10 +157,13 @@ Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** v
 **Weiterer wichtiger technischer Fund — Issuer-URL für External-ID/CIAM-Tenants:**
 `https://login.microsoftonline.com/<tenant-id>/v2.0` (Standard für Workforce-Tenants) funktioniert für External-ID-Tenants NICHT zuverlässig — der initiale Redirect zu Microsoft klappt zwar, aber der Token-Austausch schlägt mit `AADSTS500208: The domain is not a valid login domain for the account type` fehl. Die korrekte Issuer-URL für CIAM-Tenants nutzt die **tenant-eigene `ciamlogin.com`-Domain mit der Tenant-ID (nicht dem Firmennamen) als Subdomain**: `https://<tenant-id>.ciamlogin.com/<tenant-id>/v2.0` — verifiziert durch direktes Abrufen von `.well-known/openid-configuration` und Vergleich des `issuer`-Felds in der Antwort (Auth.js validiert das strikt gegen die konfigurierte Issuer-URL).
 
+**2026-09-17 nachgetragen — Abmelden korrigiert:**
+- [x] "Abmelden" setzte nur unsere eigene Sitzung zurück, nicht die von Microsoft — beim erneuten Anmelden blieb die zuletzt genutzte E-Mail vorausgefüllt/erinnert. Gefixt mit "federated logout": `src/lib/auth/sign-out.ts` beendet zusätzlich die Tenant-eigene Sitzung über den `end_session_endpoint` des Discovery-Dokuments. Live verifiziert: nach Abmelden wird beim nächsten Login-Versuch keine E-Mail mehr vorausgefüllt.
+
 **Noch offen:**
 - [ ] `.env.local.example` um die neuen Variablen ergänzen (`AUTH_SECRET`, `Kundenportal_AZURE_CLIENT_ID/SECRET/TENANT_ID`) — Nutzer muss das selbst tun, `.env.local.example` ist für mich gesperrt
 - [ ] Den erfolgreichen Fall (aktiver Kontakt mit Firma → landet auf `/uebersicht`) noch mit einer echten, in Supabase hinterlegten Kontakt-E-Mail live testen — bisher nur der "Kein Zugang"-Fall bestätigt
-- [ ] Firmen-Auswahl bei mehreren Firmen und "Abmelden" noch nicht live durchgeklickt
+- [ ] Firmen-Auswahl bei mehreren Firmen noch nicht live durchgeklickt
 
 ## Deployment
 _To be added by /deploy_

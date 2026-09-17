@@ -8,7 +8,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { auth, signOut } from "../../../auth";
+import { auth } from "../../../auth";
+import { signOutEverywhere } from "@/lib/auth/sign-out";
 
 const SUPPORT_EMAIL = "robert.bienz@obsi-hofer.ch";
 
@@ -37,13 +38,7 @@ export default async function KeinZugangPage() {
           </a>
         </CardContent>
         <CardFooter>
-          <form
-            action={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
-            }}
-            className="w-full"
-          >
+          <form action={signOutEverywhere} className="w-full">
             <Button type="submit" variant="outline" className="w-full">
               Abmelden und andere E-Mail-Adresse versuchen
             </Button>
