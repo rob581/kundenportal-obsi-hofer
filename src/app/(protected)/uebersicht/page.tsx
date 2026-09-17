@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { auth } from "../../../../auth";
 import { getFirmenNamen } from "@/lib/auth/access";
-import { getGeraeteList } from "@/lib/geraete/mock-data";
+import { getCurrentFirmaId } from "@/lib/auth/current-firma";
+import { getGeraeteList } from "@/lib/geraete/queries";
 import { AppHeader } from "@/components/app-header";
 import { GeraeteFilterBar } from "@/components/geraete-filter-bar";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,8 +22,6 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
-const SELECTED_FIRMA_COOKIE = "obsi_selected_firma";
-
 function formatDatum(iso: string | null): string {
   if (!iso) return "—";
   return new Date(iso).toLocaleDateString("de-CH");
@@ -36,20 +32,7 @@ export default async function UebersichtPage({
 }: {
   searchParams: Promise<{ status?: string; suche?: string; seite?: string }>;
 }) {
-  const session = await auth();
-  const firmaIds = session?.portal?.firmaIds ?? [];
-
-  let currentFirmaId: string;
-  if (firmaIds.length === 1) {
-    currentFirmaId = firmaIds[0];
-  } else {
-    const selected = (await cookies()).get(SELECTED_FIRMA_COOKIE)?.value;
-    if (!selected || !firmaIds.includes(selected)) {
-      redirect("/firmen-auswahl");
-    }
-    currentFirmaId = selected;
-  }
-
+  const currentFirmaId = await getCurrentFirmaId();
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
 
@@ -59,7 +42,7 @@ export default async function UebersichtPage({
   let result: Awaited<ReturnType<typeof getGeraeteList>> | null = null;
   let loadError: string | null = null;
   try {
-    result = await getGeraeteList({ status: params.status, suche: params.suche, seite });
+    result = await getGeraeteList(currentFirmaId, { status: params.status, suche: params.suche, seite });
   } catch {
     loadError = "Die Gerätedaten konnten nicht geladen werden.";
   }

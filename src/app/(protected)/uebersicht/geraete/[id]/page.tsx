@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getGeraetById } from "@/lib/geraete/mock-data";
+import { getCurrentFirmaId } from "@/lib/auth/current-firma";
+import { getGeraetById } from "@/lib/geraete/queries";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,8 @@ export default async function GeraetDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const geraet = await getGeraetById(id);
+  const currentFirmaId = await getCurrentFirmaId();
+  const geraet = await getGeraetById(id, currentFirmaId);
 
   if (!geraet) {
     notFound();

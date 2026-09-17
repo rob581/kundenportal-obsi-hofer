@@ -126,6 +126,19 @@ Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842)
 - `npx tsc --noEmit` und `npx vitest run` laufen fehlerfrei durch; manueller Smoke-Test bestätigt, dass `/uebersicht` ohne Session korrekt zu `/login` umleitet (kein Server-Fehler).
 - Noch offen (für `/backend`): echte Supabase-Anbindung, serverseitige Firma-Einschränkung über `dv_standorte`/`dv_geraete`, Pagination/Filter direkt in der Datenbankabfrage statt im Speicher.
 
+## Implementation Notes (Backend)
+
+- `src/lib/geraete/queries.ts` ersetzt die Mock-Data-Schicht mit echten Supabase-Abfragen; `getGeraeteList`/`getGeraetById` haben jetzt zusätzlich einen expliziten `firmaId`-Parameter (in der Mock-Phase gab es nur einen globalen Datensatz, daher kein Firma-Parameter nötig — musste für die echte Firma-Einschränkung ergänzt werden).
+- Zweistufige Abfrage wie in der Architektur festgelegt: erst `dv_standorte` nach `firma_id`, dann `dv_geraete` nach den gefundenen Standort-IDs (kein PostgREST-Embedding wegen fehlender Fremdschlüssel seit PROJ-1 BUG-1).
+- Status-Filter-Optionen werden über alle (ungefilterten) Geräte der Firma ermittelt und case-insensitiv depupliziert; Sortierung der Optionen jetzt locale-aware (`localeCompare` mit `sensitivity: "base"`) statt des ursprünglichen case-sensitiven `Array.sort()`, das Gross-/Kleinschreibung falsch einordnete (z.B. "keine Freigabe" nach "Letzte Freigabe" statt alphabetisch).
+- Freitextsuche über Gerätename/Seriennummer läuft über `.or()` mit `ilike`; Kommas und Klammern im Suchbegriff werden escaped, da PostgREST `.or()` diese sonst als Trennzeichen der Filterliste fehlinterpretiert.
+- Paginierung und Sortierung (`letzte_pruefung` absteigend, nie geprüfte Geräte zuerst via `nullsFirst`) laufen direkt in der Datenbankabfrage (`range`/`order`), nicht mehr im Speicher wie in der Mock-Version.
+- **Sicherheitsrelevant:** `getGeraetById` prüft bei jedem Aufruf, dass der Standort des gefundenen Geräts tatsächlich zur übergebenen `firmaId` gehört — eine Geräte-ID, die zu einer anderen Firma gehört, liefert `null` (identisch zu "unbekannte ID"), damit ein Kunde nicht durch Erraten von IDs in der URL Geräte anderer Kunden sehen kann (IDOR-Schutz, da RLS auf `dv_geraete` alle Zugriffe ausser Service-Role verweigert).
+- Neuer gemeinsamer Helper `src/lib/auth/current-firma.ts` (`getCurrentFirmaId()`) löst die aktuell gewählte Firma auf (Einzel-Firma direkt aus der Session, Mehrfach-Firma über das PROJ-2-Cookie, redirect zu `/firmen-auswahl` sonst) und wird jetzt von **beiden** Seiten (`/uebersicht` und `/uebersicht/geraete/[id]`) verwendet. Das hat einen Lücke aus der Frontend-Phase geschlossen: die Detailseite hatte zuvor gar keine Firma-Prüfung, wodurch (mit der reinen Mock-Implementierung) rein technisch keine Kunden-Trennung bestand — mit den echten Daten wäre das ein Zugriffs-Bug gewesen.
+- Kein separater API-Endpoint (`src/app/api/...`) nötig — Server Components lesen direkt über `src/lib/supabase-admin.ts`, wie in der Architektur festgelegt.
+- Integrationstests in `src/lib/geraete/queries.test.ts` (11 Tests) mit demselben Fluent-Mock-Muster wie `src/lib/auth/access.test.ts`, decken u.a. ab: Firma-Isolation, leere Standort-Liste, Status-/Suche-Filter, Sortierung mit nie-geprüften Geräten zuerst, und die drei "kein Zugriff"-Fälle von `getGeraetById` (fremde Firma, unbekannte ID, Gerät ohne Standort).
+- `npx tsc --noEmit` und `npx vitest run` (36 Tests total) laufen fehlerfrei durch; manueller Smoke-Test bestätigt weiterhin keinen Server-Fehler auf `/uebersicht` ohne Session. Echter End-to-End-Test mit dem vorhandenen Test-Kontakt (`test-kontakt-robert-1`) steht noch aus (Nutzer-Review).
+
 ## QA Test Results
 _To be added by /qa_
 
