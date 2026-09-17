@@ -30,7 +30,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 - Portal ist read-only – keine Schreibrechte für Kunden, kein Zurückschreiben nach Dataverse
 - Offen: genauer PDF-Speicherort in Dataverse (Notes/Attachments vs. SharePoint) – bei der PROJ-4-Spezifikation bewusst zurückgestellt (PROJ-4 deckt vorerst nur die Prüfberichte-Metadaten ohne PDF ab); muss geklärt sein, bevor der PDF-Download als eigene Erweiterung umgesetzt wird
 - Team: 1 Person (Nutzer selbst, hat Dataverse-Admin-Zugriff)
-- Design: wird separat mit Claude Design (`/design`) erstellt, bis dahin Tailwind/shadcn-Defaults
+- Design: definiert in `docs/design-system.md` (freie Palette, nüchtern & vertrauenswürdig, Primärfarbe dunkles Stahlblau); auf allen bereits gebauten Seiten via `globals.css` angewendet
 
 ## Non-Goals
 - Keine Selbstregistrierung neuer Kunden
