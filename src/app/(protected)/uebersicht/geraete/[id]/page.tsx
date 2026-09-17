@@ -2,9 +2,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraetById } from "@/lib/geraete/queries";
+import { getPruefberichteFuerGeraet } from "@/lib/pruefberichte/mock-data";
 import { AppHeader } from "@/components/app-header";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 function formatDatum(iso: string | null): string {
   if (!iso) return "—";
@@ -31,6 +40,14 @@ export default async function GeraetDetailPage({
 
   if (!geraet) {
     notFound();
+  }
+
+  let pruefberichte: Awaited<ReturnType<typeof getPruefberichteFuerGeraet>> = [];
+  let pruefberichteError: string | null = null;
+  try {
+    pruefberichte = await getPruefberichteFuerGeraet(id);
+  } catch {
+    pruefberichteError = "Prüfberichte konnten nicht geladen werden.";
   }
 
   return (
@@ -74,6 +91,50 @@ export default async function GeraetDetailPage({
             </CardContent>
           </Card>
         )}
+
+        <Card className="mt-4">
+          <CardHeader>
+            <CardTitle className="text-base">Prüfberichte</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {pruefberichteError ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <p className="text-sm text-muted-foreground">{pruefberichteError}</p>
+                <Link
+                  href={`/uebersicht/geraete/${id}`}
+                  className="text-sm font-medium text-primary underline"
+                >
+                  Erneut versuchen
+                </Link>
+              </div>
+            ) : pruefberichte.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Für dieses Gerät sind noch keine Prüfberichte hinterlegt.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Datum</TableHead>
+                    <TableHead>Ergebnis</TableHead>
+                    <TableHead>Bemerkungen</TableHead>
+                    <TableHead>Prüfer</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pruefberichte.map((bericht) => (
+                    <TableRow key={bericht.id}>
+                      <TableCell>{formatDatum(bericht.pruefdatum)}</TableCell>
+                      <TableCell>{bericht.ergebnis ?? "—"}</TableCell>
+                      <TableCell>{bericht.bemerkungen ?? "—"}</TableCell>
+                      <TableCell>{bericht.pruefer ?? "—"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   );

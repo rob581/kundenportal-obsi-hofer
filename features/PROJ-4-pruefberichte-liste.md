@@ -1,6 +1,6 @@
 # PROJ-4: Prüfberichte-Liste
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-17
 **Last Updated:** 2026-09-17
 
@@ -104,6 +104,14 @@ Keine neuen — nutzt weiterhin die bereits installierten shadcn-Komponenten (Ca
 
 ### Voraussetzung für `/backend`
 Bevor der Backend-Teil von PROJ-4 gebaut werden kann, braucht `dv_pruefberichte` das neue `bemerkungen`-Feld (Migration + Ergänzung des Sync-Mappings um `bmvcc_remark`). Wird zu Beginn von `/backend PROJ-4` als erster Schritt miterledigt (siehe Technical Decisions).
+
+## Implementation Notes (Frontend)
+
+- Neue "Prüfberichte"-Karte direkt in `src/app/(protected)/uebersicht/geraete/[id]/page.tsx` eingebaut (unterhalb der bestehenden Bemerkungen-Karte aus PROJ-3): shadcn `Table` mit Spalten Datum/Ergebnis/Bemerkungen/Prüfer, eigener Leer-Zustand und eigener Fehler-Zustand mit "Erneut versuchen" — unabhängig vom Rest der Seite (eigener try/catch, wie im Tech Design festgelegt).
+- Datenzugriff über eine neue Mock-Data-Schicht (`src/lib/pruefberichte/types.ts`, `src/lib/pruefberichte/mock-data.ts`) mit `getPruefberichteFuerGeraet(geraetId)`. Anders als bei PROJ-3s Mock-Phase ist die Geräte-Detailseite selbst schon an echte Supabase-Daten angebunden (PROJ-3-Backend ist fertig) — die Mock-Funktion ignoriert daher den `geraetId`-Parameter bewusst und liefert für jedes Gerät dieselbe feste Beispiel-Liste (3 Einträge, unterschiedliche Ergebnisse/Bemerkungen), rein um die UI-Form zu verifizieren. `/backend` ersetzt nur die Funktionsinnereien durch eine echte Supabase-Abfrage (gefiltert nach `geraetId`, ohne Soft-gelöschte Einträge), gleiche async Signatur, keine Änderung an der aufrufenden Seite nötig.
+- Die Reihenfolge aus dem Tech Design ist eingehalten: Prüfberichte werden erst nach einem erfolgreichen `getGeraetById`-Aufruf geladen (nach dem `notFound()`-Check), nie parallel oder davor.
+- `npx tsc --noEmit` und `npx vitest run` (38 Tests, unverändert) laufen fehlerfrei durch; manueller Smoke-Test bestätigt, dass die Detailseite ohne Session weiterhin korrekt zu `/login` umleitet (kein Server-Fehler).
+- Noch offen (für `/backend`): PROJ-1-Ergänzung (`bemerkungen`-Spalte + Sync-Mapping von `bmvcc_remark`), danach echte Supabase-Abfrage für `getPruefberichteFuerGeraet` inkl. Sortierung/Soft-Delete-Filterung in der Datenbank.
 
 ## QA Test Results
 _To be added by /qa_
