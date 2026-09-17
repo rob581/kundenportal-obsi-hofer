@@ -1,9 +1,12 @@
 import Link from "next/link";
+import { auth } from "../../../../auth";
 import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraeteList } from "@/lib/geraete/queries";
+import { changeFirma } from "../firmen-auswahl/actions";
 import { AppHeader } from "@/components/app-header";
 import { GeraeteFilterBar } from "@/components/geraete-filter-bar";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -33,6 +36,8 @@ export default async function UebersichtPage({
   searchParams: Promise<{ status?: string; suche?: string; seite?: string }>;
 }) {
   const currentFirmaId = await getCurrentFirmaId();
+  const session = await auth();
+  const hatMehrereFirmen = (session?.portal?.firmaIds.length ?? 0) > 1;
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
 
@@ -53,8 +58,19 @@ export default async function UebersichtPage({
     <div>
       <AppHeader />
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="mb-1 text-xl font-semibold">Geräte-Übersicht</h1>
-        <p className="mb-6 text-sm text-muted-foreground">{firma?.name ?? "Ihre Firma"}</p>
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="mb-1 text-xl font-semibold">Geräte-Übersicht</h1>
+            <p className="text-sm text-muted-foreground">{firma?.name ?? "Ihre Firma"}</p>
+          </div>
+          {hatMehrereFirmen && (
+            <form action={changeFirma}>
+              <Button type="submit" variant="outline" size="sm">
+                Firma wechseln
+              </Button>
+            </form>
+          )}
+        </div>
 
         {loadError ? (
           <Card>

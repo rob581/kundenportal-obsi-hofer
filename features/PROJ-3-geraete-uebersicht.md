@@ -125,6 +125,7 @@ Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842)
 - Datenzugriff ist noch über eine Mock-Data-Schicht (`src/lib/geraete/types.ts`, `src/lib/geraete/mock-data.ts`) realisiert, bewusst mit denselben async Funktionssignaturen (`getGeraeteList(query)`, `getGeraetById(id)`) wie die künftige echte Implementierung — Mock-Daten decken alle vorkommenden Status-Werte inkl. der Gross-/Kleinschreibungs-Inkonsistenz sowie ein nie geprüftes Gerät ab. `/backend` ersetzt nur die Funktionsinnereien (echte zweistufige Supabase-Abfrage), keine Änderungen an den aufrufenden Seiten nötig.
 - `npx tsc --noEmit` und `npx vitest run` laufen fehlerfrei durch; manueller Smoke-Test bestätigt, dass `/uebersicht` ohne Session korrekt zu `/login` umleitet (kein Server-Fehler).
 - Noch offen (für `/backend`): echte Supabase-Anbindung, serverseitige Firma-Einschränkung über `dv_standorte`/`dv_geraete`, Pagination/Filter direkt in der Datenbankabfrage statt im Speicher.
+- **Nachträglich ergänzt (2026-09-17, Nutzerfeedback nach dem Backend-Test):** "Firma wechseln"-Button neben dem Titel, sichtbar nur für Kontakte mit mehr als einer zugeordneten Firma (`session.portal.firmaIds.length > 1`). Nutzt die neue Server Action `changeFirma()` (`firmen-auswahl/actions.ts`, PROJ-2) — löscht das `obsi_selected_firma`-Cookie und leitet zu `/firmen-auswahl` weiter, ohne dass sich der Kunde ab- und wieder anmelden muss.
 
 ## Implementation Notes (Backend)
 

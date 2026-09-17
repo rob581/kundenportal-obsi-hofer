@@ -22,3 +22,11 @@ export async function selectFirma(firmaId: string): Promise<void> {
 
   redirect("/uebersicht");
 }
+
+// Lets a customer with multiple Firmen jump back to the selection screen
+// from within the portal, without having to sign out and back in just to
+// change which Firma's data they're looking at.
+export async function changeFirma(): Promise<void> {
+  (await cookies()).delete(SELECTED_FIRMA_COOKIE);
+  redirect("/firmen-auswahl");
+}
