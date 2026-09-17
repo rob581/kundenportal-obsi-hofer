@@ -64,12 +64,46 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Prüfberichte werden als Teil derselben Server-Component-Anfrage auf der Geräte-Detailseite geladen, kein separater API-Endpoint | Konsistent mit dem in PROJ-3 etablierten Muster (reine Leseoperation); keine zusätzliche Client-Server-Rundreise nötig | 2026-09-17 |
+| Prüfberichte-Abfrage verlangt keinen eigenen `firmaId`-Parameter, sondern verlässt sich auf einen bereits geprüften `geraetId` | Die Autorisierung ("gehört das Gerät zur Firma?") ist bereits durch den vorgelagerten `getGeraetById`-Aufruf der PROJ-3-Detailseite sichergestellt; Prüfberichte werden erst geladen, nachdem dieser ein gültiges Gerät zurückgegeben hat. Diese Reihenfolge muss beim Bauen zwingend beibehalten werden (nicht parallel/vorher laden) | 2026-09-17 |
+| Sortierung (neuestes Datum zuerst) und Ausschluss Soft-gelöschter Berichte erfolgen direkt in der Datenbankabfrage, nicht im Speicher | Gleiche Begründung wie bei PROJ-3: skaliert besser und bleibt konsistent mit dem bestehenden Muster | 2026-09-17 |
+| Neues `bemerkungen`-Feld wird als rein additive Spalte an die bestehende `dv_pruefberichte`-Tabelle angehängt, keine neue Tabelle | Reine Spalten-Ergänzung ohne strukturelle Änderung an PROJ-1; einfachste Umsetzung, keine bestehenden PROJ-1-Verhaltensweisen betroffen | 2026-09-17 |
+| Die PROJ-1-Ergänzung (Migration + Sync-Mapping für `bemerkungen`/`bmvcc_remark`) wird zu Beginn von `/backend PROJ-4` miterledigt, kein separater `/refine PROJ-1`-Durchgang | Rein additiv, betrifft ausschliesslich dieses Feature; ein eigener Durchgang wäre unnötiger Overhead für ein Ein-Personen-Team | 2026-09-17 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+/uebersicht/geraete/[id] (bestehende PROJ-3-Detailseite, erweitert)
+├── AppHeader (bestehend)
+├── Zurück-Link (bestehend)
+├── Geräte-Detail-Karte (bestehend, unverändert)
+└── NEU: Prüfberichte-Karte
+    ├── Tabelle: Datum, Ergebnis, Bemerkungen, Prüfer — neuester Bericht zuerst
+    ├── Leer-Zustand ("Für dieses Gerät sind noch keine Prüfberichte hinterlegt.")
+    └── Eigener Fehler-Zustand mit "Erneut versuchen" (unabhängig vom Rest der Seite — ein Ladefehler bei den Prüfberichten darf die Gerätedetails nicht mit lahmlegen)
+```
+
+### Datenmodell (in Textform)
+
+- Die bestehende PROJ-1-Tabelle `dv_pruefberichte` wird um ein Feld `bemerkungen` (Text) ergänzt, synchronisiert aus dem Dataverse-Feld `bmvcc_remark` — eine kleine, rein additive Erweiterung an PROJ-1
+- Die Geräte-Detailseite lädt zusätzlich zu den bestehenden Gerätedaten alle Prüfberichte, deren `geraet_id` mit dem bereits (über PROJ-3) autorisierten Gerät übereinstimmt und die nicht per Soft-Delete als gelöscht markiert sind
+- Archivierte Prüfberichte werden ganz normal mitgeladen (kein zusätzlicher Filter, siehe Product Decision)
+- Sortierung nach Prüfdatum absteigend erfolgt direkt in der Datenbankabfrage
+- Keine Paginierung (siehe Edge Cases im Spec — historischer Durchschnitt ~2–3 Berichte/Gerät)
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+Keine neuen — nutzt weiterhin die bereits installierten shadcn-Komponenten (Card, Table) und die vorhandene Supabase-Anbindung (`src/lib/supabase-admin.ts`).
+
+### Voraussetzung für `/backend`
+Bevor der Backend-Teil von PROJ-4 gebaut werden kann, braucht `dv_pruefberichte` das neue `bemerkungen`-Feld (Migration + Ergänzung des Sync-Mappings um `bmvcc_remark`). Wird zu Beginn von `/backend PROJ-4` als erster Schritt miterledigt (siehe Technical Decisions).
 
 ## QA Test Results
 _To be added by /qa_
