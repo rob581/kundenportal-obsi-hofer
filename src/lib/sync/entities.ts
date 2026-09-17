@@ -74,6 +74,7 @@ const pruefberichtSchema = z.object({
   pruefer: z.string().nullable().optional(),
   ist_archiviert: z.boolean().nullable().optional(),
   deleted_at: z.string().nullable().optional(),
+  bemerkungen: z.string().nullable().optional(),
 });
 
 const relationSchema = z.object({

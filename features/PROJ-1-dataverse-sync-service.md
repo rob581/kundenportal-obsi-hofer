@@ -193,6 +193,8 @@ Siehe Decision Log → Technical Decisions oben.
 - Kein automatischer Retry bei einem transienten Fehler innerhalb eines Laufs (siehe oben) — für MVP akzeptiert, da der nächste tägliche Lauf es ohnehin erneut versucht
 - `RESEND_API_KEY`/`ALERT_EMAIL_TO` wurden vom Nutzer gesetzt, aber der tatsächliche E-Mail-Versand bei einem echten Fehlschlag wurde noch nicht end-to-end getestet (nur der Aufruf-Pfad im Code)
 
+**Nachträgliche additive Ergänzung (2026-09-17, für PROJ-4):** `dv_pruefberichte` um die Spalte `bemerkungen` erweitert (Migration `supabase/migrations/0003_pruefberichte_bemerkungen.sql`, vom Nutzer im Supabase SQL Editor ausgeführt), gemappt aus dem Dataverse-Feld `bmvcc_remark`. `pruefberichtSchema` (`src/lib/sync/entities.ts`) und der Pruefberichte-Job (`src/lib/sync/jobs.ts`) entsprechend ergänzt. Rein additiv — keine bestehenden PROJ-1-Verhaltensweisen oder -Tests betroffen (siehe PROJ-4 Implementation Notes).
+
 ## QA Test Results
 
 > **Diese QA-Runde (2026-09-16) ersetzt die vorherige vollständig** — die alte Runde testete den inzwischen entfernten Power-Automate-Push-Ansatz. Alle Bugs/ACs von damals (BUG-1/2/3, AC-1 bis AC-7 alter Nummerierung) sind mit dem Architektur-Wechsel gegenstandslos geworden, ausser dem losen-Fremdschlüssel-Fix, der unverändert übernommen wurde.

@@ -143,6 +143,7 @@ export const SYNC_JOBS: SyncJob[] = [
       "bmvcc_inspectionresult",
       "bmvcc_inspector",
       "bmvcc_isarchived",
+      "bmvcc_remark",
     ],
     map: (r) => ({
       id: r.bmvcc_pruefberichtid as string,
@@ -151,6 +152,7 @@ export const SYNC_JOBS: SyncJob[] = [
       ergebnis: r.bmvcc_inspectionresult ?? null,
       pruefer: r.bmvcc_inspector ?? null,
       ist_archiviert: r.bmvcc_isarchived ?? false,
+      bemerkungen: r.bmvcc_remark ?? null,
       // Undelete: if a previously soft-deleted Pruefbericht is present
       // again in this full pull, it is active in Dataverse again.
       deleted_at: null,
