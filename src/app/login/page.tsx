@@ -33,7 +33,7 @@ export default async function LoginPage() {
             }}
           >
             <Button type="submit" className="w-full">
-              Mit Entra External ID anmelden
+              Anmelden
             </Button>
           </form>
         </CardContent>

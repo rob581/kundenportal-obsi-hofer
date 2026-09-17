@@ -47,7 +47,7 @@
 
 ## Open Questions
 - [x] Gibt es Rollen in `bmvcc_relation.bmvcc_role_description`, die keinen Zugriff mehr rechtfertigen (z.B. "ehemalig")? → Gelöst: `bmvcc_Kontakt` hat ein eigenes Status-Feld (aktiv/inaktiv); massgeblich für Zugriff ist dieser Status, nicht die Rollenbeschreibung (2026-09-16)
-- [ ] Neuer Microsoft-Entra-External-ID-Tenant muss vom Nutzer erstellt werden (der bisherige App-Registrierungs-Versuch lag im normalen Mitarbeiter-Tenant, der keine Self-Service-Fremdanmeldung erlaubt — AADSTS90072). Blockiert den ersten echten Ende-zu-Ende-Test des Login-Flows.
+- [x] Neuer Microsoft-Entra-External-ID-Tenant musste vom Nutzer erstellt werden (der bisherige App-Registrierungs-Versuch lag im normalen Mitarbeiter-Tenant, der keine Self-Service-Fremdanmeldung erlaubt — AADSTS90072) → erledigt, neuer Tenant erstellt, Login-Flow live verifiziert (2026-09-17)
 
 ## Decision Log
 
@@ -72,6 +72,8 @@
 | NextAuth-Konfiguration aufgeteilt in `auth.config.ts` (Edge-tauglich, nur Provider, für `middleware.ts`) und `auth.ts` (voll, mit Supabase-Callback, für alles andere) | Middleware/Proxy läuft in der Edge-Runtime ohne Datenbank-Zugriff; der volle Auth-Config mit Supabase-Callback schlug dort lautlos fehl (Standard-Auth.js-Muster für DB-Callbacks) | 2026-09-16 |
 | Die eigentliche `hasAccess`-Prüfung + Firmen-Auswahl-Logik laufen in `src/app/(protected)/layout.tsx` bzw. den einzelnen Seiten (Node.js-Runtime), nicht mehr in der Middleware | Middleware kann nur die grobe "eingeloggt?"-Prüfung ohne DB-Zugriff übernehmen; die feine Zugriffsprüfung braucht Supabase | 2026-09-16 |
 | Datei heisst weiterhin `middleware.ts`, nicht `proxy.ts` | In Next.js 16.1.1 löste `proxy.ts` trotz korrekter Konvention (Root-Verzeichnis, benannter/Default-Export) nicht aus; `middleware.ts` funktioniert (laut Next.js selbst "deprecated, aber noch verfügbar") | 2026-09-16 |
+| Issuer-URL für den Entra-Provider: `https://<tenant-id>.ciamlogin.com/<tenant-id>/v2.0` statt `https://login.microsoftonline.com/<tenant-id>/v2.0` | Letzteres verursachte `AADSTS500208` beim Token-Austausch für den External-ID-Tenant; die `ciamlogin.com`-Domain mit Tenant-ID (nicht Firmenname) als Subdomain entspricht dem tatsächlichen `issuer`-Feld im OIDC-Discovery-Dokument, das Auth.js strikt validiert | 2026-09-17 |
+| Login-Button-Text vereinfacht auf "Anmelden" statt "Mit Entra External ID anmelden" | Kunden kennen den Begriff "Entra External ID" nicht — internes Microsoft-Fachjargon gehört nicht in kundenseitige UI | 2026-09-17 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
@@ -145,11 +147,19 @@ Next.js 16 benennt `middleware.ts` in `proxy.ts` um; eine alte `middleware.ts` w
 **Blocker — Entra-Tenant-Typ falsch:**
 Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** von OBSI Hofer GmbH (demselben wie für den Dataverse-Sync), nicht in einem echten **External-ID (CIAM)**-Tenant. Ergebnis: `AADSTS90072` — fremde E-Mail-Adressen können sich nicht selbst registrieren, sie müssten manuell als Gast eingeladen werden, was der Self-Service-Anforderung widerspricht. **Nutzer muss einen separaten External-Tenant erstellen** (Entra Admin Center → Verwalten → Tenants → Neu → Typ "External") und darin die App-Registrierung wiederholen. Kosten: erste 50'000 MAU/Monat kostenlos (Quelle: [Microsoft Learn](https://learn.microsoft.com/en-us/entra/external-id/external-identities-pricing)) — bei aktuell 588 Kontakten unkritisch, Tenant muss aber trotzdem mit einer Azure-Subscription verknüpft werden.
 
-**Noch offen für den nächsten Tag:**
-- [ ] Neuer External-ID-Tenant + App-Registrierung durch den Nutzer erstellen
-- [ ] Neue `Kundenportal_AZURE_*`-Werte in `.env.local` eintragen
-- [ ] Kompletter Login-Flow im Browser einmal live durchspielen (Login → Firmen-Auswahl/direkt zu Übersicht → Abmelden; sowie der Kein-Zugang-Fall mit einer nicht hinterlegten E-Mail)
+**2026-09-17 nachgetragen — Login-Flow live verifiziert:**
+- [x] Neuer External-ID-Tenant + App-Registrierung erstellt (Tenant "B2C Obsi-Hofer GmbH", Domäne `b2cobsihofer.onmicrosoft.com`, Typ korrekt "Extern")
+- [x] User Flow "SignUpSignIn" erstellt und mit der App "Kundenportal" verknüpft (unter External Identities → User flows → Applications)
+- [x] Kompletter Login-Flow im Browser durchgespielt: Anmeldung mit unbekannter E-Mail → korrekt auf "Kein Zugang" gelandet, mit Kontakt-E-Mail und "Abmelden/andere E-Mail versuchen"
+- [x] Button-Text "Mit Entra External ID anmelden" → vereinfacht zu "Anmelden" (internes Microsoft-Fachjargon ist für Kunden bedeutungslos)
+
+**Weiterer wichtiger technischer Fund — Issuer-URL für External-ID/CIAM-Tenants:**
+`https://login.microsoftonline.com/<tenant-id>/v2.0` (Standard für Workforce-Tenants) funktioniert für External-ID-Tenants NICHT zuverlässig — der initiale Redirect zu Microsoft klappt zwar, aber der Token-Austausch schlägt mit `AADSTS500208: The domain is not a valid login domain for the account type` fehl. Die korrekte Issuer-URL für CIAM-Tenants nutzt die **tenant-eigene `ciamlogin.com`-Domain mit der Tenant-ID (nicht dem Firmennamen) als Subdomain**: `https://<tenant-id>.ciamlogin.com/<tenant-id>/v2.0` — verifiziert durch direktes Abrufen von `.well-known/openid-configuration` und Vergleich des `issuer`-Felds in der Antwort (Auth.js validiert das strikt gegen die konfigurierte Issuer-URL).
+
+**Noch offen:**
 - [ ] `.env.local.example` um die neuen Variablen ergänzen (`AUTH_SECRET`, `Kundenportal_AZURE_CLIENT_ID/SECRET/TENANT_ID`) — Nutzer muss das selbst tun, `.env.local.example` ist für mich gesperrt
+- [ ] Den erfolgreichen Fall (aktiver Kontakt mit Firma → landet auf `/uebersicht`) noch mit einer echten, in Supabase hinterlegten Kontakt-E-Mail live testen — bisher nur der "Kein Zugang"-Fall bestätigt
+- [ ] Firmen-Auswahl bei mehreren Firmen und "Abmelden" noch nicht live durchgeklickt
 
 ## Deployment
 _To be added by /deploy_
