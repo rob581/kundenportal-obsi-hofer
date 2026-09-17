@@ -1,6 +1,6 @@
 # PROJ-4: Prüfberichte-Liste
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-17
 **Last Updated:** 2026-09-17
 
@@ -123,7 +123,80 @@ Bevor der Backend-Teil von PROJ-4 gebaut werden kann, braucht `dv_pruefberichte`
 - **Live verifiziert (2026-09-17):** Manueller Sync-Lauf gegen die echte Dataverse-/Supabase-Umgebung ausgeführt (`pruefberichte`-Batch schlug beim ersten Versuch mit dem bekannten transienten `TypeError: fetch failed` fehl, siehe PROJ-1 Implementation Notes; Retry lief sauber durch). Nutzer hat danach eine Geräte-Detailseite mit echten Prüfberichten aufgerufen — Bemerkungen werden korrekt angezeigt.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-17
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Wie bei PROJ-2/PROJ-3 lässt sich der echte Entra-External-ID-Login nicht automatisiert/wiederholbar durchspielen. Da PROJ-4 keine neue Route und keinen neuen API-Endpoint einführt (nur einen neuen Abschnitt auf der bereits durch PROJ-3 authentifizierten/autorisierten Geräte-Detailseite), wurde die eigentliche Zugriffskontrolle bereits vollständig durch PROJ-3s Tests abgedeckt (siehe unten). Automatisiert geprüft wurden: die Datenlogik (Vitest-Integrationstests gegen die echte Query-Funktion) und der Sicherheitsaspekt per Code-Review. Die tatsächliche Anzeige wurde vom Nutzer live gegen echte Daten bestätigt (siehe Implementation Notes, Backend).
+
+### Acceptance Criteria Status
+
+#### AC-1: Prüfberichte-Liste zeigt Datum, Ergebnis, Bemerkungen, Prüfer
+- [x] Integrationstest (`passes through Bemerkungen and Prüfer fields`) + Code-Review der Tabellen-Spalten in `page.tsx` + live vom Nutzer mit echten Daten bestätigt
+
+#### AC-2: Leermeldung bei Gerät ohne Prüfberichte
+- [x] Integrationstest (`returns an empty array for a Gerät with no reports`) deckt die Datengrundlage ab; UI-Zweig für die Leermeldung durch Code-Review bestätigt
+
+#### AC-3: Sortierung nach Prüfdatum absteigend
+- [x] Integrationstest grün (inkl. Berichte ohne Datum, die ans Ende sortieren) — siehe aber BUG-1 unten zu einer Einschränkung bei gleichem Datum
+
+#### AC-4: Archivierte Berichte erscheinen normal
+- [x] Integrationstest grün (kein Filter auf `ist_archiviert` in der Abfrage)
+
+#### AC-5: Soft-gelöschte Berichte erscheinen nicht
+- [x] Integrationstest grün (`deleted_at is null`-Filter greift)
+
+#### AC-6: Fehler-Zustand mit "Erneut versuchen", Rest der Detailseite bleibt nutzbar
+- [x] Code-Review bestätigt: eigener try/catch um `getPruefberichteFuerGeraet`, unabhängig vom bereits erfolgreich geladenen `geraet`-Objekt; ein Fehler in diesem Abschnitt kann die restliche Seite nicht mehr betreffen, da diese zu diesem Zeitpunkt schon vollständig gerendert würde. Kein künstlich provozierter echter Datenbank-Ausfall (gleiche Konvention wie PROJ-1/2/3)
+
+#### AC-7: Kein Zugriff auf Prüfberichte eines fremden Geräts
+- [x] Kein neuer Autorisierungscode nötig/vorhanden — die Prüfberichte werden ausschliesslich mit einer bereits durch `getGeraetById` (PROJ-3) autorisierten `geraetId` abgefragt, und zwar erst nach dessen erfolgreichem (nicht-null) Ergebnis (`notFound()` bricht vorher ab). Die eigentliche IDOR-Prüfung ist also durch die bereits in PROJ-3 getesteten `getGeraetById`-Fälle abgedeckt; hier zusätzlich per Code-Review verifiziert, dass die Reihenfolge (erst Gerät, dann Prüfberichte) tatsächlich eingehalten wird
+
+### Edge Cases Status
+
+#### EC-1: Prüfbericht referenziert nicht (mehr) existierendes Gerät
+- [x] Kann laut Code-Konstruktion nicht auftreten (Abfrage läuft nur mit einer bereits als existent bestätigten `geraetId`) — nicht separat testbar, da kein eigener Codepfad dafür existiert
+
+#### EC-2: Sehr viele Prüfberichte an einem Gerät
+- [x] Bewusste Produktentscheidung (keine Paginierung, siehe Decision Log) — Code-Review bestätigt, dass keine `.limit()`/`.range()` die Ergebnisse künstlich beschneidet; die Abfrage selbst begrenzt die Zeilenzahl nicht
+
+#### EC-3: Leeres Bemerkungsfeld
+- [x] Code-Review: `{bericht.bemerkungen ?? "—"}` in `page.tsx`
+
+#### EC-4: Zwei Prüfberichte am selben Datum
+- [ ] **BUG-1 gefunden** (siehe unten) — Spec geht von stabiler Sortierung aus, die Abfrage hat aber kein Sekundär-Sortierkriterium
+
+### Security Audit Results
+- [x] Authentication: Route bereits durch PROJ-3s E2E-Test abgedeckt (`tests/PROJ-3-geraete-uebersicht.spec.ts`: Detailseite ohne Session → Redirect zu `/login`) — kein neuer Test nötig, da PROJ-4 dieselbe Route erweitert statt eine neue anzulegen
+- [x] Autorisierung/IDOR: Keine neue Angriffsfläche — Prüfberichte werden ausschliesslich über eine bereits autorisierte `geraetId` abgefragt (siehe AC-7); die zugrunde liegende Firma-Prüfung ist durch PROJ-3s `getGeraetById`-Integrationstests abgedeckt (fremde Firma, unbekannte ID, kein Standort)
+- [x] Keine Secrets im Client-Code: Weder `src/lib/pruefberichte/queries.ts` noch `getSupabaseAdmin` werden von einer `"use client"`-Datei importiert (per Grep geprüft)
+- [x] Injection: `geraetId` wird ausschliesslich über `.eq("geraet_id", geraetId)` (parametrisierter Supabase-Query-Builder) verwendet, keine String-Konkatenation — kein Injektionsvektor
+- [x] XSS: `bemerkungen` (von Dataverse, nicht kundeneingegeben) wird nur über JSX-Textinterpolation ausgegeben, React escaped automatisch; kein `dangerouslySetInnerHTML`
+- [x] Rate-Limiting: kein neuer öffentlicher API-Endpoint — reine Server-Component-Erweiterung einer bereits geschützten Seite
+
+### Bugs Found
+
+#### BUG-1: Sortierung bei gleichem Prüfdatum ist nicht garantiert stabil
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Ein Gerät mit zwei oder mehr Prüfberichten am exakt selben `pruefdatum` betrachten
+  2. Erwartet (laut Edge Case in diesem Spec): "Sortierung bleibt stabil"
+  3. Tatsächlich: Die Datenbankabfrage sortiert nur nach `pruefdatum absteigend`, ohne Sekundär-Kriterium (z.B. `id`); PostgreSQL garantiert bei gleichem Sortierwert **keine** feste Reihenfolge zwischen Ausführungen — die Anzeigereihenfolge zweier gleichdatierter Berichte könnte sich theoretisch zwischen zwei Seitenaufrufen unterscheiden
+- **Priority:** Nice to have — bei durchschnittlich 2–3 Berichten pro Gerät und typischerweise unterschiedlichen Prüfdaten ein seltener Fall; einfacher Fix wäre ein zusätzliches `.order("id")` als Tie-Breaker, aber kein Blocker für den Release
+
+### Automatisierte Tests
+- **Unit-/Integrationstests (Vitest):** 44/44 grün gesamt. Für PROJ-4: 6 Tests in `src/lib/pruefberichte/queries.test.ts` (Filterung nach Gerät, Ausschluss Soft-gelöschter Berichte, archivierte Berichte normal enthalten, Sortierung inkl. Berichte ohne Datum, Bemerkungen/Prüfer durchgereicht, leeres Ergebnis)
+- **E2E-Tests (Playwright):** 12/12 grün gesamt — kein neuer PROJ-4-spezifischer Test nötig, da die einzige berührte Route (`/uebersicht/geraete/[id]`) bereits vollständig durch `tests/PROJ-3-geraete-uebersicht.spec.ts` auf Routen-Schutz getestet ist
+- **Regression:** Alle bisherigen PROJ-1-, PROJ-2- und PROJ-3-Tests weiterhin grün — keine Regressionen durch PROJ-4
+- **Live-Verifikation:** Echter Sync-Lauf gegen Dataverse/Supabase (inkl. `bemerkungen`-Feld) durchgeführt, echte Prüfberichte auf einer echten Geräte-Detailseite vom Nutzer bestätigt (siehe Implementation Notes, Backend)
+
+### Summary
+- **Acceptance Criteria:** 7/7 abgedeckt (Integrationstests + Code-Review; UI-Anzeige zusätzlich live vom Nutzer gegen echte Daten bestätigt)
+- **Bugs Found:** 1 total (0 Critical, 0 High, 0 Medium, 1 Low) — nicht blockierend
+- **Security:** Solide — keine neue Angriffsfläche gegenüber PROJ-3, kein Secret-Leak, kein Injection- oder XSS-Vektor
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen. BUG-1 (fehlender Tie-Breaker bei gleichem Prüfdatum) ist optional und kann bei Gelegenheit (z.B. zusammen mit BUG-1 aus PROJ-3, der Tabellen-Trunkierung) nachgezogen werden.
 
 ## Deployment
 _To be added by /deploy_
