@@ -1,6 +1,6 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-17
 **Last Updated:** 2026-09-17
 
@@ -115,6 +115,16 @@ Keine neuen — nutzt die bereits installierten shadcn-Komponenten (Table, Input
 
 ### Datenfund für `/frontend` und `/backend`
 Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842), "keine Freigabe" (1174), "letzte Freigabe"/"Letzte Freigabe" (172+2, uneinheitliche Schreibung), kein Status (53, `null`). Beim Gruppieren für den Filter case-insensitiv vergleichen.
+
+## Implementation Notes (Frontend)
+
+- `/uebersicht` neu gebaut als Server Component: liest `searchParams` (`status`, `suche`, `seite`), löst die aktuell ausgewählte Firma auf (Single-Firma direkt aus der Session, Multi-Firma über das bestehende `obsi_selected_firma`-Cookie, redirect zu `/firmen-auswahl` falls keine gültige Auswahl vorliegt), rendert `AppHeader`, die neue `GeraeteFilterBar` und eine shadcn-`Table` mit Paginierung.
+- `GeraeteFilterBar` (`src/components/geraete-filter-bar.tsx`, Client Component) steuert Status-Filter (shadcn `Select`) und Freitextsuche (shadcn `Input` + `Button`) über URL-Suchparameter (`router.push`), damit Zustand beim Neuladen/Teilen erhalten bleibt; jede Filteränderung setzt `seite` zurück.
+- Detailseite `/uebersicht/geraete/[id]` neu gebaut: zeigt alle Felder (Seriennummer, Barcode, Standort, Lagerort, Prüfdaten, Artikel/Hersteller/Norm, Zubehör, Bemerkungen), `notFound()` bei unbekannter ID.
+- Leer-Zustand, "keine Ergebnisse für Suche"-Zustand und Fehler-Zustand (mit "Erneut versuchen"-Link) sind umgesetzt wie in den Acceptance Criteria beschrieben.
+- Datenzugriff ist noch über eine Mock-Data-Schicht (`src/lib/geraete/types.ts`, `src/lib/geraete/mock-data.ts`) realisiert, bewusst mit denselben async Funktionssignaturen (`getGeraeteList(query)`, `getGeraetById(id)`) wie die künftige echte Implementierung — Mock-Daten decken alle vorkommenden Status-Werte inkl. der Gross-/Kleinschreibungs-Inkonsistenz sowie ein nie geprüftes Gerät ab. `/backend` ersetzt nur die Funktionsinnereien (echte zweistufige Supabase-Abfrage), keine Änderungen an den aufrufenden Seiten nötig.
+- `npx tsc --noEmit` und `npx vitest run` laufen fehlerfrei durch; manueller Smoke-Test bestätigt, dass `/uebersicht` ohne Session korrekt zu `/login` umleitet (kein Server-Fehler).
+- Noch offen (für `/backend`): echte Supabase-Anbindung, serverseitige Firma-Einschränkung über `dv_standorte`/`dv_geraete`, Pagination/Filter direkt in der Datenbankabfrage statt im Speicher.
 
 ## QA Test Results
 _To be added by /qa_
