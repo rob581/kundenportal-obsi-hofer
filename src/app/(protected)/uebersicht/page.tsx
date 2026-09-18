@@ -3,9 +3,11 @@ import { auth } from "../../../../auth";
 import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraeteList } from "@/lib/geraete/queries";
+import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { changeFirma } from "../firmen-auswahl/actions";
 import { AppHeader } from "@/components/app-header";
 import { GeraeteFilterBar } from "@/components/geraete-filter-bar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -120,7 +122,15 @@ export default async function UebersichtPage({
                                 {geraet.name ?? "(ohne Namen)"}
                               </Link>
                             </TableCell>
-                            <TableCell>{geraet.status ?? "—"}</TableCell>
+                            <TableCell>
+                              {geraet.status ? (
+                                <Badge variant={getStatusBadgeVariant(geraet.status)}>
+                                  {geraet.status}
+                                </Badge>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
                             <TableCell>{geraet.standortName ?? "—"}</TableCell>
                             <TableCell>{formatDatum(geraet.letztePruefung)}</TableCell>
                           </TableRow>

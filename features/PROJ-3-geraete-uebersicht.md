@@ -126,6 +126,7 @@ Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842)
 - `npx tsc --noEmit` und `npx vitest run` laufen fehlerfrei durch; manueller Smoke-Test bestätigt, dass `/uebersicht` ohne Session korrekt zu `/login` umleitet (kein Server-Fehler).
 - Noch offen (für `/backend`): echte Supabase-Anbindung, serverseitige Firma-Einschränkung über `dv_standorte`/`dv_geraete`, Pagination/Filter direkt in der Datenbankabfrage statt im Speicher.
 - **Nachträglich ergänzt (2026-09-17, Nutzerfeedback nach dem Backend-Test):** "Firma wechseln"-Button neben dem Titel, sichtbar nur für Kontakte mit mehr als einer zugeordneten Firma (`session.portal.firmaIds.length > 1`). Nutzt die neue Server Action `changeFirma()` (`firmen-auswahl/actions.ts`, PROJ-2) — löscht das `obsi_selected_firma`-Cookie und leitet zu `/firmen-auswahl` weiter, ohne dass sich der Kunde ab- und wieder anmelden muss.
+- **Nachträglich ergänzt (2026-09-18, `/design`-Nachtrag):** Geräte-Status wird jetzt farblich markiert (Freigabe=Grün, keine Freigabe=Rot, letzte Freigabe=Amber) statt neutralem Text/Grau-Badge, auf der Übersicht-Tabelle und der Detailseite — siehe `docs/design-system.md` Component Conventions und `src/lib/status-badge.ts`.
 
 ## Implementation Notes (Backend)
 

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraetById } from "@/lib/geraete/queries";
 import { getPruefberichteFuerGeraet } from "@/lib/pruefberichte/queries";
+import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,7 +64,9 @@ export default async function GeraetDetailPage({
 
         <div className="mb-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold">{geraet.name ?? "(ohne Namen)"}</h1>
-          {geraet.status && <Badge variant="secondary">{geraet.status}</Badge>}
+          {geraet.status && (
+            <Badge variant={getStatusBadgeVariant(geraet.status)}>{geraet.status}</Badge>
+          )}
         </div>
 
         <Card>
@@ -125,7 +128,15 @@ export default async function GeraetDetailPage({
                   {pruefberichte.map((bericht) => (
                     <TableRow key={bericht.id}>
                       <TableCell>{formatDatum(bericht.pruefdatum)}</TableCell>
-                      <TableCell>{bericht.ergebnis ?? "—"}</TableCell>
+                      <TableCell>
+                        {bericht.ergebnis ? (
+                          <Badge variant={getStatusBadgeVariant(bericht.ergebnis)}>
+                            {bericht.ergebnis}
+                          </Badge>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                       <TableCell>{bericht.bemerkungen ?? "—"}</TableCell>
                       <TableCell>{bericht.pruefer ?? "—"}</TableCell>
                     </TableRow>

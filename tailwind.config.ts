@@ -40,6 +40,12 @@ const config: Config = {
   				DEFAULT: 'hsl(var(--destructive))',
   				foreground: 'hsl(var(--destructive-foreground))'
   			},
+  			status: {
+  				success: 'hsl(var(--status-success))',
+  				'success-foreground': 'hsl(var(--status-success-foreground))',
+  				warning: 'hsl(var(--status-warning))',
+  				'warning-foreground': 'hsl(var(--status-warning-foreground))'
+  			},
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',
   			ring: 'hsl(var(--ring))',

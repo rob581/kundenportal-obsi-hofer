@@ -36,7 +36,7 @@ Vorerst nicht unterstützt — alle bisher gebauten Seiten (PROJ-1 bis PROJ-4) g
   - "keine Freigabe" → `--destructive` (Rot, wiederverwendet statt eines eigenen Tokens)
   - "letzte Freigabe" / "Letzte Freigabe" → `--status-warning` (Amber) — case-insensitive wie bei der bestehenden Status-Normalisierung (siehe PROJ-3 Tech Design)
   - Kein Status (`null`) → neutral (`--muted-foreground`), keine Farbe
-- **Offen für `/frontend`:** Diese Zuordnung ist auf den bereits gebauten Seiten (PROJ-3 Geräte-Übersicht/-Detail, PROJ-4 Prüfberichte-Tabelle) noch nicht umgesetzt — das ist eine Komponenten-Änderung, kein globales CSS-Token, und braucht einen eigenen `/frontend`-Nachtrag.
+- **Umgesetzt (2026-09-18):** Shared Helper `src/lib/status-badge.ts` (`getStatusBadgeVariant`) mappt einen Status-String auf einen Badge-Variant (`success`/`destructive`/`warning`/`secondary`), genutzt auf allen drei Stellen: Geräte-Übersicht-Tabelle, Geräte-Detail-Badge, Prüfberichte-Ergebnis-Spalte. `success`/`warning`-Varianten wurden dafür zu `src/components/ui/badge.tsx` ergänzt (Standard-shadcn-Customization über die bestehende `cva`-Variants-Definition, keine Neuimplementierung).
 
 ## Entscheidungs-Log
 | Frage | Entscheidung | Datum |
