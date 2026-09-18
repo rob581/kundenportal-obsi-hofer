@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { auth } from "../../auth";
 import { changeFirma } from "@/app/(protected)/firmen-auswahl/actions";
@@ -10,7 +11,10 @@ export async function AppHeader() {
 
   return (
     <header className="flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
-      <span className="font-semibold">OBSI Hofer GmbH — Kundenportal</span>
+      <div className="flex items-center gap-3">
+        <Image src="/logo_small.png" alt="OBSI Hofer GmbH" width={386} height={500} className="h-9 w-auto" priority />
+        <span className="font-semibold">Kundenportal</span>
+      </div>
       <div className="flex items-center gap-4">
         <nav className="flex items-center gap-4 text-sm">
           <Link href="/uebersicht" className="text-muted-foreground hover:text-foreground">

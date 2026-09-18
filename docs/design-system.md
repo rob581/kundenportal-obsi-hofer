@@ -3,6 +3,8 @@
 ## Brand
 Eigenständige Palette für das Kundenportal, bewusst nicht an das bestehende OBSI-Hofer-Erscheinungsbild (obsi-hofer.ch) angelehnt — freie Farbwahl (Entscheidung 2026-09-17).
 
+**Logo (nachträglich ergänzt, 2026-09-18):** `public/logo_small.png` (386×500px), im `AppHeader` ganz links, feste Höhe `h-9`. `public/logo_large.png` (1157×1500px, gleiches Motiv, höhere Auflösung) liegt ebenfalls im Repo, aktuell ungenutzt — falls für einen anderen Zweck (z.B. Druck/PDF) gedacht, sonst kann sie entfernt werden.
+
 ## Visuelle Grundhaltung
 Nüchtern & vertrauenswürdig: klar, ruhig, wenig Ablenkung. Passt zu B2B-Kunden, die schnell den Status ihrer sicherheitsrelevanten Geräte/Berichte prüfen wollen — keine verspielten Elemente, zurückhaltende Akzentfarbe, viel Weissraum, klare Tabellen.
 
