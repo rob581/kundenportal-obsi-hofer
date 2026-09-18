@@ -1,12 +1,9 @@
 import Link from "next/link";
-import { auth } from "../../../../auth";
 import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getDashboardKennzahlen } from "@/lib/dashboard/mock-data";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
-import { changeFirma } from "../firmen-auswahl/actions";
 import { AppHeader } from "@/components/app-header";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const STATUS_TILE_TEXT_COLOR: Record<string, string> = {
@@ -52,8 +49,6 @@ function StatusKachel({
 
 export default async function DashboardPage() {
   const currentFirmaId = await getCurrentFirmaId();
-  const session = await auth();
-  const hatMehrereFirmen = (session?.portal?.firmaIds.length ?? 0) > 1;
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
 
@@ -71,18 +66,9 @@ export default async function DashboardPage() {
     <div>
       <AppHeader />
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <h1 className="mb-1 text-xl font-semibold">Dashboard</h1>
-            <p className="text-sm text-muted-foreground">{firma?.name ?? "Ihre Firma"}</p>
-          </div>
-          {hatMehrereFirmen && (
-            <form action={changeFirma}>
-              <Button type="submit" variant="outline" size="sm">
-                Firma wechseln
-              </Button>
-            </form>
-          )}
+        <div className="mb-6">
+          <h1 className="mb-1 text-xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">{firma?.name ?? "Ihre Firma"}</p>
         </div>
 
         {loadError ? (
