@@ -158,7 +158,9 @@ export async function getGeraeteList(firmaId: string, query: GeraeteQuery): Prom
   }
   if (query.suche) {
     const needle = escapeOrListValue(query.suche.trim());
-    geraeteQuery = geraeteQuery.or(`name.ilike.%${needle}%,seriennummer.ilike.%${needle}%`);
+    geraeteQuery = geraeteQuery.or(
+      `seriennummer.ilike.%${needle}%,barcode.ilike.%${needle}%,lagerort.ilike.%${needle}%`
+    );
   }
 
   const start = (page - 1) * PAGE_SIZE;

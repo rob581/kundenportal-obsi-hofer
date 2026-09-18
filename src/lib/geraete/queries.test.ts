@@ -93,14 +93,14 @@ function seedZweiFirmen() {
       id: "g1",
       name: "Feuerlöscher Halle A",
       seriennummer: "FL-0041",
-      barcode: null,
+      barcode: "4012345000041",
       status: "Freigabe",
       letzte_pruefung: "2026-08-12",
       ablegereife: null,
       herstelljahr: "2019-01-01",
       standort_id: STANDORT_A,
       artikel_id: "a1",
-      lagerort: null,
+      lagerort: "Regal 3",
       pruefer: null,
       zubehoer: null,
       bemerkungen: null,
@@ -116,7 +116,7 @@ function seedZweiFirmen() {
       herstelljahr: null,
       standort_id: STANDORT_A,
       artikel_id: null,
-      lagerort: null,
+      lagerort: "Flur EG",
       pruefer: null,
       zubehoer: null,
       bemerkungen: null,
@@ -194,14 +194,24 @@ describe("getGeraeteList", () => {
     expect(result.items.map((g) => g.id)).toEqual(["g1"]);
   });
 
-  it("filters by search term across name and Seriennummer", async () => {
+  it("filters by search term across Seriennummer, Barcode and Lagerort", async () => {
     seedZweiFirmen();
 
     const bySeriennummer = await getGeraeteList("f1", { suche: "RM-1187" });
     expect(bySeriennummer.items.map((g) => g.id)).toEqual(["g2"]);
 
+    const byBarcode = await getGeraeteList("f1", { suche: "4012345000041" });
+    expect(byBarcode.items.map((g) => g.id)).toEqual(["g1"]);
+
+    const byLagerort = await getGeraeteList("f1", { suche: "Flur EG" });
+    expect(byLagerort.items.map((g) => g.id)).toEqual(["g2"]);
+  });
+
+  it("no longer matches on Gerätename (AC: Suche ersetzt durch Seriennummer/Barcode/Lagerort)", async () => {
+    seedZweiFirmen();
+
     const byName = await getGeraeteList("f1", { suche: "Absturzsicherung" });
-    expect(byName.items.map((g) => g.id)).toEqual(["g3"]);
+    expect(byName.items).toEqual([]);
   });
 
   it("sorts by letzte_pruefung descending with never-inspected devices first", async () => {
@@ -215,13 +225,13 @@ describe("getGeraeteList", () => {
   it("combines status filter and search term with AND (AC: beide Kriterien kombiniert)", async () => {
     seedZweiFirmen();
 
-    // g1 matches the status alone, but not the search term alone — only a
-    // device matching BOTH may be returned.
-    const result = await getGeraeteList("f1", { status: "Freigabe", suche: "Rauchmelder" });
+    // g2's Lagerort matches the search term, but its Status doesn't match
+    // "Freigabe" — only a device matching BOTH may be returned.
+    const result = await getGeraeteList("f1", { status: "Freigabe", suche: "Flur EG" });
 
     expect(result.items).toEqual([]);
 
-    const matchesBoth = await getGeraeteList("f1", { status: "Freigabe", suche: "Feuerlöscher" });
+    const matchesBoth = await getGeraeteList("f1", { status: "Freigabe", suche: "4012345000041" });
     expect(matchesBoth.items.map((g) => g.id)).toEqual(["g1"]);
   });
 

@@ -62,7 +62,7 @@ export function GeraeteFilterBar({ statusOptions }: { statusOptions: string[] })
         }}
       >
         <Input
-          placeholder="Suche nach Gerätename oder Seriennummer…"
+          placeholder="Suche nach Seriennummer, Barcode oder Lagerort…"
           value={suche}
           onChange={(e) => setSuche(e.target.value)}
         />
