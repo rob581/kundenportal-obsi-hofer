@@ -233,5 +233,27 @@ Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842)
 - **Production Ready:** JA
 - **Recommendation:** Status auf "Approved" setzen. BUG-1 (Tabellen-Trunkierung) optional bei einem künftigen `/design`-Durchgang mitnehmen, kein Grund für einen Deployment-Aufschub.
 
+### Re-Verifikation (2026-09-18)
+
+Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen, die einige ACs/Wortlaute veraltet gemacht haben (siehe Implementation Notes): Artikel-Info statt Gerätename, Lagerort statt Standort, Suche über Seriennummer/Barcode/Lagerort statt Gerätename. Dieser Abschnitt verifiziert gezielt die betroffenen Stellen erneut, statt die komplette QA von vorne zu wiederholen.
+
+#### AC-1 (jetzt): Liste zeigt Artikel-Info, Status, Lagerort, Datum letzte Prüfung
+- [x] `formatArtikelInfo`-Logik durch 4 neue Tests in `artikel-info.test.ts` abgedeckt (Reihenfolge, fehlende Teile, Fallback auf Gerätename, Fallback auf Platzhalter); `getGeraeteList` liefert Artikel-Daten jetzt auch für die Liste (Batch-Query, 1 neuer Test); Lagerort war schon immer im Datensatz enthalten, jetzt auch in der Tabelle sichtbar (Code-Review). Live vom Nutzer bestätigt ("sieht gut aus", mehrfach)
+- **Wortlaut-Hinweis:** Der ursprüngliche AC-Text oben ("...mit Gerätename...") ist bewusst nicht nachträglich umgeschrieben (historischer Stand des Interviews, gleiche Konvention wie bei PROJ-2), das tatsächliche Verhalten ist aber das aktuelle
+
+#### AC-4 (jetzt): Freitextsuche über Seriennummer, Barcode und Lagerort
+- [x] Bestehender Suchtest umgeschrieben + neuer Test, der explizit bestätigt, dass eine Namenssuche jetzt **keine** Treffer mehr liefert (Regressionsschutz gegen ein versehentliches Wieder-Einschleichen der alten Suchfelder)
+
+#### AC-5 (UND-Verknüpfung Status + Suche): weiterhin korrekt
+- [x] Test auf die neuen Suchfelder (Barcode/Lagerort statt Gerätename) umgestellt, Logik selbst unverändert
+
+#### Neue Sicherheitsprüfung: Artikel-Batch-Lookup kann nicht firmenübergreifend leaken
+- [x] Code-Review: `artikelIds` wird ausschliesslich aus den bereits Firma-gefilterten Geräte-Zeilen abgeleitet (`standort_id in [...]`) — die Artikel-Abfrage kann datenstrukturell keine Artikel anderer Firmen zurückgeben
+
+#### Regression
+- [x] Alle 61 Vitest-Tests grün (18 davon in `geraete/queries.test.ts` + `artikel-info.test.ts`), alle 14 Playwright-Tests grün (inkl. der 2 PROJ-3-spezifischen Routen-Schutz-Tests) — keine Regressionen durch die nachträglichen Änderungen
+
+**Ergebnis:** Status bleibt **Approved**. Keine neuen Bugs gefunden; BUG-1 von oben (Tabellen-Trunkierung) weiterhin offen und unverändert Low-Priority.
+
 ## Deployment
 _To be added by /deploy_
