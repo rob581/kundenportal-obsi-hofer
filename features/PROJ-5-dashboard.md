@@ -67,12 +67,50 @@ Keine offenen Fragen — alle Kernentscheidungen wurden im Interview getroffen.
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Neuer Navigations-Link ("Übersicht" / "Dashboard") wird direkt im bestehenden, gemeinsam genutzten `AppHeader` ergänzt, statt einer neuen Navigationskomponente | `AppHeader` erscheint bereits auf allen geschützten Seiten (PROJ-2/3/4); eine Erweiterung dort macht den Link automatisch überall verfügbar, ohne jede Seite einzeln anzupassen | 2026-09-18 |
+| Kennzahlen werden über eine neue, gemeinsame Abfrage-Schicht (`src/lib/dashboard/`) berechnet, die die bestehende Firma→Standort→Geräte-Auflösung aus PROJ-3 wiederverwendet, statt sie zu duplizieren | Vermeidet zwei unabhängige Implementierungen derselben Zugriffsbeschränkung; ein Bugfix an der Auflösung (z.B. aus einem künftigen PROJ-3-Fix) wirkt automatisch auch hier | 2026-09-18 |
+| "Total Prüfberichte" wird als reiner Zähl-Query über alle Geräte-IDs der Firma berechnet (kein Laden einzelner Prüfbericht-Datensätze) | Konsistent mit der bestehenden Performance-Vorgabe aus der Spec; skaliert unabhängig von der tatsächlichen Anzahl Prüfberichte | 2026-09-18 |
+| Status-Kacheln nutzen dieselbe Farb-Zuordnung wie die Geräte-Übersicht/-Detailseite (`getStatusBadgeVariant` aus dem `/design`-Nachtrag) | Visuelle Konsistenz zwischen Dashboard und Geräte-Übersicht — derselbe Status sieht überall gleich aus | 2026-09-18 |
+| Kein separater API-Endpoint — Server Component liest direkt über die bestehende Supabase-Anbindung | Reine Leseoperation, konsistent mit dem in PROJ-3/PROJ-4 etablierten Muster | 2026-09-18 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+AppHeader (bestehend, erweitert)
+└── NEU: Navigations-Links "Übersicht" / "Dashboard" — auf allen geschützten Seiten sichtbar
+
+/dashboard (neue Seite)
+├── AppHeader (erweitert)
+├── Firma-Name-Anzeige (wie auf /uebersicht)
+├── "Firma wechseln"-Button (wiederverwendet aus PROJ-3, nur bei mehreren Firmen)
+├── Status-Kacheln
+│   ├── Freigabe / keine Freigabe / letzte Freigabe — immer alle drei, auch mit 0
+│   ├── Kein Status — nur wenn > 0
+│   └── Jede Kachel anklickbar → /uebersicht?status=... (vorausgefüllter Filter)
+├── Kachel "Total Prüfberichte"
+├── Kachel "Letzte Prüfung" (Datum, oder "Noch nie geprüft")
+├── Leer-Zustand ("Für Ihre Firma sind noch keine Geräte hinterlegt...", analog PROJ-3)
+└── Fehler-Zustand mit "Erneut versuchen" (Header/Abmelden bleiben nutzbar)
+```
+
+### Datenmodell (in Textform)
+
+- Die Firma→Standort→Geräte-Auflösung ist identisch zu PROJ-3 (erst Standorte der Firma, dann Geräte dieser Standorte) und wird für das Dashboard wiederverwendet statt neu gebaut
+- Status-Kacheln: Zählung der Geräte dieser Firma, gruppiert nach normalisiertem Status (case-insensitiv, gleiche Normalisierung wie PROJ-3), inkl. einer Kategorie für "kein Status" (`null`)
+- "Total Prüfberichte": Zählung aller nicht-soft-gelöschten Prüfberichte, deren Gerät zu einem Standort dieser Firma gehört
+- "Letzte Prüfung": höchster Wert von `letzte_pruefung` über alle Geräte dieser Firma; `null`, wenn kein Gerät je geprüft wurde
+- Alle drei Kennzahlen werden in einem Durchgang für die aktuell ausgewählte Firma berechnet, keine Paginierung nötig (reine Zählwerte)
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+Keine neuen — nutzt weiterhin shadcn-Komponenten (Card) und die vorhandene Supabase-Anbindung.
 
 ## QA Test Results
 _To be added by /qa_
