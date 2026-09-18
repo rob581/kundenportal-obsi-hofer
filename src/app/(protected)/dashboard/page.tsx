@@ -65,12 +65,7 @@ export default async function DashboardPage() {
     loadError = "Die Kennzahlen konnten nicht geladen werden.";
   }
 
-  const keineGeraete =
-    kennzahlen !== null &&
-    kennzahlen.statusFreigabe === 0 &&
-    kennzahlen.statusKeineFreigabe === 0 &&
-    kennzahlen.statusLetzteFreigabe === 0 &&
-    kennzahlen.statusKeinStatus === 0;
+  const keineGeraete = kennzahlen !== null && kennzahlen.totalGeraete === 0;
 
   return (
     <div>
@@ -126,7 +121,17 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Total Geräte
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-2xl font-semibold">{kennzahlen!.totalGeraete}</p>
+                </CardContent>
+              </Card>
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm font-medium text-muted-foreground">

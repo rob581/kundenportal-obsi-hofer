@@ -7,6 +7,7 @@ import type { DashboardKennzahlen } from "./types";
 // Mock-Phase — Geräte-/Firma-Daten sind hier bereits real (PROJ-3/4
 // Backend ist fertig), nur diese Aggregation fehlt noch.
 const MOCK_KENNZAHLEN: DashboardKennzahlen = {
+  totalGeraete: 20,
   statusFreigabe: 14,
   statusKeineFreigabe: 3,
   statusLetzteFreigabe: 1,

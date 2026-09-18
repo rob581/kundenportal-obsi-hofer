@@ -1,4 +1,5 @@
 export type DashboardKennzahlen = {
+  totalGeraete: number;
   statusFreigabe: number;
   statusKeineFreigabe: number;
   statusLetzteFreigabe: number;
