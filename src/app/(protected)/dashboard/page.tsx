@@ -123,32 +123,32 @@ export default async function DashboardPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <Card>
-                <CardHeader>
+                <CardHeader className="text-center">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
                     Total Geräte
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="text-center">
                   <p className="text-2xl font-semibold">{kennzahlen!.totalGeraete}</p>
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader>
+                <CardHeader className="text-center">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
                     Total Prüfberichte
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="text-center">
                   <p className="text-2xl font-semibold">{kennzahlen!.totalPruefberichte}</p>
                 </CardContent>
               </Card>
               <Card>
-                <CardHeader>
+                <CardHeader className="text-center">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
                     Letzte Prüfung
                   </CardTitle>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="text-center">
                   <p className="text-2xl font-semibold">{formatDatum(kennzahlen!.letztePruefung)}</p>
                 </CardContent>
               </Card>
