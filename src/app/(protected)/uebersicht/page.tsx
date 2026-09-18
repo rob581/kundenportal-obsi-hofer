@@ -93,7 +93,7 @@ export default async function UebersichtPage({
                         <TableRow>
                           <TableHead>Gerät</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Standort</TableHead>
+                          <TableHead>Lagerort</TableHead>
                           <TableHead>Letzte Prüfung</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -117,7 +117,7 @@ export default async function UebersichtPage({
                                 "—"
                               )}
                             </TableCell>
-                            <TableCell>{geraet.standortName ?? "—"}</TableCell>
+                            <TableCell>{geraet.lagerort ?? "—"}</TableCell>
                             <TableCell>{formatDatum(geraet.letztePruefung)}</TableCell>
                           </TableRow>
                         ))}
