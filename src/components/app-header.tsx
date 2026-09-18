@@ -13,7 +13,7 @@ export async function AppHeader() {
     <header className="flex h-14 items-center justify-between border-b bg-background px-4 sm:px-6">
       <div className="flex items-center gap-3">
         <Image src="/logo_small.png" alt="OBSI Hofer GmbH" width={386} height={500} className="h-9 w-auto" priority />
-        <span className="text-lg font-semibold">Kundenportal</span>
+        <span className="text-xl font-semibold">Kundenportal</span>
       </div>
       <div className="flex items-center gap-4">
         <nav className="flex items-center gap-4 text-sm">
