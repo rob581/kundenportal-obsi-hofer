@@ -64,11 +64,10 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <AppHeader />
+      <AppHeader firmaName={firma?.name ?? "Ihre Firma"} />
       <main className="mx-auto max-w-4xl px-4 py-8">
         <div className="mb-6">
-          <h1 className="mb-1 text-xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">{firma?.name ?? "Ihre Firma"}</p>
+          <h1 className="text-xl font-semibold">Dashboard</h1>
         </div>
 
         {loadError ? (

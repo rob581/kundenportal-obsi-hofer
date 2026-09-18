@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraetById } from "@/lib/geraete/queries";
 import { getPruefberichteFuerGeraet } from "@/lib/pruefberichte/queries";
@@ -43,6 +44,9 @@ export default async function GeraetDetailPage({
     notFound();
   }
 
+  const firmen = await getFirmenNamen([currentFirmaId]);
+  const firma = firmen[0];
+
   let pruefberichte: Awaited<ReturnType<typeof getPruefberichteFuerGeraet>> = [];
   let pruefberichteError: string | null = null;
   try {
@@ -53,7 +57,7 @@ export default async function GeraetDetailPage({
 
   return (
     <div>
-      <AppHeader />
+      <AppHeader firmaName={firma?.name ?? "Ihre Firma"} />
       <main className="mx-auto max-w-2xl px-4 py-8">
         <Link
           href="/uebersicht"
