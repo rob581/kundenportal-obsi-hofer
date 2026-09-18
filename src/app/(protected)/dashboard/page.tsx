@@ -108,6 +108,7 @@ export default async function DashboardPage() {
           </Card>
         ) : (
           <>
+            <h2 className="mb-2 text-sm font-medium text-muted-foreground">Geräte nach Status</h2>
             <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatusKachel label="Freigabe" anzahl={kennzahlen!.statusFreigabe} status="Freigabe" />
               <StatusKachel
