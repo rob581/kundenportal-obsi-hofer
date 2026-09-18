@@ -86,7 +86,7 @@
   body {
     @apply text-foreground;
     background-color: hsl(var(--background));
-    background-image: linear-gradient(hsl(var(--background) / 0.82), hsl(var(--background) / 0.82)),
+    background-image: linear-gradient(hsl(var(--background) / 0.5), hsl(var(--background) / 0.5)),
       url("/obsi-hero-bg.jpg");
     background-size: cover;
     background-position: center top;
