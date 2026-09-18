@@ -36,6 +36,7 @@
 - [ ] Angenommen die Firma hat Geräte, aber keines wurde je geprüft, wenn das Dashboard geladen wird, dann zeigt die Kennzahl "letzte Prüfung" einen klaren Hinweis ("Noch nie geprüft") statt eines leeren oder falschen Datums
 - [ ] Angenommen die Kennzahlen können nicht geladen werden (z.B. Datenbank kurzzeitig nicht erreichbar), wenn der Fehler auftritt, dann wird eine Fehlermeldung mit "Erneut versuchen"-Button angezeigt und Header/Abmelden bleiben nutzbar
 - [ ] Angenommen ein Kunde ist auf der Geräte-Übersicht oder der Detailseite, wenn er einen neuen Navigations-Link im Header anklickt, dann gelangt er zum Dashboard, und umgekehrt zurück zur Übersicht
+- [ ] Angenommen ein Gerät der Firma wurde noch nie geprüft oder zuletzt vor mehr als 360 Tagen, wenn das Dashboard geladen wird, dann wird dieses Gerät in der Kennzahl "Zu prüfen" mitgezählt; ein Gerät, dessen letzte Prüfung höchstens 360 Tage zurückliegt, wird nicht mitgezählt
 
 ## Edge Cases
 - Firma ohne jegliche Geräte → Leermeldung analog zu PROJ-3, keine Kacheln mit 0
@@ -63,6 +64,8 @@ Keine offenen Fragen — alle Kernentscheidungen wurden im Interview getroffen.
 | **Nachträglich erweitert:** zusätzliche Kachel "Total Geräte" (Gesamtzahl Geräte der Firma, unabhängig vom Status) vor "Total Prüfberichte" ergänzt | Nutzerwunsch während `/frontend` — sinnvolle Ergänzung, da die vier Status-Kacheln allein die Gesamtzahl nicht auf einen Blick zeigen; einfache Summe, kein Mehraufwand | 2026-09-18 |
 | Immer alle drei bekannten Status-Kacheln anzeigen (auch mit 0) | Konsistentes, vorhersehbares Layout unabhängig von der Firma; kein Rätselraten, warum eine Kategorie fehlt | 2026-09-18 |
 | Eigene "Kein Status"-Kachel, aber nur wenn deren Anzahl > 0 | Betrifft laut PROJ-1-Datenfund nur ca. 0,6% der Geräte — soll bei den meisten Firmen nicht unnötig auftauchen, aber die Summe aller Kacheln muss der Gesamtzahl Geräte entsprechen | 2026-09-18 |
+| **Nachträglich erweitert:** zusätzliche Kachel "Zu prüfen" (Geräte, deren letzte Prüfung mehr als 360 Tage zurückliegt) ergänzt, als erste Kachel in der Status-Reihe, vor "Freigabe" | Nutzerwunsch während `/frontend`; 360 Tage als fester Schwellenwert, um Geräte mit dringendem Handlungsbedarf sichtbar zu machen | 2026-09-18 |
+| Nie geprüfte Geräte zählen ebenfalls als "Zu prüfen" | Ein nie geprüftes Gerät hat mit Sicherheit keine Prüfung innerhalb der letzten 360 Tage — logisch konsistent, auch wenn die reine Datums-Formel das nicht automatisch abdeckt | 2026-09-18 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
