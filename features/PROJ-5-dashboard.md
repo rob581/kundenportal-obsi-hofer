@@ -133,6 +133,7 @@ Keine neuen — nutzt weiterhin shadcn-Komponenten (Card) und die vorhandene Sup
 - 6 neue Integrationstests in `src/lib/dashboard/queries.test.ts` (gleiches Fluent-Mock-Muster wie bei PROJ-3/4, erweitert um eine `head: true`-Zähl-Abfrage): keine Standorte, Standorte ohne Geräte, Status-Zählung case-insensitiv, `letzte_pruefung`-Maximum inkl. Nullwerte, "nie geprüft"-Fall, Prüfberichte-Zählung schliesst Soft-gelöschte und fremde Geräte-IDs korrekt aus.
 - `npx tsc --noEmit`, `npm run build`, `npx vitest run` (54 Tests, 6 neu) und `npx playwright test` (12 Tests, unverändert) laufen fehlerfrei durch; manueller Smoke-Test bestätigt weiterhin keinen Server-Fehler auf `/dashboard` ohne Session.
 - Noch offen: Live-Verifikation gegen echte Daten (Nutzer-Review), danach `/qa`.
+- **Nachträglich ergänzt (2026-09-18, Nutzerwunsch):** Vierte Kennzahl "Zu prüfen" — Anzahl Geräte, deren `letzte_pruefung` mehr als 360 Tage zurückliegt, oder die noch nie geprüft wurden (auf Nutzerentscheidung: nie-geprüfte Geräte zählen mit, da sie mit Sicherheit älter als das Intervall sind). Berechnung erfolgt im selben Reduce-Durchgang wie die Status-Zählung (`ZU_PRUEFEN_TAGE = 360`, String-Vergleich auf ISO-Datumsstrings), keine zusätzliche Datenbankabfrage. Kachel in der zweiten Kennzahlen-Reihe (jetzt 4 statt 3 Spalten), Zahl in Amber (`text-status-warning`) zur optischen Betonung. 2 neue Tests inkl. Grenzfall "exakt 360 Tage her zählt noch nicht" — insgesamt 61 Tests grün.
 
 ## QA Test Results
 _To be added by /qa_

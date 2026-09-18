@@ -47,6 +47,12 @@ beforeEach(() => {
 
 const STANDORT_A = "st-a";
 
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 function seedFirma(geraete: Row[], pruefberichte: Row[] = []) {
   tableData.dv_standorte = [{ id: STANDORT_A, firma_id: "f1" }];
   tableData.dv_geraete = geraete;
@@ -69,6 +75,7 @@ describe("getDashboardKennzahlen", () => {
       statusKeinStatus: 0,
       totalPruefberichte: 0,
       letztePruefung: null,
+      zuPruefen: 0,
     });
   });
 
@@ -141,5 +148,27 @@ describe("getDashboardKennzahlen", () => {
     const result = await getDashboardKennzahlen("f1");
 
     expect(result.totalPruefberichte).toBe(3);
+  });
+
+  it("counts a Gerät as 'zu prüfen' when never inspected or inspected over 360 days ago", async () => {
+    seedFirma([
+      { id: "recent", standort_id: STANDORT_A, status: "Freigabe", letzte_pruefung: daysAgo(10) },
+      { id: "overdue", standort_id: STANDORT_A, status: "Freigabe", letzte_pruefung: daysAgo(400) },
+      { id: "never", standort_id: STANDORT_A, status: "Freigabe", letzte_pruefung: null },
+    ]);
+
+    const result = await getDashboardKennzahlen("f1");
+
+    expect(result.zuPruefen).toBe(2);
+  });
+
+  it("does not count a Gerät inspected exactly 360 days ago as 'zu prüfen' yet", async () => {
+    seedFirma([
+      { id: "boundary", standort_id: STANDORT_A, status: "Freigabe", letzte_pruefung: daysAgo(360) },
+    ]);
+
+    const result = await getDashboardKennzahlen("f1");
+
+    expect(result.zuPruefen).toBe(0);
   });
 });

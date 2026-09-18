@@ -7,6 +7,17 @@ function normalizeStatus(status: string | null): string | null {
   return status.trim().toLowerCase();
 }
 
+// "Zu prüfen": kein Prüfdatum, oder älter als das (per Nutzerentscheidung
+// akzeptierte) 360-Tage-Intervall. String-Vergleich funktioniert korrekt für
+// ISO-Datumsstrings (YYYY-MM-DD), wie sie letzte_pruefung liefert.
+const ZU_PRUEFEN_TAGE = 360;
+
+function getZuPruefenCutoff(): string {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - ZU_PRUEFEN_TAGE);
+  return cutoff.toISOString().slice(0, 10);
+}
+
 const EMPTY_KENNZAHLEN: DashboardKennzahlen = {
   totalGeraete: 0,
   statusFreigabe: 0,
@@ -15,6 +26,7 @@ const EMPTY_KENNZAHLEN: DashboardKennzahlen = {
   statusKeinStatus: 0,
   totalPruefberichte: 0,
   letztePruefung: null,
+  zuPruefen: 0,
 };
 
 // Reuses the same Firma→Standort→Geräte-Auflösung as PROJ-3
@@ -51,6 +63,8 @@ export async function getDashboardKennzahlen(firmaId: string): Promise<Dashboard
   let statusLetzteFreigabe = 0;
   let statusKeinStatus = 0;
   let letztePruefung: string | null = null;
+  let zuPruefen = 0;
+  const zuPruefenCutoff = getZuPruefenCutoff();
 
   for (const geraet of geraete) {
     switch (normalizeStatus(geraet.status)) {
@@ -69,6 +83,10 @@ export async function getDashboardKennzahlen(firmaId: string): Promise<Dashboard
 
     if (geraet.letzte_pruefung && (!letztePruefung || geraet.letzte_pruefung > letztePruefung)) {
       letztePruefung = geraet.letzte_pruefung;
+    }
+
+    if (!geraet.letzte_pruefung || geraet.letzte_pruefung < zuPruefenCutoff) {
+      zuPruefen++;
     }
   }
 
@@ -91,5 +109,6 @@ export async function getDashboardKennzahlen(firmaId: string): Promise<Dashboard
     statusKeinStatus,
     totalPruefberichte: count ?? 0,
     letztePruefung,
+    zuPruefen,
   };
 }

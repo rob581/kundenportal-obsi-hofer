@@ -106,7 +106,7 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
               <Card>
                 <CardHeader className="text-center">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -135,6 +135,16 @@ export default async function DashboardPage() {
                 </CardHeader>
                 <CardContent className="text-center">
                   <p className="text-2xl font-semibold">{formatDatum(kennzahlen!.letztePruefung)}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="text-center">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Zu prüfen
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-center">
+                  <p className="text-2xl font-semibold text-status-warning">{kennzahlen!.zuPruefen}</p>
                 </CardContent>
               </Card>
             </div>
