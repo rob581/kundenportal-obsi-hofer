@@ -19,7 +19,7 @@
 | PROJ-2 | Kunden-Login (Entra External ID) | Approved | [Spec](../features/PROJ-2-kunden-login.md) | 2026-09-15 |
 | PROJ-3 | Geräte-Übersicht | Approved | [Spec](../features/PROJ-3-geraete-uebersicht.md) | 2026-09-15 |
 | PROJ-4 | Prüfberichte-Liste | Approved | [Spec](../features/PROJ-4-pruefberichte-liste.md) | 2026-09-15 |
-| PROJ-5 | Dashboard | In Progress | [Spec](../features/PROJ-5-dashboard.md) | 2026-09-15 |
+| PROJ-5 | Dashboard | Approved | [Spec](../features/PROJ-5-dashboard.md) | 2026-09-15 |
 
 <!-- Add features above this line -->
 

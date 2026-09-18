@@ -1,6 +1,6 @@
 # PROJ-5: Dashboard
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-18
 **Last Updated:** 2026-09-18
 
@@ -139,7 +139,75 @@ Keine neuen — nutzt weiterhin shadcn-Komponenten (Card) und die vorhandene Sup
 - **Nachträglich ergänzt (2026-09-18, Nutzerwunsch):** Vierte Kennzahl "Zu prüfen" — Anzahl Geräte, deren `letzte_pruefung` mehr als 360 Tage zurückliegt, oder die noch nie geprüft wurden (auf Nutzerentscheidung: nie-geprüfte Geräte zählen mit, da sie mit Sicherheit älter als das Intervall sind). Berechnung erfolgt im selben Reduce-Durchgang wie die Status-Zählung (`ZU_PRUEFEN_TAGE = 360`, String-Vergleich auf ISO-Datumsstrings), keine zusätzliche Datenbankabfrage. Kachel in der zweiten Kennzahlen-Reihe (jetzt 4 statt 3 Spalten), Zahl in Amber (`text-status-warning`) zur optischen Betonung. 2 neue Tests inkl. Grenzfall "exakt 360 Tage her zählt noch nicht" — insgesamt 61 Tests grün.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-18
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Wie bei PROJ-2/3/4 lässt sich der echte Entra-External-ID-Login nicht automatisiert/wiederholbar durchspielen. Die Aggregations-Logik ist vollständig über Vitest-Integrationstests abgedeckt; die tatsächliche Anzeige (Kennzahlen, Status-Kacheln, Verlinkung, "Zu prüfen") wurde vom Nutzer während der Backend-/Frontend-Phase live gegen echte Daten bestätigt ("sieht gut aus", mehrfach).
+
+### Acceptance Criteria Status
+
+#### AC-1: Kennzahlen werden für die ausgewählte Firma angezeigt
+- [x] Integrationstests (`queries.test.ts`) + live vom Nutzer bestätigt
+
+#### AC-2: Immer alle drei bekannten Status-Kacheln, fehlende mit 0
+- [x] Code-Review (`StatusKachel` wird für Freigabe/keine Freigabe/letzte Freigabe immer gerendert, unabhängig vom Wert) + Integrationstest für die zugrunde liegende Zählung
+
+#### AC-3: "Kein Status"-Kachel nur wenn > 0
+- [x] Code-Review (`{kennzahlen!.statusKeinStatus > 0 && (...)}`) + Integrationstest für `statusKeinStatus`-Zählung
+
+#### AC-4: Keine "Kein Status"-Kachel wenn 0
+- [x] Gleicher Code-Pfad wie AC-3, negativer Fall durch die Bedingung selbst abgedeckt
+
+#### AC-5: Status-Kachel-Klick verlinkt zur gefilterten Übersicht
+- [x] Code-Review: `href="/uebersicht?status=..."`, case-insensitiver Filter auf der Zielseite (PROJ-3) macht das robust gegenüber Schreibweisen-Inkonsistenzen in den echten Daten
+
+#### AC-6: Leermeldung bei Firma ohne Geräte
+- [x] Integrationstest (`EMPTY_KENNZAHLEN` bei keinen Standorten/Geräten) + Code-Review des `keineGeraete`-Zweigs
+
+#### AC-7: "Noch nie geprüft" statt leerem Datum
+- [x] Integrationstest + Code-Review (`formatDatum` liefert "Noch nie geprüft" bei `null`)
+
+#### AC-8: Fehler-Zustand mit "Erneut versuchen"
+- [x] Code-Review: eigener try/catch um `getDashboardKennzahlen`, `AppHeader` bleibt ausserhalb des Fehler-Zweigs nutzbar (gleiches Muster wie PROJ-3/4)
+
+#### AC-9: Navigation zwischen Übersicht und Dashboard über Header-Link
+- [x] Code-Review: `AppHeader` rendert beide Links auf jeder geschützten Seite, unabhängig vom aktuellen Pfad
+
+#### AC-10: "Zu prüfen" zählt Geräte ohne Prüfung oder älter als 360 Tage
+- [x] 2 neue Integrationstests: überfällige/nie geprüfte Geräte werden gezählt, ein Gerät mit Prüfung vor genau 360 Tagen noch nicht (Grenzfall bewusst getestet)
+
+### Security Audit Results
+- [x] Authentication: `/dashboard` ohne Session → Redirect zu `/login` (neuer Playwright-Test, `tests/PROJ-5-dashboard.spec.ts`)
+- [x] Autorisierung: Keine neue Angriffsfläche — `firmaId` kommt ausschliesslich aus der Session (`getCurrentFirmaId`), keine URL-Parameter, die eine fremde Firma erzwingen könnten (im Gegensatz zu PROJ-3/4 gibt es hier nicht einmal eine ID im Pfad)
+- [x] Keine Secrets im Client-Code: `getDashboardKennzahlen`/`getSupabaseAdmin` werden von keiner `"use client"`-Datei importiert (per Grep geprüft)
+- [x] Kein Injection-Vektor: keine Freitext-Eingaben auf dieser Seite
+- [x] Kein XSS-Vektor: nur Zahlen und ein formatiertes Datum werden gerendert
+- [x] Rate-Limiting: kein neuer API-Endpoint
+
+### Bugs Found
+
+#### BUG-1: Bei seltener "Kein Status"-Kachel (5. Kachel) entstehen auf Desktop 3 leere Spalten in der neuen Zeile
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Firma mit mindestens einem Gerät ohne Status aufrufen (betrifft laut PROJ-1-Datenfund ca. 0,6% der Geräte)
+  2. Dashboard auf Desktop-Breite betrachten
+  3. Erwartet: saubere Kachel-Anordnung
+  4. Tatsächlich: 5 Kacheln in einem 4-spaltigen Grid — die 5. Kachel ("Kein Status") rutscht in eine neue Zeile mit 3 leeren Spalten daneben
+- **Priority:** Nice to have — seltener Fall, keine funktionale Beeinträchtigung, nur optisch nicht perfekt ausbalanciert
+
+### Automatisierte Tests
+- **Unit-/Integrationstests (Vitest):** 61/61 grün gesamt, davon 8 in `src/lib/dashboard/queries.test.ts` (inkl. der 2 neuen für "Zu prüfen")
+- **E2E-Tests (Playwright):** 14/14 grün gesamt (12 unverändert + 2 neu in `tests/PROJ-5-dashboard.spec.ts` für Chromium + Mobile Safari)
+- **Regression:** Alle bisherigen PROJ-1/2/3/4-Tests weiterhin grün — keine Regressionen durch PROJ-5
+
+### Summary
+- **Acceptance Criteria:** 10/10 abgedeckt (Integrationstests + Code-Review; UI-Verhalten zusätzlich vom Nutzer live gegen echte Daten bestätigt)
+- **Bugs Found:** 1 total (0 Critical, 0 High, 0 Medium, 1 Low) — nicht blockierend
+- **Security:** Solide — kleinste Angriffsfläche aller bisherigen Features (keine URL-Parameter, keine Freitext-Eingaben)
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen. BUG-1 optional bei einem künftigen Layout-Polish mitnehmen (z.B. "Kein Status" immer in eine eigene, schmalere Kachel-Reihe stellen).
 
 ## Deployment
 _To be added by /deploy_
