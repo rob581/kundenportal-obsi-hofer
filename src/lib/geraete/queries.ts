@@ -80,6 +80,13 @@ async function getStandorteFuerFirma(firmaId: string) {
   return (data ?? []) as { id: string; name: string | null }[];
 }
 
+// Shared with src/lib/dashboard/queries.ts (see PROJ-5 Tech Design: reuse
+// this resolution instead of duplicating it) — just the IDs, no names.
+export async function getStandortIdsFuerFirma(firmaId: string): Promise<string[]> {
+  const standorte = await getStandorteFuerFirma(firmaId);
+  return standorte.map((s) => s.id);
+}
+
 // Two-step lookup by design (see PROJ-3 Tech Design): dv_geraete/dv_standorte
 // have no real foreign keys since PROJ-1's BUG-1 fix, so PostgREST can't
 // embed the join — we resolve the Firma's Standort-IDs first, then query

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
-import { getDashboardKennzahlen } from "@/lib/dashboard/mock-data";
+import { getDashboardKennzahlen } from "@/lib/dashboard/queries";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";

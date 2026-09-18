@@ -125,6 +125,15 @@ Keine neuen — nutzt weiterhin shadcn-Komponenten (Card) und die vorhandene Sup
 - `npx tsc --noEmit`, `npx vitest run` (48 Tests, unverändert) und `npx playwright test` (12 Tests, unverändert) laufen fehlerfrei durch; manueller Smoke-Test bestätigt, dass `/dashboard` ohne Session korrekt zu `/login` umleitet (kein Server-Fehler).
 - Noch offen (für `/backend`): echte Firma→Standort→Geräte-Auflösung (wiederverwendet aus PROJ-3) plus aggregierte Zähl-Abfragen für Status-Verteilung, Total Prüfberichte und maximales Prüfdatum.
 
+## Implementation Notes (Backend)
+
+- `src/lib/dashboard/queries.ts` ersetzt die Mock-Data-Schicht mit einer echten Supabase-Abfrage: `getStandortIdsFuerFirma` (neu aus `src/lib/geraete/queries.ts` exportiert, wiederverwendet statt dupliziert) liefert die Standort-IDs der Firma, danach werden `dv_geraete` (nur `id`/`status`/`letzte_pruefung`) für diese Standorte gelesen und einmal in JS zu den vier Status-Zählern + `letzte_pruefung`-Maximum reduziert.
+- "Total Prüfberichte" ist ein reiner Zähl-Query (`count: "exact", head: true`) über `dv_pruefberichte`, gefiltert nach den zuvor ermittelten Geräte-IDs und `deleted_at is null` — es werden nie einzelne Prüfbericht-Datensätze geladen, wie im Tech Design festgelegt.
+- Firma ohne Standorte oder ohne Geräte → alle Kennzahlen `0`/`null` (`EMPTY_KENNZAHLEN`), keine Sonderbehandlung in der aufrufenden Seite nötig (`dashboard/page.tsx`s `keineGeraete`-Check greift automatisch).
+- 6 neue Integrationstests in `src/lib/dashboard/queries.test.ts` (gleiches Fluent-Mock-Muster wie bei PROJ-3/4, erweitert um eine `head: true`-Zähl-Abfrage): keine Standorte, Standorte ohne Geräte, Status-Zählung case-insensitiv, `letzte_pruefung`-Maximum inkl. Nullwerte, "nie geprüft"-Fall, Prüfberichte-Zählung schliesst Soft-gelöschte und fremde Geräte-IDs korrekt aus.
+- `npx tsc --noEmit`, `npm run build`, `npx vitest run` (54 Tests, 6 neu) und `npx playwright test` (12 Tests, unverändert) laufen fehlerfrei durch; manueller Smoke-Test bestätigt weiterhin keinen Server-Fehler auf `/dashboard` ohne Session.
+- Noch offen: Live-Verifikation gegen echte Daten (Nutzer-Review), danach `/qa`.
+
 ## QA Test Results
 _To be added by /qa_
 
