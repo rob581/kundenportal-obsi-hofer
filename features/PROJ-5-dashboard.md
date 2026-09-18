@@ -1,6 +1,6 @@
 # PROJ-5: Dashboard
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-18
 **Last Updated:** 2026-09-18
 
@@ -111,6 +111,15 @@ Siehe Decision Log → Technical Decisions oben.
 
 ### Abhängigkeiten (Packages)
 Keine neuen — nutzt weiterhin shadcn-Komponenten (Card) und die vorhandene Supabase-Anbindung.
+
+## Implementation Notes (Frontend)
+
+- `AppHeader` (`src/components/app-header.tsx`) um zwei Navigations-Links ("Übersicht" / "Dashboard") erweitert — erscheint automatisch auf allen geschützten Seiten, keine aktive-Link-Hervorhebung im MVP (nicht durch die Acceptance Criteria verlangt).
+- Neue Seite `src/app/(protected)/dashboard/page.tsx`: löst Firma wie bei PROJ-3/4 auf (`getCurrentFirmaId`), zeigt "Firma wechseln"-Button nur bei mehreren Firmen, rendert Status-Kacheln (immer Freigabe/keine Freigabe/letzte Freigabe, "Kein Status" nur wenn > 0), Kachel "Total Prüfberichte", Kachel "Letzte Prüfung" (mit "Noch nie geprüft"-Fallback), Leer-Zustand und eigenen Fehler-Zustand mit "Erneut versuchen".
+- Status-Kacheln (ausser "Kein Status") sind als `Link` zu `/uebersicht?status=...` umgesetzt und nutzen `getStatusBadgeVariant` (aus dem `/design`-Nachtrag) für die Textfarbe der Zahl — visuell konsistent mit den Status-Badges auf PROJ-3/4.
+- Datenzugriff über eine neue Mock-Data-Schicht (`src/lib/dashboard/types.ts`, `src/lib/dashboard/mock-data.ts`) mit `getDashboardKennzahlen(firmaId)` — ignoriert `firmaId` bewusst (wie bei PROJ-4s Mock-Phase) und liefert feste Beispielzahlen inkl. eines "Kein Status"-Werts > 0, um alle UI-Zustände sichtbar zu machen. `/backend` ersetzt nur die Funktionsinnereien durch echte aggregierte Supabase-Abfragen, gleiche async Signatur.
+- `npx tsc --noEmit`, `npx vitest run` (48 Tests, unverändert) und `npx playwright test` (12 Tests, unverändert) laufen fehlerfrei durch; manueller Smoke-Test bestätigt, dass `/dashboard` ohne Session korrekt zu `/login` umleitet (kein Server-Fehler).
+- Noch offen (für `/backend`): echte Firma→Standort→Geräte-Auflösung (wiederverwendet aus PROJ-3) plus aggregierte Zähl-Abfragen für Status-Verteilung, Total Prüfberichte und maximales Prüfdatum.
 
 ## QA Test Results
 _To be added by /qa_
