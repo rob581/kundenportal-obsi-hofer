@@ -258,13 +258,18 @@ describe("getGeraeteList", () => {
     expect(combinedIds.size).toBe(30);
   });
 
-  it("does not populate Artikel fields in the list (list view doesn't need them)", async () => {
+  it("populates Artikel fields in the list too (Gerät-Spalte zeigt Artikel-Info, PROJ-3-Refinement)", async () => {
     seedZweiFirmen();
 
     const result = await getGeraeteList("f1", {});
     const g1 = result.items.find((g) => g.id === "g1");
+    const g2 = result.items.find((g) => g.id === "g2");
 
-    expect(g1?.artikelBezeichnung).toBeNull();
+    expect(g1?.artikelBezeichnung).toBe("Feuerlöscher 6kg ABC");
+    expect(g1?.artikelHersteller).toBe("GLORIA");
+    expect(g1?.artikelNorm).toBe("EN 3");
+    // g2 has no artikel_id at all — no Lookup should be attempted, fields stay null.
+    expect(g2?.artikelBezeichnung).toBeNull();
   });
 });
 

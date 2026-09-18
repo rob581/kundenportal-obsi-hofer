@@ -15,6 +15,8 @@ export type Geraet = {
   artikelBezeichnung: string | null;
   artikelHersteller: string | null;
   artikelNorm: string | null;
+  artikelTyp: string | null;
+  artikelDimension: string | null;
 };
 
 export type GeraeteQuery = {

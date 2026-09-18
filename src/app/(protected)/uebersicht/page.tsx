@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraeteList } from "@/lib/geraete/queries";
+import { formatArtikelInfo } from "@/lib/geraete/artikel-info";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
 import { GeraeteFilterBar } from "@/components/geraete-filter-bar";
@@ -104,7 +105,7 @@ export default async function UebersichtPage({
                                 href={`/uebersicht/geraete/${geraet.id}`}
                                 className="font-medium text-primary underline-offset-2 hover:underline"
                               >
-                                {geraet.name ?? "(ohne Namen)"}
+                                {formatArtikelInfo(geraet)}
                               </Link>
                             </TableCell>
                             <TableCell>

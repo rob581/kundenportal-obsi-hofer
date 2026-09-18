@@ -45,11 +45,15 @@ type GeraetRow = {
   bemerkungen: string | null;
 };
 
-function mapGeraetRow(
-  row: GeraetRow,
-  standortName: string | null,
-  artikel: { bezeichnung: string | null; hersteller: string | null; norm: string | null } | null
-): Geraet {
+type ArtikelInfo = {
+  bezeichnung: string | null;
+  hersteller: string | null;
+  norm: string | null;
+  artikeltyp: string | null;
+  dimension: string | null;
+};
+
+function mapGeraetRow(row: GeraetRow, standortName: string | null, artikel: ArtikelInfo | null): Geraet {
   return {
     id: row.id,
     name: row.name,
@@ -67,7 +71,33 @@ function mapGeraetRow(
     artikelBezeichnung: artikel?.bezeichnung ?? null,
     artikelHersteller: artikel?.hersteller ?? null,
     artikelNorm: artikel?.norm ?? null,
+    artikelTyp: artikel?.artikeltyp ?? null,
+    artikelDimension: artikel?.dimension ?? null,
   };
+}
+
+async function getArtikelMapFuerIds(artikelIds: string[]): Promise<Map<string, ArtikelInfo>> {
+  if (artikelIds.length === 0) return new Map();
+
+  const { data, error } = await getSupabaseAdmin()
+    .from("dv_artikel")
+    .select("id, bezeichnung, hersteller, norm, artikeltyp, dimension")
+    .in("id", artikelIds);
+
+  if (error) throw new Error(`Artikel-Lookup fehlgeschlagen: ${error.message}`);
+
+  return new Map(
+    (data ?? []).map((row) => [
+      row.id as string,
+      {
+        bezeichnung: row.bezeichnung as string | null,
+        hersteller: row.hersteller as string | null,
+        norm: row.norm as string | null,
+        artikeltyp: row.artikeltyp as string | null,
+        dimension: row.dimension as string | null,
+      },
+    ])
+  );
 }
 
 async function getStandorteFuerFirma(firmaId: string) {
@@ -140,12 +170,20 @@ export async function getGeraeteList(firmaId: string, query: GeraeteQuery): Prom
 
   if (error) throw new Error(`Geräte-Lookup fehlgeschlagen: ${error.message}`);
 
-  // List columns are Gerätename/Status/Standort/Datum only (see Tech Design
-  // Komponenten-Struktur), so Artikel-Felder stay null here — only the
-  // detail page (getGeraetById) fetches Artikel, avoiding an Artikel lookup
-  // per row for a list of up to 25 items.
-  const items = (data ?? []).map((row) =>
-    mapGeraetRow(row as GeraetRow, standortNamen.get((row as GeraetRow).standort_id ?? "") ?? null, null)
+  // The "Gerät"-Spalte zeigt seit dem PROJ-3-Refinement Artikel-Infos statt
+  // des Gerätenamens (siehe formatArtikelInfo), daher werden Artikel jetzt
+  // auch für die Liste geladen — als eine Batch-Abfrage über die (max. 25)
+  // distinct Artikel-IDs der aktuellen Seite, kein Lookup pro Zeile.
+  const rows = (data ?? []) as GeraetRow[];
+  const artikelIds = [...new Set(rows.map((row) => row.artikel_id).filter((id): id is string => !!id))];
+  const artikelMap = await getArtikelMapFuerIds(artikelIds);
+
+  const items = rows.map((row) =>
+    mapGeraetRow(
+      row,
+      standortNamen.get(row.standort_id ?? "") ?? null,
+      row.artikel_id ? artikelMap.get(row.artikel_id) ?? null : null
+    )
   );
 
   return { items, total: count ?? items.length, page, pageSize: PAGE_SIZE, statusOptions };
@@ -181,16 +219,16 @@ export async function getGeraetById(id: string, firmaId: string): Promise<Geraet
   if (standortError) throw new Error(`Standort-Lookup fehlgeschlagen: ${standortError.message}`);
   if (!standort || standort.firma_id !== firmaId) return null;
 
-  let artikel: { bezeichnung: string | null; hersteller: string | null; norm: string | null } | null = null;
+  let artikel: ArtikelInfo | null = null;
   if (row.artikel_id) {
     const { data: artikelRow, error: artikelError } = await supabase
       .from("dv_artikel")
-      .select("bezeichnung, hersteller, norm")
+      .select("bezeichnung, hersteller, norm, artikeltyp, dimension")
       .eq("id", row.artikel_id)
       .maybeSingle();
 
     if (artikelError) throw new Error(`Artikel-Lookup fehlgeschlagen: ${artikelError.message}`);
-    artikel = artikelRow as typeof artikel;
+    artikel = artikelRow as ArtikelInfo | null;
   }
 
   return mapGeraetRow(row, standort.name as string | null, artikel);

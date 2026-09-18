@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraetById } from "@/lib/geraete/queries";
+import { formatArtikelInfo } from "@/lib/geraete/artikel-info";
 import { getPruefberichteFuerGeraet } from "@/lib/pruefberichte/queries";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
@@ -67,7 +68,7 @@ export default async function GeraetDetailPage({
         </Link>
 
         <div className="mb-4 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">{geraet.name ?? "(ohne Namen)"}</h1>
+          <h1 className="text-xl font-semibold">{formatArtikelInfo(geraet)}</h1>
           {geraet.status && (
             <Badge variant={getStatusBadgeVariant(geraet.status)}>{geraet.status}</Badge>
           )}
@@ -86,6 +87,8 @@ export default async function GeraetDetailPage({
             <Field label="Artikel" value={geraet.artikelBezeichnung} />
             <Field label="Hersteller" value={geraet.artikelHersteller} />
             <Field label="Norm" value={geraet.artikelNorm} />
+            <Field label="Typ" value={geraet.artikelTyp} />
+            <Field label="Dimension" value={geraet.artikelDimension} />
             <Field label="Zubehör" value={geraet.zubehoer} />
           </CardContent>
         </Card>
