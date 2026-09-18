@@ -40,6 +40,7 @@ const artikelSchema = z.object({
   artikeltyp: z.string().nullable().optional(),
   norm: z.string().nullable().optional(),
   hersteller: z.string().nullable().optional(),
+  dimension: z.string().nullable().optional(),
 });
 
 const standortSchema = z.object({

@@ -53,6 +53,7 @@ export const SYNC_JOBS: SyncJob[] = [
       "bmvcc_articletype",
       "bmvcc_standardnorm",
       "bmvcc_manufacturer",
+      "bmvcc_dimensions",
     ],
     map: (r) => ({
       id: r.bmvcc_artikelid as string,
@@ -61,6 +62,7 @@ export const SYNC_JOBS: SyncJob[] = [
       artikeltyp: r.bmvcc_articletype ?? null,
       norm: r.bmvcc_standardnorm ?? null,
       hersteller: r.bmvcc_manufacturer ?? null,
+      dimension: r.bmvcc_dimensions ?? null,
     }),
   },
   {
