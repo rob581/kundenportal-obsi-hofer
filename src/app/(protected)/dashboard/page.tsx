@@ -31,9 +31,11 @@ function StatusKachel({
 
   const content = (
     <Card className={status ? "transition-colors hover:bg-muted/50" : undefined}>
-      <CardContent className="py-6 text-center">
+      <CardHeader className="text-center">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+      </CardHeader>
+      <CardContent className="text-center">
         <p className={`text-2xl font-semibold ${colorClass}`}>{anzahl}</p>
-        <p className="text-sm text-muted-foreground">{label}</p>
       </CardContent>
     </Card>
   );
@@ -110,6 +112,16 @@ export default async function DashboardPage() {
               <Card>
                 <CardHeader className="text-center">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
+                    Zu prüfen
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="text-center">
+                  <p className="text-2xl font-semibold text-status-warning">{kennzahlen!.zuPruefen}</p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="text-center">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
                     Total Geräte
                   </CardTitle>
                 </CardHeader>
@@ -135,16 +147,6 @@ export default async function DashboardPage() {
                 </CardHeader>
                 <CardContent className="text-center">
                   <p className="text-2xl font-semibold">{formatDatum(kennzahlen!.letztePruefung)}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="text-center">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Zu prüfen
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <p className="text-2xl font-semibold text-status-warning">{kennzahlen!.zuPruefen}</p>
                 </CardContent>
               </Card>
             </div>
