@@ -84,6 +84,13 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: hsl(var(--background));
+    background-image: linear-gradient(hsl(var(--background) / 0.82), hsl(var(--background) / 0.82)),
+      url("/obsi-hero-bg.jpg");
+    background-size: cover;
+    background-position: center top;
+    background-repeat: no-repeat;
+    min-height: 100vh;
   }
 }
