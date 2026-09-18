@@ -48,7 +48,7 @@ export const SYNC_JOBS: SyncJob[] = [
     entitySet: "bmvcc_artikels",
     select: [
       "bmvcc_artikelid",
-      "bmvcc_articlename",
+      "bmvcc_modelarticle",
       "bmvcc_articlenumber",
       "bmvcc_articletype",
       "bmvcc_standardnorm",
@@ -57,7 +57,9 @@ export const SYNC_JOBS: SyncJob[] = [
     ],
     map: (r) => ({
       id: r.bmvcc_artikelid as string,
-      bezeichnung: r.bmvcc_articlename ?? null,
+      // Was bmvcc_articlename; corrected to the real "Modellartikel" field
+      // (2026-09-18) — see PROJ-3 Decision Log.
+      bezeichnung: r.bmvcc_modelarticle ?? null,
       artikelnummer: r.bmvcc_articlenumber ?? null,
       artikeltyp: r.bmvcc_articletype ?? null,
       norm: r.bmvcc_standardnorm ?? null,
