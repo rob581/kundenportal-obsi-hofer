@@ -90,7 +90,8 @@ export default async function DashboardPage() {
           </Card>
         ) : (
           <>
-            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-4">
+            <h2 className="mb-2 text-sm font-medium text-muted-foreground">Geräte nach Status</h2>
+            <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <Card>
                 <CardHeader className="text-center">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -101,10 +102,6 @@ export default async function DashboardPage() {
                   <p className="text-2xl font-semibold text-status-warning">{kennzahlen!.zuPruefen}</p>
                 </CardContent>
               </Card>
-            </div>
-
-            <h2 className="mb-2 text-sm font-medium text-muted-foreground">Geräte nach Status</h2>
-            <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
               <StatusKachel label="Freigabe" anzahl={kennzahlen!.statusFreigabe} status="Freigabe" />
               <StatusKachel
                 label="keine Freigabe"
