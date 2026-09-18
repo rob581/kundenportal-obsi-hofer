@@ -15,11 +15,11 @@
 
 | ID | Feature | Status | Spec | Created |
 |----|---------|--------|------|---------|
-| PROJ-1 | Dataverse-Sync-Service | Approved | [Spec](../features/PROJ-1-dataverse-sync-service.md) | 2026-09-15 |
-| PROJ-2 | Kunden-Login (Entra External ID) | Approved | [Spec](../features/PROJ-2-kunden-login.md) | 2026-09-15 |
-| PROJ-3 | Geräte-Übersicht | Approved | [Spec](../features/PROJ-3-geraete-uebersicht.md) | 2026-09-15 |
-| PROJ-4 | Prüfberichte-Liste | Approved | [Spec](../features/PROJ-4-pruefberichte-liste.md) | 2026-09-15 |
-| PROJ-5 | Dashboard | Approved | [Spec](../features/PROJ-5-dashboard.md) | 2026-09-15 |
+| PROJ-1 | Dataverse-Sync-Service | Deployed | [Spec](../features/PROJ-1-dataverse-sync-service.md) | 2026-09-15 |
+| PROJ-2 | Kunden-Login (Entra External ID) | Deployed | [Spec](../features/PROJ-2-kunden-login.md) | 2026-09-15 |
+| PROJ-3 | Geräte-Übersicht | Deployed | [Spec](../features/PROJ-3-geraete-uebersicht.md) | 2026-09-15 |
+| PROJ-4 | Prüfberichte-Liste | Deployed | [Spec](../features/PROJ-4-pruefberichte-liste.md) | 2026-09-15 |
+| PROJ-5 | Dashboard | Deployed | [Spec](../features/PROJ-5-dashboard.md) | 2026-09-15 |
 
 <!-- Add features above this line -->
 

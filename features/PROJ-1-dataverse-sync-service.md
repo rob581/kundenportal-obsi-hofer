@@ -287,4 +287,6 @@ Siehe Decision Log → Technical Decisions oben.
 - **Recommendation:** Beide High-Bugs sind behoben und verifiziert. Vor dem produktiven Einsatz noch offen: echtes Vercel-Deployment mit Cron-Konfiguration, sowie ein Ende-zu-Ende-Test des tatsächlichen E-Mail-Versands bei einem echten Fehlschlag (bisher nur der Code-Pfad getestet, siehe Implementation Notes).
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-18
+- **Verifiziert:** Von diesem Sync-Job befüllte Daten (Geräte, Artikel, Firmen, Kontakte) werden auf Production korrekt aus Supabase gelesen und angezeigt (siehe PROJ-3/PROJ-5 Deployment-Notizen). Der Cron-Trigger `/api/cron/sync-dataverse` selbst wurde beim ersten Deploy noch nicht manuell auf Vercel ausgelöst — offen für den nächsten geplanten oder manuellen Lauf.

@@ -256,4 +256,6 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 **Ergebnis:** Status bleibt **Approved**. Keine neuen Bugs gefunden; BUG-1 von oben (Tabellen-Trunkierung) weiterhin offen und unverändert Low-Priority.
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-18
+- **Verifiziert:** `/uebersicht`, Status-Filter (`Freigabe`, `keine Freigabe`, `letzte Freigabe`) und mehrere Geräte-Detailseiten (`/uebersicht/geraete/[id]`) live auf Production aufgerufen — alle 200, Artikel-Info/Lagerort/Suche wie erwartet dargestellt.

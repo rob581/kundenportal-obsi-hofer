@@ -200,4 +200,6 @@ Bevor der Backend-Teil von PROJ-4 gebaut werden kann, braucht `dv_pruefberichte`
 - **Recommendation:** Status auf "Approved" setzen. BUG-1 (fehlender Tie-Breaker bei gleichem Prüfdatum) ist optional und kann bei Gelegenheit (z.B. zusammen mit BUG-1 aus PROJ-3, der Tabellen-Trunkierung) nachgezogen werden.
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-18
+- **Verifiziert:** Über die auf Production aufgerufenen Geräte-Detailseiten (`/uebersicht/geraete/[id]`) mitgetestet — Prüfberichte-Liste wird korrekt angezeigt.

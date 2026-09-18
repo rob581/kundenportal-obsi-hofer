@@ -214,7 +214,7 @@ Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** v
 - **Steps to Reproduce:** Middleware testweise auf einen bedingungslosen Redirect gesetzt (jede Anfrage sollte umgeleitet werden) → selbst nach vollständigem Neustart (`.next` gelöscht, Server neu gestartet) hatte das auf **keinen einzigen** Request Einfluss
 - **Auswirkung entdeckt durch:** `/kein-zugang` war ohne jede Session direkt erreichbar (HTTP 200 statt Redirect) — die anderen geschützten Seiten (`/uebersicht`, `/firmen-auswahl`) waren nur zufällig trotzdem geschützt, weil das `(protected)/layout.tsx` unabhängig davon eine eigene serverseitige `auth()`-Prüfung macht
 - **Ursache:** Unklar — vermutlich eine Next.js-16.1.1/Turbopack/Windows-Dev-Eigenheit; ob es auf Vercel (echte Edge-Runtime) funktioniert, ist ungetestet
-- **Status:** ✅ Teilweise gefixt (2026-09-17): `src/app/kein-zugang/page.tsx` hat jetzt dieselbe zuverlässige `auth()`-Prüfung wie die anderen geschützten Seiten (`!session → redirect("/login")`), unabhängig von der Middleware. `middleware.ts` bleibt als zusätzliche Sicherheitsebene bestehen (Kommentar im Code erklärt den Vorbehalt) — **muss bei `/deploy` auf Vercel erneut verifiziert werden**, um zu klären, ob es dort tatsächlich greift.
+- **Status:** ✅ Vollständig verifiziert (2026-09-18, Production auf Vercel): Vercel-Deployment-Logs zeigen für **jeden** Request (`/uebersicht`, `/dashboard`, Geräte-Details, `/login`, `/api/auth/*`) einen eigenen `"type":"middleware"`-Log-Eintrag (~9–17ms Laufzeit) — die Middleware wird auf der echten Vercel-Edge-Runtime zuverlässig ausgeführt, anders als lokal. Nicht angemeldeter Zugriff auf `/uebersicht` liefert korrekt `307` → `/login`. Der ursprüngliche lokale Dev-Bug bleibt als Hinweis für künftige lokale Entwicklung bestehen, ist für Production aber gelöst.
 - **Empfehlung für künftige Seiten (PROJ-3/4/5):** Nie allein auf Middleware verlassen — jede neue Seite/jedes neue Layout sollte ihre eigene `auth()`-Prüfung haben, wie es das `(protected)/layout.tsx` bereits vormacht.
 
 #### BUG-2: Vitest führte versehentlich die neuen Playwright-E2E-Specs aus und stürzte ab
@@ -245,4 +245,6 @@ Beide Bugs wurden in dieser Session direkt behoben statt nur dokumentiert — ab
 - **Recommendation:** Status auf "Approved" setzen. Bei `/deploy`: gezielt prüfen, ob Middleware auf Vercel greift (z.B. mit demselben "bedingungsloser Redirect"-Test), da das lokal nie funktioniert hat.
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-18
+- **Verifiziert:** Login-Flow (Entra External ID → Callback → Firmen-Auswahl → Übersicht) end-to-end auf Production getestet, inkl. BUG-1 Middleware-Verifikation (siehe oben)

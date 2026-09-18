@@ -210,4 +210,6 @@ Keine neuen — nutzt weiterhin shadcn-Komponenten (Card) und die vorhandene Sup
 - **Recommendation:** Status auf "Approved" setzen. BUG-1 optional bei einem künftigen Layout-Polish mitnehmen (z.B. "Kein Status" immer in eine eigene, schmalere Kachel-Reihe stellen).
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-18
+- **Verifiziert:** `/dashboard` live auf Production aufgerufen — 200, Kacheln (inkl. "Zu prüfen") korrekt befüllt.
