@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "../../auth";
 import { changeFirma } from "@/app/(protected)/firmen-auswahl/actions";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { signOutEverywhere } from "@/lib/auth/sign-out";
 
 export async function AppHeader({ firmaName }: { firmaName?: string }) {
@@ -39,6 +40,7 @@ export async function AppHeader({ firmaName }: { firmaName?: string }) {
             Abmelden
           </Button>
         </form>
+        <ThemeToggle />
       </div>
     </header>
   );
