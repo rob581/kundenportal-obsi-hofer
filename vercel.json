@@ -1,4 +1,5 @@
 {
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':!docs' ':!features' ':!*.md'",
   "crons": [
     {
       "path": "/api/cron/sync-dataverse",
