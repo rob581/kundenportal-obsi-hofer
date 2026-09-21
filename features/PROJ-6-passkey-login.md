@@ -1,6 +1,6 @@
 # PROJ-6: Passkey-Login
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -207,4 +207,12 @@ Keine.
 - **Recommendation:** Status auf "Approved" setzen. Bei `/deploy`: Relying Party ID/Origins im Supabase-Dashboard von `localhost`/`http://localhost:3000` auf die echte Production-Domain umstellen — sonst funktioniert Passkey dort nicht (siehe Implementation Notes Backend)
 
 ## Deployment
-_To be added by /deploy_
+
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-21
+- **Nachträglicher Fund beim ersten Production-Test:** Die Passkey-Liste auf `/sicherheit` blieb dauerhaft bei "Wird geladen…" hängen. Ursache: `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` waren nur lokal in `.env.local` gesetzt, nie im Vercel-Dashboard hinterlegt — der Browser-Client bekam dadurch `undefined` als URL/Key, wodurch `passkey.list()` vermutlich intern warf, statt einen Fehler zurückzugeben, und die `finally`/`await`-Kette nie `isLoading` auf `false` setzte. Nutzer hat beide Variablen im Vercel-Dashboard ergänzt (Vercel markierte sie zunächst als potenziell sensibel wegen des `NEXT_PUBLIC_`-Präfixes — bewusst auf "Config"/öffentlich gesetzt, da der Publishable Key ohnehin zum Exponieren gedacht ist) und neu deployed — danach funktionierte das Laden
+- **Relying-Party-Einstellungen** im Supabase-Dashboard von `localhost`/`http://localhost:3000` auf die Production-Domain umgestellt: RP ID `obsi-hoferkundenportal.vercel.app`, RP Origin `https://obsi-hoferkundenportal.vercel.app`
+- **Verifiziert:** Nutzer hat auf der echten Production-URL sowohl Passkey-Registrierung als auch Passkey-Login end-to-end mit einem echten Gerät getestet — funktioniert
+
+### Lessons Learned für künftige Deploys
+Bei neuen `NEXT_PUBLIC_`-Variablen künftig **vor** dem ersten Push nach `/backend` explizit daran denken, sie auch im Vercel-Dashboard zu ergänzen, nicht erst beim Post-Deployment-Test entdecken — `.env.local`/`.env.local.example` allein reichen nicht, da Vercel sie nicht automatisch übernimmt.

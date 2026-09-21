@@ -1,6 +1,6 @@
 # PROJ-2: Kunden-Login (Supabase Auth)
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-16
 **Last Updated:** 2026-09-21
 
@@ -370,9 +370,7 @@ Security Audit, Bugs (BUG-1/2/3) und Summary dieser archivierten Version: siehe 
 
 ## Deployment
 
-**Aktueller Produktivstand (Entra External ID, unverändert bis zum nächsten `/deploy`):**
 - **Production URL:** https://obsi-hoferkundenportal.vercel.app
-- **Deployed:** 2026-09-18
-- **Verifiziert:** Login-Flow (Entra External ID → Callback → Firmen-Auswahl → Übersicht) end-to-end auf Production getestet, inkl. BUG-1 Middleware-Verifikation (siehe archivierte QA Test Results)
-
-Die Supabase-Auth-Version wurde bisher nur lokal getestet (siehe QA Test Results oben) — noch nicht deployed. Folgt bei `/deploy`.
+- **Deployed:** 2026-09-21 (Supabase-Auth-Version)
+- **Verifiziert:** Login mit E-Mail+Code end-to-end auf Production getestet, inkl. „Abmelden". Zwei neue Env-Variablen (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) mussten nachträglich im Vercel-Dashboard ergänzt werden (waren nur lokal in `.env.local` gesetzt, nicht in Vercel) — siehe PROJ-6 Deployment-Notizen für Details zu diesem Stolperstein
+- **Ersetzt:** die bisherige Entra-External-ID-Version (deployed 2026-09-18, siehe archivierte QA Test Results oben für deren Verifikationsdetails)
