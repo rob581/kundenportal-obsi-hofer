@@ -1,30 +1,18 @@
-import NextAuth from "next-auth";
-import { NextResponse } from "next/server";
-import authConfig from "./auth.config";
+import { type NextRequest } from "next/server";
+import { updateSession } from "@/lib/supabase/middleware";
 
-// QA finding (2026-09-17): in this project's local dev setup (Next.js
-// 16.1.1 + Turbopack on Windows), middleware never actually executes —
-// verified with an unconditional redirect that still had zero effect on
-// any request, even after a full clean restart. It may still work once
-// deployed to Vercel's real Edge Runtime (untested — revisit at
-// /deploy), so this file is kept as defense-in-depth rather than
-// removed. Do NOT rely on this alone: every protected page must also
-// check auth() itself (see (protected)/layout.tsx and
-// src/app/kein-zugang/page.tsx), which is what actually protects things
-// right now.
-const { auth } = NextAuth(authConfig);
-
-export default auth((req) => {
-  const { nextUrl } = req;
-
-  if (nextUrl.pathname.startsWith("/api/auth")) return;
-  if (nextUrl.pathname === "/login") return;
-
-  if (!req.auth) {
-    return NextResponse.redirect(new URL("/login", nextUrl));
-  }
-  return;
-});
+// QA-Fund (2026-09-17, damals unter NextAuth): in der lokalen
+// Next.js-16-Dev-Umgebung (Turbopack, Windows) wurde Middleware nie
+// ausgeführt — verifiziert mit einem bedingungslosen Redirect, der selbst
+// nach vollständigem Neustart wirkungslos blieb. Auf Vercels echter
+// Edge-Runtime lief sie zuverlässig. Da der Bug an Next.js/Turbopack hing,
+// nicht an NextAuth, gilt dieselbe Einschränkung vermutlich weiterhin —
+// bei /deploy erneut verifizieren. Jede geschützte Seite prüft die
+// Sitzung deshalb zusätzlich selbst (siehe (protected)/layout.tsx,
+// kein-zugang/page.tsx, login/page.tsx).
+export async function middleware(request: NextRequest) {
+  return updateSession(request);
+}
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.svg$).*)"],

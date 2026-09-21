@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export type PortalAccess = {
@@ -5,13 +6,18 @@ export type PortalAccess = {
   firmaIds: string[];
 };
 
-// PROJ-2 access rule: the verified Entra email must match an ACTIVE
-// Kontakt (dv_kontakte.ist_aktiv), and that Kontakt must be linked to at
-// least one Firma via dv_relationen. Anything else — unknown email,
-// inactive contact, or an active contact with zero linked Firmen — means
-// no access, and callers must show the same generic "Kein Zugang" message
+// PROJ-2 access rule: the verified email must match an ACTIVE Kontakt
+// (dv_kontakte.ist_aktiv), and that Kontakt must be linked to at least one
+// Firma via dv_relationen. Anything else — unknown email, inactive
+// contact, or an active contact with zero linked Firmen — means no
+// access, and callers must show the same generic "Kein Zugang" message
 // for all of these (see spec Decision Log: don't reveal which case it was).
-export async function getPortalAccess(email: string): Promise<PortalAccess | null> {
+//
+// Seit dem Wechsel auf Supabase Auth (2026-09-21) wird dieser Check nicht
+// mehr einmalig beim Login in einem Session-Token zwischengespeichert,
+// sondern bei jedem Seitenaufruf frisch ausgeführt — react `cache()`
+// dedupliziert das innerhalb eines Requests (siehe session.ts).
+export const getPortalAccess = cache(async (email: string): Promise<PortalAccess | null> => {
   const supabase = getSupabaseAdmin();
 
   const { data: kontakt, error: kontaktError } = await supabase
@@ -35,7 +41,7 @@ export async function getPortalAccess(email: string): Promise<PortalAccess | nul
   if (firmaIds.length === 0) return null;
 
   return { contactId: kontakt.id as string, firmaIds };
-}
+});
 
 export async function getFirmenNamen(firmaIds: string[]): Promise<{ id: string; name: string }[]> {
   if (firmaIds.length === 0) return [];

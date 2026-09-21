@@ -1,14 +1,16 @@
 import Image from "next/image";
 import Link from "next/link";
-import { auth } from "../../auth";
+import { getCurrentUserEmail } from "@/lib/auth/session";
+import { getPortalAccess } from "@/lib/auth/access";
 import { changeFirma } from "@/app/(protected)/firmen-auswahl/actions";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { signOutEverywhere } from "@/lib/auth/sign-out";
 
 export async function AppHeader({ firmaName }: { firmaName?: string }) {
-  const session = await auth();
-  const hatMehrereFirmen = (session?.portal?.firmaIds.length ?? 0) > 1;
+  const email = await getCurrentUserEmail();
+  const access = email ? await getPortalAccess(email) : null;
+  const hatMehrereFirmen = (access?.firmaIds.length ?? 0) > 1;
 
   return (
     <header className="grid h-14 grid-cols-3 items-center border-b bg-background px-4 sm:px-6">

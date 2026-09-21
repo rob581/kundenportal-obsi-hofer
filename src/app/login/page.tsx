@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -7,11 +8,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { LoginForm } from "@/components/login-form";
+import { getCurrentUserEmail } from "@/lib/auth/session";
+import { getPortalAccess } from "@/lib/auth/access";
 
-// TODO(/backend PROJ-2): Bereits angemeldete Kunden hierher umleiten
-// (auf /uebersicht bzw. /kein-zugang), sobald die Supabase-Session-Prüfung
-// verdrahtet ist (ersetzt die bisherige NextAuth-`auth()`-Prüfung).
-export default function LoginPage() {
+export default async function LoginPage() {
+  const email = await getCurrentUserEmail();
+  if (email) {
+    const access = await getPortalAccess(email);
+    redirect(access ? "/uebersicht" : "/kein-zugang");
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-muted/30 px-4">
       <Card className="w-full max-w-sm">

@@ -1,20 +1,23 @@
 import { redirect } from "next/navigation";
-import { auth } from "../../../auth";
+import { getCurrentUserEmail } from "@/lib/auth/session";
+import { getPortalAccess } from "@/lib/auth/access";
 
 // Runs in the Node.js runtime (unlike middleware.ts), so it can safely
-// call the full auth() config including the Supabase Kontakt/Relation
-// lookup. This is the real "does this customer have access" gate.
+// call the Supabase-Admin-Kontakt/Relation-Lookup. This is the real "does
+// this customer have access" gate.
 export default async function ProtectedLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
+  const email = await getCurrentUserEmail();
 
-  if (!session) {
+  if (!email) {
     redirect("/login");
   }
-  if (!session.portal?.hasAccess) {
+
+  const access = await getPortalAccess(email);
+  if (!access) {
     redirect("/kein-zugang");
   }
 

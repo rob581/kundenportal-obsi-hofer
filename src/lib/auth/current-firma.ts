@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth } from "../../../auth";
+import { getCurrentUserEmail } from "@/lib/auth/session";
+import { getPortalAccess } from "@/lib/auth/access";
 
 const SELECTED_FIRMA_COOKIE = "obsi_selected_firma";
 
@@ -11,8 +12,9 @@ const SELECTED_FIRMA_COOKIE = "obsi_selected_firma";
 // gap (the device detail page had no Firma check at all before PROJ-3
 // backend work added this helper).
 export async function getCurrentFirmaId(): Promise<string> {
-  const session = await auth();
-  const firmaIds = session?.portal?.firmaIds ?? [];
+  const email = await getCurrentUserEmail();
+  const access = email ? await getPortalAccess(email) : null;
+  const firmaIds = access?.firmaIds ?? [];
 
   if (firmaIds.length === 1) {
     return firmaIds[0];

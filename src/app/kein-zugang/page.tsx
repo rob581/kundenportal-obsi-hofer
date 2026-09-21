@@ -8,22 +8,24 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { auth } from "../../../auth";
+import { getCurrentUserEmail } from "@/lib/auth/session";
+import { getPortalAccess } from "@/lib/auth/access";
 import { signOutEverywhere } from "@/lib/auth/sign-out";
 
 const SUPPORT_EMAIL = "robert.bienz@obsi-hofer.ch";
 
-// Shown whenever the verified Entra email doesn't map to an active
-// Kontakt with at least one linked Firma — see auth.ts / access.ts and
-// the spec Decision Log for why this stays a single generic message.
+// Shown whenever the verified email doesn't map to an active Kontakt with
+// at least one linked Firma — see access.ts and the spec Decision Log for
+// why this stays a single generic message.
 export default async function KeinZugangPage() {
-  const session = await auth();
+  const email = await getCurrentUserEmail();
   // Don't rely on middleware alone for this (see middleware.ts QA note) —
   // without any session there's nothing meaningful to show here either.
-  if (!session) {
+  if (!email) {
     redirect("/login");
   }
-  if (session.portal?.hasAccess) {
+  const access = await getPortalAccess(email);
+  if (access) {
     redirect("/uebersicht");
   }
 

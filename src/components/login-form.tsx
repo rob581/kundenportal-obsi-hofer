@@ -9,6 +9,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { requestLoginCode, verifyLoginCode } from "@/app/login/actions";
 
 type Step = "email" | "code";
 
@@ -22,8 +23,12 @@ export function LoginForm() {
   function handleRequestCode(event: FormEvent) {
     event.preventDefault();
     setError(null);
-    // TODO(/backend PROJ-2): supabase.auth.signInWithOtp({ email }) aufrufen.
-    startTransition(() => {
+    startTransition(async () => {
+      const result = await requestLoginCode(email);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
       setStep("code");
     });
   }
@@ -35,10 +40,13 @@ export function LoginForm() {
       setError("Bitte den vollständigen 6-stelligen Code eingeben.");
       return;
     }
-    // TODO(/backend PROJ-2): supabase.auth.verifyOtp({ email, token: code, type: "email" })
-    // aufrufen, danach Zugriffsprüfung (getPortalAccess) + Weiterleitung.
-    startTransition(() => {
-      setError("Anmeldung ist noch nicht angebunden (folgt bei /backend).");
+    startTransition(async () => {
+      // Bei Erfolg redirectet verifyLoginCode serverseitig (wirft NEXT_REDIRECT,
+      // kein return danach) — ein error-Ergebnis heisst also immer "ungültig".
+      const result = await verifyLoginCode(email, code);
+      if (result?.error) {
+        setError(result.error);
+      }
     });
   }
 

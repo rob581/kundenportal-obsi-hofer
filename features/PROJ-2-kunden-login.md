@@ -4,7 +4,7 @@
 **Created:** 2026-09-16
 **Last Updated:** 2026-09-21
 
-> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). "Tech Design" (`/architecture`) und die Login-UI in "Implementation Notes (Frontend)" (`/frontend`) sind bereits für Supabase Auth aktualisiert. Backend-Anbindung (`@supabase/ssr`, echte `signInWithOtp`/`verifyOtp`-Aufrufe, Middleware/Layout-Umstellung) fehlt noch. Die Abschnitte "Implementation Notes (Backend)", "QA Test Results" und "Deployment" weiter unten beschreiben weiterhin die **bisherige, produktiv gelaufene Entra-Implementierung** und bleiben vorerst als historische Referenz stehen — werden durch einen Durchlauf von `/backend` → `/qa` → `/deploy` ersetzt. Die aktuell auf Vercel deployte Version läuft bis dahin unverändert mit Entra External ID weiter.
+> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). "Tech Design" (`/architecture`), Frontend (`/frontend`) und Backend (`/backend`) sind bereits vollständig für Supabase Auth umgestellt und lokal live gegen die echte Supabase-Instanz verifiziert. Nur die Abschnitte "QA Test Results" und "Deployment" weiter unten beschreiben noch die **bisherige, produktiv gelaufene Entra-Implementierung** und werden erst bei `/qa` → `/deploy` ersetzt. Die aktuell auf Vercel deployte Version läuft bis dahin unverändert mit Entra External ID weiter.
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — für den Abgleich der E-Mail-Adresse gegen synchronisierte Kontakt-/Relation-/Firma-Daten
@@ -196,6 +196,42 @@ Datenmodell war identisch aufgebaut (E-Mail gegen Kontakt/Relation abgleichen, k
 **Manuell verifiziert:** Alle drei Seiten + Root-Redirect liefern korrektes HTML (`curl` gegen laufenden Dev-Server), `npm run build` und `npx tsc --noEmit` fehlerfrei. Kein Playwright-Browser-Klicktest in dieser Session durchgeführt — folgt bei `/qa`.
 
 ## Implementation Notes (Backend)
+
+**Erstellt 2026-09-21 (Supabase-Auth-Anbindung):**
+- `src/lib/supabase/server.ts` — `createSupabaseServerClient()`, für Server Actions/Route Handlers/Server Components (Publishable Key, kein RLS-Bypass)
+- `src/lib/supabase/middleware.ts` — `updateSession()`, Edge-taugliche Sitzungsprüfung für `middleware.ts` (nur Fetch-Aufrufe, kein Node-DB-Zugriff)
+- `src/lib/auth/session.ts` — `getCurrentUserEmail()`, mit React `cache()` dedupliziert pro Request
+- `src/lib/auth/access.ts` — `getPortalAccess()` jetzt ebenfalls mit `cache()` gewrappt; Logik selbst unverändert. Wird jetzt bei **jedem** Seitenaufruf frisch ausgeführt statt einmalig im Session-Token zwischengespeichert (einfacher, kein Custom-JWT-Claim-Mechanismus nötig; unkritisch bei 588 Kontakten)
+- `src/app/login/actions.ts` — neue Server Actions `requestLoginCode` (`signInWithOtp`) und `verifyLoginCode` (`verifyOtp` + Redirect je nach `getPortalAccess`)
+- `src/components/login-form.tsx` — Platzhalter-TODOs durch echte Aufrufe der obigen Server Actions ersetzt
+- `src/lib/auth/sign-out.ts` — `supabase.auth.signOut()` statt Federated-Logout-Redirect (kein externer Tenant mehr, der eine eigene Sitzung hält)
+- `src/app/(protected)/layout.tsx`, `kein-zugang/page.tsx`, `app-header.tsx`, `firmen-auswahl/actions.ts`, `firmen-auswahl/page.tsx`, `current-firma.ts` — `auth()`/`session.portal` durch `getCurrentUserEmail()` + `getPortalAccess()` ersetzt
+- `middleware.ts` — nutzt jetzt `updateSession()` statt NextAuth
+- **Entfernt:** `auth.ts`, `auth.config.ts`, `src/app/api/auth/[...nextauth]/route.ts`, Paket `next-auth`
+- **Keine neuen Env-Variablen nötig** — `SUPABASE_URL`/`SUPABASE_PUBLISHABLE_KEY` waren durch PROJ-1 bereits vorhanden
+
+**Live gegen die echte Supabase-Instanz verifiziert (Playwright, Testkontakt `robert.bienz@cloudcab.ch`):**
+- `signInWithOtp` — echter Request ohne Fehler, UI wechselt zu Schritt 2
+- `verifyOtp` mit absichtlich falschem Code — korrekte Fehlermeldung "Der Code ist ungültig oder abgelaufen.", kein Redirect, keine Konsolenfehler
+- Alle geschützten Routen (`/uebersicht`, `/dashboard`, `/firmen-auswahl`, `/kein-zugang`) leiten ohne Session korrekt zu `/login` um
+- `npm run build`, `npm run lint`, `npm test` (61/61) fehlerfrei
+
+**2026-09-21 nachgetragen — Erfolgsfall live mit echtem E-Mail-Code verifiziert:**
+Der Nutzer hat den kompletten Flow manuell im Browser durchgespielt (Login mit `robert.bienz@cloudcab.ch`, echter Code aus der E-Mail) — funktioniert vollständig, inkl. Weiterleitung. Dabei drei zusätzliche, nur manuell im Supabase-/Resend-Dashboard lösbare Konfigurationsprobleme gefunden und behoben:
+
+1. **E-Mail-Template:** Unter **Authentication → Emails → "Magic link or OTP"** muss `{{ .ConfirmationURL }}` durch `{{ .Token }}` ersetzt werden, sonst verschickt Supabase einen Magic Link statt eines Codes. Zusätzlicher Fund dabei: mit Supabase's Standard-Mailversand (kein eigenes SMTP) lässt sich der Template-Inhalt gar nicht erst bearbeiten — dafür ist zwingend eigenes SMTP nötig (siehe Punkt 2).
+2. **Custom SMTP erforderlich:** Eigenes SMTP über den bereits vorhandenen Resend-Account eingerichtet (Host `smtp.resend.com`, User `resend`, Passwort = `RESEND_API_KEY`). **Port 465 (implizites SSL) schlug fehl** (`500 Error sending confirmation email`, Resend erhielt die Anfrage nie) — **Port 587 (STARTTLS) behoben**. Absender vorerst `robert.bienz@cloudcab.ch` (einzige in Resend verifizierte Domain); vor echtem Produktivstart auf eine `obsi-hofer.ch`-Adresse umstellen, sobald diese Domain in Resend verifiziert ist.
+3. **OTP-Code-Länge:** Supabase-Projekte erzeugen standardmässig inzwischen **8-stellige** statt 6-stellige Codes (projektabhängig, hat sich bei Supabase geändert) — unsere UI (`InputOTP maxLength=6`) erwartete 6. Unter **Authentication → Sign In / Providers → Email → OTP Length** explizit auf `6` gesetzt, statt die UI auf 8 anzupassen (Server-Konfiguration bewusst auf unsere UX-Entscheidung fixiert, nicht umgekehrt).
+
+`requestLoginCode` protokolliert den echten Supabase-Fehler jetzt serverseitig (`console.error`) statt ihn nur zu verschlucken — hat direkt beim Debuggen von Punkt 2 geholfen und bleibt drin für künftige Fehlersuche.
+
+**Nicht automatisiert testbar (nur manuell durch den Nutzer):** der Erfolgsfall mit echtem, per E-Mail zugestelltem Code — jetzt live verifiziert (siehe oben).
+
+---
+
+### Archiviert — ursprüngliche Implementation Notes (Entra External ID, 2026-09-16/17)
+
+*Nur noch als historische Referenz, siehe Hinweis-Banner ganz oben.*
 
 **Erstellt:**
 - `auth.config.ts` — schlanke, Edge-taugliche NextAuth-Konfiguration (nur Entra-Provider, keine Datenbank-Callbacks) — wird ausschliesslich von `middleware.ts` genutzt

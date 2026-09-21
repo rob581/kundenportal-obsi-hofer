@@ -1,14 +1,15 @@
 import { redirect } from "next/navigation";
-import { auth } from "../../../../auth";
-import { getFirmenNamen } from "@/lib/auth/access";
+import { getCurrentUserEmail } from "@/lib/auth/session";
+import { getPortalAccess, getFirmenNamen } from "@/lib/auth/access";
 import { AppHeader } from "@/components/app-header";
 import { FirmenAuswahlList } from "@/components/firmen-auswahl-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { selectFirma } from "./actions";
 
 export default async function FirmenAuswahlPage() {
-  const session = await auth();
-  const firmaIds = session?.portal?.firmaIds ?? [];
+  const email = await getCurrentUserEmail();
+  const access = email ? await getPortalAccess(email) : null;
+  const firmaIds = access?.firmaIds ?? [];
 
   // Nothing to choose — the (protected) layout already guarantees at
   // least one Firma, so this only happens with exactly one.
