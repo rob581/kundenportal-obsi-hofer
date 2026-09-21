@@ -1,6 +1,6 @@
 # PROJ-6: Passkey-Login
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -50,8 +50,8 @@
 - Supabase-Passkey-API ist Beta/experimentell (seit Mai 2026) — kann sich ohne Vorankündigung ändern
 
 ## Open Questions
-- [ ] Verhindert Supabase/der Browser automatisch die doppelte Registrierung desselben Geräts als zweiter Passkey, oder müssen wir das selbst prüfen? → technische Klärung bei `/architecture`
-- [ ] Erfordert `registerPasskey()` eine kürzlich abgeschlossene Anmeldung (analog zu Entras "MFA in den letzten 5 Minuten"), oder reicht eine bestehende Sitzung unabhängig von ihrem Alter? → technische Klärung bei `/architecture`
+- [x] Verhindert Supabase/der Browser automatisch die doppelte Registrierung desselben Geräts als zweiter Passkey? → In Supabase's spärlicher Beta-Doku nicht explizit dokumentiert; WebAuthn selbst kennt dafür den Standard-Mechanismus `excludeCredentials`, den Browser üblicherweise respektieren. Wird bei `/backend` empirisch geprüft, kein Blocker für die Architektur (2026-09-21)
+- [x] Erfordert `registerPasskey()` eine kürzlich abgeschlossene Anmeldung (analog zu Entras "MFA in den letzten 5 Minuten")? → Laut Doku nicht spezifiziert/nicht erforderlich, anders als bei Entra — eine bestehende, gültige Sitzung genügt. Wird bei `/backend` verifiziert (2026-09-21)
 
 ## Decision Log
 
@@ -68,12 +68,45 @@
 
 ### Technical Decisions
 <!-- Added by /architecture -->
+| Decision | Rationale | Date |
+|----------|-----------|------|
+| Keine eigene Datenbank-Tabelle für Passkeys | Supabase Auth verwaltet Passkeys intern selbst (Registrieren, Auflisten, Löschen sind fertige API-Methoden) — genau wie es bereits die Nutzerkonten selbst verwaltet. Kein Custom-Backend nötig, im Gegensatz zum verworfenen Entra-Ansatz (siehe PROJ-2), der eine eigene Graph-API-Anbindung mit High-Privilege-Rechten gebraucht hätte | 2026-09-21 |
+| Server Actions für Registrierung/Löschung, analog zu `login/actions.ts` | Passt zum bestehenden Projekt-Muster (PROJ-2); kein separater API-Route-Handler nötig | 2026-09-21 |
+| Browser-Kompatibilitätsprüfung rein clientseitig | WebAuthn-Verfügbarkeit lässt sich direkt im Browser feststellen, kein Server-Overhead nötig | 2026-09-21 |
+| Sitzungsprüfung auf "/sicherheit" wiederverwendet dieselbe `(protected)`-Route-Group wie die bestehenden Seiten | Kein neuer Schutzmechanismus nötig — "/sicherheit" ist einfach eine weitere Seite unter dem bestehenden PROJ-2-Schutz | 2026-09-21 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+App (eingeloggter Bereich)
+├── AppHeader
+│   └── Neuer Navigations-Link "Sicherheit" (neben Übersicht/Dashboard)
+├── Sicherheit-Seite ("/sicherheit", neu, geschützt wie die übrigen PROJ-2-Seiten)
+│   ├── Liste registrierter Passkeys (Erstellungsdatum je Eintrag + "Löschen"-Button)
+│   ├── Leerer Zustand ("Noch kein Passkey eingerichtet") bei null Einträgen
+│   ├── "Passkey hinzufügen"-Button — wird bei 5/5 durch Hinweistext ersetzt
+│   ├── Bestätigungsdialog vor dem Löschen
+│   └── Fehlermeldung bei abgebrochener/fehlgeschlagener Geräte-Bestätigung
+└── Login-Seite (erweitert, bestehende Datei aus PROJ-2)
+    ├── Neuer Button "Mit Passkey anmelden" (über dem bestehenden E-Mail-Formular, nur bei WebAuthn-fähigem Browser sichtbar)
+    └── Bestehendes zweistufiges E-Mail+Code-Formular — unverändert
+```
+
+### Datenmodell (in Textform)
+
+Es wird **keine eigene Tabelle** angelegt. Supabase Auth führt eine eigene, interne Liste der Passkeys pro Nutzer (ähnlich wie die Nutzerkonten selbst) — das Portal fragt diese Liste bei Bedarf direkt ab, statt einen eigenen Datenbestand zu pflegen. Die Zugehörigkeit "welcher Passkey gehört zu welchem Kunden" managt Supabase vollständig selbst über die bestehende Sitzung.
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+- `@supabase/supabase-js` — bereits vorhanden, Passkey-Funktionalität wird über einen expliziten Opt-in beim Client aktiviert (Beta-Feature)
+- shadcn `alert-dialog` — neu zu installieren, für den Lösch-Bestätigungsdialog (entspricht der Konvention aus dem Decision Log: "eigener Namen für Bestätigungsdialoge" wie z. B. bereits für andere destruktive Aktionen üblich)
 
 ## QA Test Results
 _To be added by /qa_
