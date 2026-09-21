@@ -63,13 +63,13 @@ describe("verifyLoginCode", () => {
     expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it("redirects to /uebersicht when the code is valid and the contact has access", async () => {
+  it("redirects to /dashboard when the code is valid and the contact has access", async () => {
     verifyOtpMock.mockResolvedValue({ error: null });
     getPortalAccessMock.mockResolvedValue({ contactId: "k1", firmaIds: ["f1"] });
 
-    await expect(verifyLoginCode("test@example.com", "123456")).rejects.toThrow("NEXT_REDIRECT:/uebersicht");
+    await expect(verifyLoginCode("test@example.com", "123456")).rejects.toThrow("NEXT_REDIRECT:/dashboard");
 
-    expect(redirectMock).toHaveBeenCalledWith("/uebersicht");
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard");
   });
 
   it("redirects to /kein-zugang when the code is valid but there is no portal access", async () => {

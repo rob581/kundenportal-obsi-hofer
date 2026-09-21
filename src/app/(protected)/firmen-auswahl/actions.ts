@@ -22,7 +22,7 @@ export async function selectFirma(firmaId: string): Promise<void> {
     path: "/",
   });
 
-  redirect("/uebersicht");
+  redirect("/dashboard");
 }
 
 // Lets a customer with multiple Firmen jump back to the selection screen

@@ -28,5 +28,5 @@ export async function verifyLoginCode(email: string, code: string): Promise<{ er
   }
 
   const access = await getPortalAccess(email);
-  redirect(access ? "/uebersicht" : "/kein-zugang");
+  redirect(access ? "/dashboard" : "/kein-zugang");
 }

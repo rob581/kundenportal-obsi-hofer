@@ -26,7 +26,7 @@ export default async function KeinZugangPage() {
   }
   const access = await getPortalAccess(email);
   if (access) {
-    redirect("/uebersicht");
+    redirect("/dashboard");
   }
 
   return (

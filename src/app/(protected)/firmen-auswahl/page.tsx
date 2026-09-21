@@ -14,7 +14,7 @@ export default async function FirmenAuswahlPage() {
   // Nothing to choose — the (protected) layout already guarantees at
   // least one Firma, so this only happens with exactly one.
   if (firmaIds.length <= 1) {
-    redirect("/uebersicht");
+    redirect("/dashboard");
   }
 
   const firmen = await getFirmenNamen(firmaIds);

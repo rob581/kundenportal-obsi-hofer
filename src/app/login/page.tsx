@@ -15,7 +15,7 @@ export default async function LoginPage() {
   const email = await getCurrentUserEmail();
   if (email) {
     const access = await getPortalAccess(email);
-    redirect(access ? "/uebersicht" : "/kein-zugang");
+    redirect(access ? "/dashboard" : "/kein-zugang");
   }
 
   return (

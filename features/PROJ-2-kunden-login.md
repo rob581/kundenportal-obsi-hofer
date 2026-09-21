@@ -227,6 +227,8 @@ Der Nutzer hat den kompletten Flow manuell im Browser durchgespielt (Login mit `
 
 **Nicht automatisiert testbar (nur manuell durch den Nutzer):** der Erfolgsfall mit echtem, per E-Mail zugestelltem Code — jetzt live verifiziert (siehe oben).
 
+**Nachträglich geändert (2026-09-21, Nutzerwunsch):** Alle Post-Login-Weiterleitungen zeigen jetzt auf `/dashboard` statt `/uebersicht` — Code-Login (`verifyLoginCode`), Passkey-Login (`login-form.tsx`), bereits angemeldete Besucher auf `/login`, `/kein-zugang` (falls nachträglich Zugang besteht) sowie die Firma-Auswahl (`firmen-auswahl/actions.ts` nach Auswahl, `firmen-auswahl/page.tsx` bei nur einer Firma). `getCurrentFirmaId()` (siehe PROJ-5) leitet weiterhin bei fehlender Firma-Auswahl zu `/firmen-auswahl` um, unabhängig davon, welche Seite sie aufgerufen hat. Betroffener Test (`login/actions.test.ts`) angepasst; `npx vitest run` weiterhin 74/74 grün.
+
 ---
 
 ### Archiviert — ursprüngliche Implementation Notes (Entra External ID, 2026-09-16/17)

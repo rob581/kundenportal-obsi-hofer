@@ -58,10 +58,10 @@ export function LoginForm() {
 
     // Volle Navigation statt Client-Router: (protected)/layout.tsx prüft die
     // Sitzung serverseitig (getPortalAccess -> ggf. Kein Zugang) und
-    // /uebersicht leitet bei mehreren Firmen selbst zur Firmen-Auswahl um
+    // /dashboard leitet bei mehreren Firmen selbst zur Firmen-Auswahl um
     // (getCurrentFirmaId) — exakt dieselbe Weiterleitungslogik wie beim
     // E-Mail+Code-Login in verifyLoginCode.
-    window.location.assign("/uebersicht");
+    window.location.assign("/dashboard");
   }
 
   function handleRequestCode(event: FormEvent) {
