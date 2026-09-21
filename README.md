@@ -28,7 +28,7 @@ Externe Dienste, die für Entwicklung und Betrieb dieses Projekts gebraucht werd
 | Vercel | Hosting, Deployments, Cron-Job, Environment Variables | [vercel.com/dashboard](https://vercel.com/dashboard) → Projekt "rob581's Project" |
 | Supabase | Datenbank (Spiegel der Dataverse-Daten), Auth (E-Mail-Code + Passkey) | [supabase.com/dashboard/project/ooozvxgkfxuurpzxodyy](https://supabase.com/dashboard/project/ooozvxgkfxuurpzxodyy) |
 | Resend | Mailversand: Supabase-Auth-E-Mails (Login-Code) sowie Sync-Alert-/Erfolgs-Mails vom Cron-Job | [resend.com/overview](https://resend.com/overview) |
-| Microsoft Dataverse | Quelle der Wahrheit für Kunden-, Geräte- und Prüfbericht-Daten, wird täglich per Power Automate + Cron-Job synchronisiert | intern bei OBSI Hofer GmbH, kein öffentlicher Link |
+| Microsoft Dataverse | Quelle der Wahrheit für Kunden-, Geräte- und Prüfbericht-Daten; wird täglich um 03:00 Uhr per Vercel-Cron-Job direkt via Dataverse Web API abgeglichen (kein Power Automate — ursprünglich so geplant, am 2026-09-16 durch den Cron-Pull-Ansatz ersetzt, siehe [PROJ-1 Decision Log](features/PROJ-1-dataverse-sync-service.md)) | intern bei OBSI Hofer GmbH, kein öffentlicher Link |
 
 **Frühere Entra-External-ID-Anbindung:** Bis 2026-09-21 lief die Anmeldung über Microsoft Entra External ID (Tenant "B2C Obsi-Hofer GmbH"); seither ersetzt durch Supabase Auth (siehe [PROJ-2 Decision Log](features/PROJ-2-kunden-login.md)). Der Entra-Tenant existiert noch, wird vom Portal aber nicht mehr genutzt.
 
