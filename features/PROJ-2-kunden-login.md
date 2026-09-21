@@ -4,7 +4,7 @@
 **Created:** 2026-09-16
 **Last Updated:** 2026-09-21
 
-> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). "Tech Design" (`/architecture`), Frontend (`/frontend`) und Backend (`/backend`) sind bereits vollständig für Supabase Auth umgestellt und lokal live gegen die echte Supabase-Instanz verifiziert. Nur die Abschnitte "QA Test Results" und "Deployment" weiter unten beschreiben noch die **bisherige, produktiv gelaufene Entra-Implementierung** und werden erst bei `/qa` → `/deploy` ersetzt. Die aktuell auf Vercel deployte Version läuft bis dahin unverändert mit Entra External ID weiter.
+> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). "Tech Design" (`/architecture`), Frontend (`/frontend`), Backend (`/backend`) und "QA Test Results" sind bereits vollständig für Supabase Auth aktualisiert — Production-Ready-Status: **noch nicht ganz**, AC-5 (Abmelden) fehlt noch ein Live-Test. Nur "Deployment" ganz unten beschreibt noch die **bisherige, produktiv gelaufene Entra-Implementierung** — die aktuell auf Vercel deployte Version läuft unverändert mit Entra External ID weiter, bis `/deploy` erneut läuft.
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — für den Abgleich der E-Mail-Adresse gegen synchronisierte Kontakt-/Relation-/Firma-Daten
@@ -272,13 +272,78 @@ Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** v
 
 ## QA Test Results
 
+**Tested:** 2026-09-21
+**App URL:** http://localhost:3000 (+ Live-Test durch den Nutzer gegen die echte Supabase-Instanz)
+**Tester:** QA Engineer (AI) + Nutzer (für den Erfolgsfall mit echtem E-Mail-Code)
+
+> Hinweis: `signInWithOtp`/`verifyOtp` rufen die echte Supabase-Instanz auf — ein automatisierter, wiederholbarer E2E-Test des kompletten Flows würde bei jedem Lauf eine echte E-Mail verschicken und schnell Supabase's Rate-Limit (60s/E-Mail) treffen. Der Erfolgsfall wurde daher **manuell vom Nutzer live** getestet (siehe Implementation Notes Backend). Automatisiert getestet: alles ohne echten Code erreichbare/prüfbare Verhalten (Login-Seiteninhalt, Routen-Schutz, Fehlerpfad bei falschem Code).
+
+### Acceptance Criteria Status
+
+#### AC-1: Registrierung/Login prüft aktiven Kontakt
+- [x] Live verifiziert (Testkontakt `robert.bienz@cloudcab.ch`, echter E-Mail-Code, Supabase legt beim ersten Login automatisch einen Auth-Nutzer an) → korrekt zur Firmen-Auswahl weitergeleitet
+
+#### AC-2: Genau eine Firma → direkte Weiterleitung
+- [x] Logik unverändert gegenüber der ursprünglichen (live verifizierten) Entra-Version, nur die Identitätsquelle wurde getauscht — durch `access.test.ts` weiterhin abgedeckt. Nicht erneut live mit einem Ein-Firma-Kontakt nachgestellt (Testkontakt hat zwei Firmen)
+
+#### AC-3: Mehrere Firmen → Firmen-Auswahl
+- [x] Live verifiziert: Testkontakt mit 2 Firmen zeigt nach echtem Code-Login korrekt die Firmen-Auswahl
+
+#### AC-4: Unbekannt/inaktiv → generische "Kein Zugang"-Meldung
+- [x] Logik unverändert (`getPortalAccess` gibt weiterhin `null` zurück, per Unit-Test abgedeckt); automatisiert bestätigt, dass `/kein-zugang` ohne Session zu `/login` umleitet. Nicht erneut live mit einem zweiten echten Supabase-Login für eine unbekannte E-Mail durchgespielt
+
+#### AC-5: Abmelden beendet die Sitzung
+- [ ] **Nicht in dieser Session getestet** (Nutzer hat "Abmelden" nach dem Live-Login noch nicht ausprobiert). Code-Review: `signOutEverywhere()` ruft jetzt `supabase.auth.signOut()` statt des bisherigen Federated-Logout-Redirects — einfacher als vorher, da Supabase (anders als Entra) keine externe Tenant-Sitzung offen hält. Empfehlung: kurz manuell nachtesten
+
+#### AC-6: Datenscope pro gewählter Firma
+- [x] Logik unverändert (`current-firma.ts`, Cookie-basiert), nur die Identitätsquelle für `firmaIds` getauscht. Regressions-E2E-Tests von PROJ-3 (die auf demselben Access-Mechanismus aufbauen) laufen weiterhin grün
+
+#### AC-7: Zuordnung wird bei jedem Login neu geprüft
+- [x] **Jetzt architektonisch garantiert, nicht nur beim Login:** `getPortalAccess` läuft seit dem Supabase-Wechsel bei **jedem** Seitenaufruf frisch (vorher: einmalig im Session-Token beim Login gecacht) — eine strengere Erfüllung der ursprünglichen Anforderung, kein Sonderfall-Test nötig
+
+### Security Audit Results
+- [x] Authentication: Alle geschützten Seiten ohne Session → Redirect zu `/login` (automatisiert verifiziert für `/uebersicht`, `/dashboard`, `/firmen-auswahl`, `/kein-zugang`)
+- [x] Keine Secrets im Client-Bundle: `SUPABASE_SECRET_KEY` explizit im gebauten `.next/static`-Output gesucht — nicht gefunden. Kein neuer Auth-Code importiert `supabase-admin.ts` (RLS-Bypass-Client) von einer Client-Component aus
+- [x] Kein XSS-Vektor: kein `dangerouslySetInnerHTML` im gesamten `src/`; E-Mail-Adresse wird nur über normales JSX-Escaping angezeigt
+- [x] Keine E-Mail-/Konto-Enumeration: `requestLoginCode` gibt bei jeder E-Mail dieselbe Erfolgsmeldung zurück (Supabase legt unbekannte Kontakte bei Bedarf automatisch an); `verifyLoginCode` zeigt für falschen Code und für "kein Zugang" jeweils dieselbe generische Meldung
+- [x] Autorisierung/IDOR: `selectFirma` (unverändert) validiert die gewählte Firma weiterhin gegen die eigene (frisch abgefragte) `firmaIds`-Liste, bevor das Cookie gesetzt wird
+- [x] Rate-Limiting auf Code-Anfragen: durch Supabase serverseitig erzwungen (beobachtet: "Minimum interval per user: 60 seconds" beim Debugging live erlebt) — nicht mehr unser eigenes TODO wie noch beim ursprünglichen Entra-Audit
+- [ ] **Nicht unabhängig geprüft:** Brute-Force-Schutz für `verifyOtp` (wiederholte Code-Rateversuche für dieselbe E-Mail) — liegt vollständig bei Supabase; Dashboard zeigt einen eigenen "Attack Protection"-Menüpunkt, dessen Konfiguration ich nicht eingesehen habe. Empfehlung: einmal kurz im Dashboard prüfen
+- [ ] **Nicht unabhängig geprüft:** Cookie-Attribute (`HttpOnly`/`SameSite`) der von `@supabase/ssr` gesetzten Session-Cookies — verlasse mich auf die dokumentierten Defaults des offiziellen Pakets, aber nicht selbst am Netzwerk-Tab nachgemessen (bräuchte eine echte Session)
+
+### Bugs Found
+
+Keine neuen Bugs im Supabase-Auth-Code selbst gefunden. Drei **Konfigurationsprobleme** (kein Code) wurden beim Live-Test entdeckt und vom Nutzer im Supabase-/Resend-Dashboard behoben — siehe Implementation Notes Backend für Details (E-Mail-Template `{{ .Token }}`, SMTP-Port 587 statt 465, OTP-Länge 6 statt 8).
+
+#### BUG-1 (fortbestehend, aus Entra-Ära): Middleware läuft in der lokalen Next.js-16-Dev-Umgebung weiterhin nicht
+- **Severity:** Low (nicht Medium wie ursprünglich — Ursache und Mitigation sind inzwischen bekannt und wirksam)
+- **Erneut geprüft mit der neuen Supabase-Middleware:** `console.log`-Sonde in `middleware.ts` eingebaut, geschützte Route lokal aufgerufen → Sonde feuerte **nicht**, obwohl der Request korrekt mit 307 zu `/login` umgeleitet wurde (der Redirect kam aus `(protected)/layout.tsx`, nicht aus der Middleware). Bestätigt: derselbe Next.js/Turbopack/Windows-Dev-Bug wie beim ursprünglichen NextAuth-Setup, unabhängig von der Auth-Bibliothek — Ursache liegt also nicht am Auth-Provider
+- **Status:** Wie zuvor durch Defense-in-Depth mitigiert (jede geschützte Seite prüft die Sitzung zusätzlich selbst) und auf Vercels echter Edge-Runtime bereits einmal funktionierend verifiziert (2026-09-18, mit der alten Entra-Middleware) — sollte bei `/deploy` mit der neuen Supabase-Middleware erneut auf Vercel bestätigt werden
+- **Diagnose-Code wurde nach dem Test wieder entfernt**, keine Spuren im Commit
+
+### Automatisierte Tests
+- **Unit-Tests (Vitest):** 66/66 grün, davon 5 neu für `src/app/login/actions.test.ts` (`requestLoginCode`-Erfolg/-Fehler, `verifyLoginCode`-Fehlerpfad + beide Redirect-Ziele je nach `getPortalAccess`)
+- **E2E-Tests (Playwright):** 12/12 grün (Chromium + Mobile Safari) in `tests/PROJ-2-kunden-login.spec.ts`, neu geschrieben für die Supabase-UI (altes "Anmelden"-Button-Test entfernt, da nicht mehr zutreffend) — Login-Seiteninhalt, Pflichtfeld-Validierung, Routen-Schutz für alle vier geschützten Seiten ohne Session
+- **Regressionstest:** komplette E2E-Suite (18 Tests, inkl. PROJ-3/PROJ-5) grün — keine Nebenwirkungen auf andere Features durch den Auth-Wechsel
+
+### Summary
+- **Acceptance Criteria:** 6/7 live oder durch unveränderte/verstärkte Logik abgedeckt, 1 (AC-5, Abmelden) noch nicht in dieser Session getestet
+- **Bugs Found:** 0 neue Bugs im Code; 3 Dashboard-Konfigurationsprobleme gefunden und behoben (dokumentiert); 1 fortbestehendes, bekanntes und mitigiertes Low-Bug (Middleware lokal)
+- **Security:** Solide — kein Secret-Leak, kein XSS-Vektor, keine Enumeration, IDOR-Schutz unverändert intakt, Rate-Limiting jetzt Supabase-seitig statt eigenem TODO. Zwei Punkte nicht unabhängig verifiziert (Attack-Protection-Konfiguration, Cookie-Attribute)
+- **Production Ready:** **Noch nicht ganz** — bitte zuerst "Abmelden" (AC-5) einmal live testen, dann aus meiner Sicht bereit
+- **Recommendation:** Status vorerst auf "In Review" belassen, bis AC-5 bestätigt ist. Danach kann direkt auf "Approved" gesetzt werden, ohne erneuten vollen `/qa`-Lauf.
+
+---
+
+### Archiviert — ursprüngliche QA Test Results (Entra External ID, 2026-09-17/18)
+
+*Nur noch als historische Referenz.*
+
 **Tested:** 2026-09-17
 **App URL:** http://localhost:3000
 **Tester:** QA Engineer (AI)
 
 > Hinweis: Der echte Entra-External-ID-Login (Microsoft-Redirect, Registrierung, MFA) lässt sich nicht sinnvoll automatisiert/wiederholbar testen — dafür bräuchte es echte, dauerhaft nutzbare Kundenzugangsdaten bei Microsoft. Dieser Teil wurde in den vorherigen Sessions **manuell live** gegen den echten External-ID-Tenant verifiziert (siehe Implementation Notes oben). Automatisiert getestet wurde alles, was ohne echten Microsoft-Login erreichbar/prüfbar ist: Seiteninhalte, Routen-Schutz, Cookie-/Autorisierungs-Sicherheit.
-
-### Acceptance Criteria Status
 
 #### AC-1: Registrierung/Login prüft aktiven Kontakt
 - [x] Live verifiziert (unbekannte E-Mail → Kein Zugang; aktiver Kontakt → Zugriff)
@@ -301,52 +366,13 @@ Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** v
 #### AC-7: Zuordnung wird bei jedem Login neu geprüft
 - [x] Durch Architektur abgedeckt (`getPortalAccess` läuft bei jedem Sign-in neu, keine persistente Portal-Nutzer-Tabelle) — nicht separat live mit einer Statusänderung zwischen zwei Logins getestet (bräuchte eine zweite echte Anmeldung mit Zwischenschritt in Dataverse)
 
-### Security Audit Results
-- [x] Authentication: Alle geschützten Seiten ohne Session → 307 zu `/login` (verifiziert für `/uebersicht`, `/firmen-auswahl`, `/kein-zugang`)
-- [x] Session-Cookies: `HttpOnly` + `SameSite=Lax`, kein JS-Zugriff möglich, CSRF-Token vorhanden
-- [x] Autorisierung/IDOR: `obsi_selected_firma`-Cookie manuell auf einen erfundenen Wert manipuliert → korrekt auf `/firmen-auswahl` zurückgeworfen (kein Zugriff auf falsche Firma möglich); die Server Action `selectFirma` validiert die gewählte Firma zusätzlich gegen die Session, bevor sie das Cookie setzt
-- [x] Keine Secrets im Seitenquelltext (`AZURE_CLIENT_SECRET`, `SUPABASE_SECRET_KEY`, `AUTH_SECRET`, `CRON_SECRET` geprüft)
-- [x] Kein XSS-relevantes Eingabefeld in diesem Feature (keine Freitext-Formulare, nur OAuth-Redirect + Firmen-Auswahl-Buttons)
-- [ ] BUG (Medium): Kein Rate-Limiting auf unseren eigenen Auth-Routen (`/api/auth/*`) — bewusst niedrige Priorität, da der eigentliche Credential-Check bei Microsoft liegt, nicht bei uns
-
-### Bugs Found
-
-#### BUG-1: Middleware/Proxy wird in der lokalen Next.js-16-Dev-Umgebung nie ausgeführt
-- **Severity:** Medium
-- **Steps to Reproduce:** Middleware testweise auf einen bedingungslosen Redirect gesetzt (jede Anfrage sollte umgeleitet werden) → selbst nach vollständigem Neustart (`.next` gelöscht, Server neu gestartet) hatte das auf **keinen einzigen** Request Einfluss
-- **Auswirkung entdeckt durch:** `/kein-zugang` war ohne jede Session direkt erreichbar (HTTP 200 statt Redirect) — die anderen geschützten Seiten (`/uebersicht`, `/firmen-auswahl`) waren nur zufällig trotzdem geschützt, weil das `(protected)/layout.tsx` unabhängig davon eine eigene serverseitige `auth()`-Prüfung macht
-- **Ursache:** Unklar — vermutlich eine Next.js-16.1.1/Turbopack/Windows-Dev-Eigenheit; ob es auf Vercel (echte Edge-Runtime) funktioniert, ist ungetestet
-- **Status:** ✅ Vollständig verifiziert (2026-09-18, Production auf Vercel): Vercel-Deployment-Logs zeigen für **jeden** Request (`/uebersicht`, `/dashboard`, Geräte-Details, `/login`, `/api/auth/*`) einen eigenen `"type":"middleware"`-Log-Eintrag (~9–17ms Laufzeit) — die Middleware wird auf der echten Vercel-Edge-Runtime zuverlässig ausgeführt, anders als lokal. Nicht angemeldeter Zugriff auf `/uebersicht` liefert korrekt `307` → `/login`. Der ursprüngliche lokale Dev-Bug bleibt als Hinweis für künftige lokale Entwicklung bestehen, ist für Production aber gelöst.
-- **Empfehlung für künftige Seiten (PROJ-3/4/5):** Nie allein auf Middleware verlassen — jede neue Seite/jedes neue Layout sollte ihre eigene `auth()`-Prüfung haben, wie es das `(protected)/layout.tsx` bereits vormacht.
-
-#### BUG-2: Vitest führte versehentlich die neuen Playwright-E2E-Specs aus und stürzte ab
-- **Severity:** Medium
-- **Steps to Reproduce:** `npm test` nach Hinzufügen von `tests/PROJ-2-kunden-login.spec.ts` ausführen → Absturz, da Vitest die Playwright-`test.describe`-Syntax nicht versteht
-- **Ursache:** `vitest.config.ts` hatte keine `exclude`-Regel für `tests/` (das laut `CLAUDE.md` ausschliesslich für Playwright-E2E-Tests reserviert ist)
-- **Status:** ✅ Gefixt (2026-09-17): `tests/` zur `exclude`-Liste in `vitest.config.ts` hinzugefügt (inkl. der Standard-Vitest-Ausschlüsse, die durch eine eigene `exclude`-Angabe sonst überschrieben würden)
-
-#### BUG-3: Firma-Auswahl-Cookie überlebt Abmelden, dadurch keine erneute Firmen-Auswahl beim nächsten Login
-- **Severity:** Medium
-- **Gefunden:** 2026-09-17, vom Nutzer beim manuellen Testen von PROJ-3 gemeldet ("nach dem Abmelden und neu Anmelden kommt wieder die zuletzt angezeigte Firma nicht die Firmenauswahl")
-- **Steps to Reproduce:** Als Kontakt mit mehreren Firmen anmelden, eine Firma auswählen, über "Abmelden" ausloggen, danach (im selben Browser) erneut anmelden → landet direkt wieder auf der zuvor gewählten Firma statt auf `/firmen-auswahl`
-- **Ursache:** `obsi_selected_firma` wird beim Setzen (`firmen-auswahl/actions.ts`) ohne `maxAge`/`expires` gesetzt (reines Session-Cookie), und `signOutEverywhere()` (`src/lib/auth/sign-out.ts`) hat bisher ausschliesslich die NextAuth-Session beendet, nie dieses Cookie gelöscht — es überlebt daher jedes Abmelden, solange der Browser offen bleibt
-- **Status:** ✅ Gefixt (2026-09-17): `signOutEverywhere()` löscht das `obsi_selected_firma`-Cookie jetzt explizit vor dem Redirect zum Entra-Logout
-
-### Hinweis zur QA-Konvention
-Beide Bugs wurden in dieser Session direkt behoben statt nur dokumentiert — abweichend von der üblichen QA-Regel "nur finden, nicht fixen". Grund: Beide blockierten eine verlässliche weitere Testdurchführung (BUG-2 verhinderte `npm test`, BUG-1 wurde erst durch gezieltes Debugging während der Sicherheitsprüfung sichtbar und liess sich mit calculated risk sofort schliessen). Bitte kurz gegenprüfen, ob das so in Ordnung ist.
-
-### Automatisierte Tests
-- **Unit-Tests (Vitest):** 25/25 grün, davon 7 neu für `src/lib/auth/access.ts` (bisher ungetestete Zugriffslogik: aktiver Kontakt, Gross-/Kleinschreibung, unbekannte E-Mail, inaktiver Kontakt, Kontakt ohne Firma, Firmen-Namen-Lookup)
-- **E2E-Tests (Playwright):** 8/8 grün (Chromium + Mobile Safari) in `tests/PROJ-2-kunden-login.spec.ts` — Login-Seiteninhalt, Routen-Schutz für alle drei geschützten Seiten ohne Session
-
-### Summary
-- **Acceptance Criteria:** 7/7 abgedeckt (6 live verifiziert, 1 durch Architektur/Unit-Test)
-- **Bugs Found:** 3 total, alle behoben (0 High/Critical offen, 1 Medium-Fund zu Rate-Limiting bewusst akzeptiert); BUG-3 kam erst nach dem ursprünglichen `/qa`-Lauf hinzu, gemeldet während des manuellen PROJ-3-Tests am 2026-09-17
-- **Security:** Solide — Routen-Schutz, Cookie-Sicherheit, Autorisierung gegen Firma-Manipulation, keine Secret-Leaks, kein XSS-Vektor
-- **Production Ready:** JA, mit einem Vorbehalt — BUG-1s Vercel-Verhalten sollte bei `/deploy` verifiziert werden, bevor es als endgültig gelöst gilt
-- **Recommendation:** Status auf "Approved" setzen. Bei `/deploy`: gezielt prüfen, ob Middleware auf Vercel greift (z.B. mit demselben "bedingungsloser Redirect"-Test), da das lokal nie funktioniert hat.
+Security Audit, Bugs (BUG-1/2/3) und Summary dieser archivierten Version: siehe Git-Historie dieser Datei (vor dem 2026-09-21-Commit) für den vollständigen Wortlaut — hier gekürzt, um die Datei nicht unnötig aufzublähen.
 
 ## Deployment
+
+**Aktueller Produktivstand (Entra External ID, unverändert bis zum nächsten `/deploy`):**
 - **Production URL:** https://obsi-hoferkundenportal.vercel.app
 - **Deployed:** 2026-09-18
-- **Verifiziert:** Login-Flow (Entra External ID → Callback → Firmen-Auswahl → Übersicht) end-to-end auf Production getestet, inkl. BUG-1 Middleware-Verifikation (siehe oben)
+- **Verifiziert:** Login-Flow (Entra External ID → Callback → Firmen-Auswahl → Übersicht) end-to-end auf Production getestet, inkl. BUG-1 Middleware-Verifikation (siehe archivierte QA Test Results)
+
+Die Supabase-Auth-Version wurde bisher nur lokal getestet (siehe QA Test Results oben) — noch nicht deployed. Folgt bei `/deploy`.
