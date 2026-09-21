@@ -1,32 +1,35 @@
-# PROJ-2: Kunden-Login (Entra External ID)
+# PROJ-2: Kunden-Login (Supabase Auth)
 
 ## Status: Planned
 **Created:** 2026-09-16
-**Last Updated:** 2026-09-16
+**Last Updated:** 2026-09-21
+
+> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). Die Abschnitte "Tech Design", "Implementation Notes", "QA Test Results" und "Deployment" weiter unten beschreiben die **bisherige, produktiv gelaufene Entra-Implementierung** und bleiben als historische Referenz stehen — sie sind **nicht mehr aktuell** und werden durch einen erneuten Durchlauf von `/architecture` → `/frontend` → `/backend` → `/qa` → `/deploy` ersetzt. Die aktuell auf Vercel deployte Version läuft bis dahin unverändert mit Entra External ID weiter.
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — für den Abgleich der E-Mail-Adresse gegen synchronisierte Kontakt-/Relation-/Firma-Daten
 
 ## User Stories
-- Als Kunde möchte ich mich mit meiner Geschäfts-E-Mail über Microsoft Entra External ID registrieren/anmelden, damit ich Zugriff auf meine Geräte- und Prüfberichtsdaten erhalte.
+- Als Kunde möchte ich mich mit meiner Geschäfts-E-Mail und einem Einmal-Code registrieren/anmelden, damit ich Zugriff auf meine Geräte- und Prüfberichtsdaten erhalte.
 - Als Kunde mit mehreren zugeordneten Firmen möchte ich zwischen diesen wechseln können, damit ich jeweils nur die für mich relevanten Daten sehe.
 - Als Kunde ohne gültige Zuordnung möchte ich eine klare Meldung mit Kontaktmöglichkeit sehen, damit ich weiss, wie ich Zugang bekomme.
 - Als OBSI Hofer AG möchte ich, dass nur Kunden mit einer aktiven, gültigen Kontakt-Zuordnung in Dataverse Zugriff auf Daten erhalten, damit keine Fremd- oder veralteten Daten offengelegt werden.
 - Als Kunde möchte ich mich abmelden können, damit ich meine Sitzung sicher beenden kann.
 
 ## Out of Scope
-- Eigene Konto-Verwaltung (Passwort ändern, Profil bearbeiten) — wird vollständig über die Standard-UI von Entra External ID abgedeckt
+- Eigene Konto-Verwaltung (Profil bearbeiten) — entfällt ohnehin grösstenteils durch reinen E-Mail-Einmal-Code-Login (kein Passwort zu verwalten)
 - Sofortige Sperrung einer laufenden Sitzung bei Entzug des Zugriffs — die Zuordnung wird nur beim (nächsten) Login geprüft
 - Automatisiertes Ticket-/Support-System bei "Kein Zugang" — nur statischer Kontakthinweis
 - Admin-Verwaltung der Kontakt-Zuordnung im Portal — erfolgt weiterhin ausschliesslich in Dataverse
 - Rollenbasierte Rechte innerhalb einer Firma (z.B. Kontakt X sieht weniger als Kontakt Y derselben Firma) — alle aktiven Kontakte einer Firma sehen dieselben Daten dieser Firma
-- Eigene MFA-Konfiguration/-Logik — es werden die Standard-Sicherheitseinstellungen von Entra External ID verwendet
+- Eigene MFA-Konfiguration/-Logik — es werden die Standard-Sicherheitseinstellungen von Supabase Auth verwendet
+- Passkey (FIDO2)-Login für Kunden — durch den Wechsel zu Supabase Auth technisch nicht mehr blockiert (siehe Decision Log, 2026-09-21), aber bewusst nicht Teil dieser Spec-Version; eigene, spätere Erweiterung
 
 ## Acceptance Criteria
 
 **Format:** Angenommen [Vorbedingung] / Wenn [Aktion] / Dann [Ergebnis]
 
-- [ ] Angenommen ein Kunde ist noch nicht registriert, wenn er sich mit seiner Geschäfts-E-Mail über Entra External ID registriert und die E-Mail-Adresse verifiziert, dann wird geprüft, ob diese E-Mail (unabhängig von Gross-/Kleinschreibung) einem synchronisierten, **aktiven** Kontakt entspricht
+- [ ] Angenommen ein Kunde ist noch nicht registriert, wenn er sich mit seiner Geschäfts-E-Mail per Einmal-Code anmeldet und die E-Mail-Adresse verifiziert, dann wird geprüft, ob diese E-Mail (unabhängig von Gross-/Kleinschreibung) einem synchronisierten, **aktiven** Kontakt entspricht
 - [ ] Angenommen die E-Mail eines Kunden entspricht einem aktiven Kontakt mit genau einer zugeordneten Firma, wenn der Login erfolgreich ist, dann wird der Kunde direkt zur Übersicht dieser Firma weitergeleitet
 - [ ] Angenommen die E-Mail eines Kunden entspricht einem aktiven Kontakt mit mehreren zugeordneten Firmen, wenn der Login erfolgreich ist, dann sieht der Kunde eine Firmen-Auswahl, bevor er auf Geräte/Prüfberichte zugreifen kann
 - [ ] Angenommen die E-Mail eines Kunden entspricht keinem bekannten Kontakt oder einem inaktiven Kontakt, wenn der Login-Vorgang abgeschlossen ist, dann wird dieselbe generische "Kein Zugang"-Meldung mit Kontaktmöglichkeit angezeigt und keine Kundendaten werden geladen
@@ -43,11 +46,14 @@
 
 ## Technical Requirements (optional)
 - Sicherheit: Zugriffsprüfung ausschliesslich serverseitig gegen synchronisierte Dataverse-Daten (Kontakt-Status + Relation zu Firma), nie rein clientseitig
-- Auth-Provider: Microsoft Entra External ID
+- Auth-Provider: Supabase Auth (E-Mail-Einmal-Code; selbes Supabase-Projekt wie die PROJ-1-Spiegeldaten)
 
 ## Open Questions
 - [x] Gibt es Rollen in `bmvcc_relation.bmvcc_role_description`, die keinen Zugriff mehr rechtfertigen (z.B. "ehemalig")? → Gelöst: `bmvcc_Kontakt` hat ein eigenes Status-Feld (aktiv/inaktiv); massgeblich für Zugriff ist dieser Status, nicht die Rollenbeschreibung (2026-09-16)
 - [x] Neuer Microsoft-Entra-External-ID-Tenant musste vom Nutzer erstellt werden (der bisherige App-Registrierungs-Versuch lag im normalen Mitarbeiter-Tenant, der keine Self-Service-Fremdanmeldung erlaubt — AADSTS90072) → erledigt, neuer Tenant erstellt, Login-Flow live verifiziert (2026-09-17)
+- [x] Können wir Kunden das Anmelden per Passkey (FIDO2) ermöglichen, statt/zusätzlich zu E-Mail+Einmalcode? → Ursprünglich (mit Entra External ID) recherchiert und zurückgestellt, siehe Decision Log für die vier Blocker (2026-09-21). Durch den Wechsel zu Supabase Auth (selbes Datum) sind diese Blocker hinfällig; Passkey bleibt trotzdem vorerst Out of Scope, siehe oben
+- [x] Gibt es einen bewussten Grund für die ursprüngliche PRD-Festlegung "Auth: Microsoft Entra External ID (nicht Supabase Auth)"? → Nutzer erinnert keinen bewussten Grund; Einschränkung aufgehoben, solange das Portal noch keine Produktivnutzer hat (2026-09-21)
+- [ ] Was passiert mit dem bestehenden Entra-External-ID-Tenant ("B2C Obsi-Hofer GmbH") und der App-Registrierung "Kundenportal" — abbauen oder unverändert stehen lassen? Nicht entschieden, keine Dringlichkeit (keine Kosten bei Nichtnutzung unterhalb der Free-Tier-Grenzen)
 
 ## Decision Log
 
@@ -59,9 +65,15 @@
 | Zuordnung/Status wird bei jedem Login neu geprüft, nicht dauerhaft in einem Portal-Konto gespeichert | Änderungen in Dataverse wirken sich automatisch beim nächsten Login aus, ohne zusätzlichen Abgleichsmechanismus während einer laufenden Sitzung | 2026-09-16 |
 | Zugriffsvoraussetzung ist der Aktiv-Status des Kontakts (`bmvcc_Kontakt`-Statusfeld), nicht die Rollenbeschreibung in `bmvcc_relation` | Klareres, bereits vorhandenes Signal in Dataverse für "nicht mehr aktuell" | 2026-09-16 |
 | "Kein Zugang" zeigt für unbekannte UND inaktive Kontakte dieselbe generische Meldung | Verhindert, dass von aussen erkennbar ist, ob eine E-Mail-Adresse existiert(e) oder nur deaktiviert wurde | 2026-09-16 |
+| Passkey (FIDO2)-Login für Kunden wird vorerst nicht umgesetzt | Vier Blocker laut offizieller Microsoft-Doku ([Sign in with passkeys in Microsoft Entra External ID](https://learn.microsoft.com/en-us/entra/external-id/customers/how-to-sign-in-with-passkey), Stand 2026-09-21): (1) Passkey-Registrierung ist nur für E-Mail+Passwort-/Username+Passwort-Konten möglich — unser aktuelles Modell (E-Mail + Einmal-Passcode) wird explizit noch nicht unterstützt ("on the roadmap", kein Datum); Umstieg auf Passwort-Konten wäre eine eigene Produktentscheidung. (2) Erfordert eine für den Tenant konfigurierte Custom-URL-Domain als Relying Party — ohne diese fällt `rp.id` auf Microsofts eigene Domain zurück (im passkey-sample-Test verifiziert: `login.microsoft.com`, was zu einem WebAuthn-Origin-Fehler führt). (3) Microsoft liefert keine fertige Registrierungs-UI — wir müssten eine eigene "Passkey verwalten"-Seite im Portal bauen. (4) Die einzige verfügbare Graph-API nutzt hochprivilegierte Application Permissions statt delegierter Nutzer-Rechte; Microsoft selbst rät für Kunden-Self-Service davon ab, die passende Low-Privilege-API ist noch nicht verfügbar ("on the roadmap"). Bei Bedarf erneut prüfen, sobald Microsoft E-Mail-OTP-Unterstützung oder Low-Privilege-APIs liefert. | 2026-09-21 |
+| Nachtrag: Admin-Provisionierung (statt Self-Service-OTP-Anmeldung) würde nur Blocker (1) auflösen, nicht die Gesamteinschätzung ändern | Kunden liessen sich per Graph-API `Create User` direkt als E-Mail+Passwort-Lokalkonto anlegen (statt Self-Service-Registrierung mit Einmalcode) — das macht sie passkey-fähig bezüglich Kontotyp. Aber: Microsoft bietet dafür keinen automatischen Passwort-Setup-Mailversand (nur für Workforce-Tenants vorgesehen); wir müssten Initial-Passwort-Vergabe und -Versand (z.B. über unseren bestehenden Resend-Versand) sowie den Account-Lifecycle selbst bauen — zusätzlicher eigener Aufwand, der durch die jetzige Self-Service-OTP-Anmeldung komplett entfällt. Blocker (2) Custom-Domain, (3) fehlende Microsoft-UI und (4) High-Privilege-API bleiben unabhängig vom Onboarding-Weg bestehen. Ändert die Entscheidung oben nicht. | 2026-09-21 |
+| **Fundamentaler Wechsel: Auth-Provider von Microsoft Entra External ID auf Supabase Auth** | Auslöser: die vier Passkey-Blocker bei Entra External ID (s. oben) plus der PRD-Constraint "nicht Supabase Auth" hatte keinen erinnerlichen Grund mehr. Für Supabase Auth spricht: (1) natives Passkey/WebAuthn-Support ohne die vier Entra-Blocker (keine Custom-Domain-Pflicht, kein Passwort-Kontozwang, fertige SDK-Methoden statt Eigenbau-Registrierungs-UI, keine High-Privilege-Graph-API nötig); (2) ein System statt zwei — Supabase wird durch PROJ-1 ohnehin schon für die Dataverse-Spiegeldaten genutzt, ein separater Entra-Tenant nur fürs Login entfällt; (3) NextAuth/Middleware-Komplexität entfällt (u.a. Ursache von BUG-1, siehe QA-Abschnitt unten); (4) kostenlos im aktuellen Rahmen — Supabase Free Plan enthält 50'000 MAU, bei 588 Kontakten irrelevant, kein Unterschied zu vorher. Entscheidender Zeitpunkt-Faktor: Portal hat noch **keine Produktivnutzer**, nur Testuser — Wechsel jetzt ohne Migrationsrisiko, wäre nach echtem Kunden-Rollout deutlich teurer gewesen. E-Mail-Verifizierung bleibt bewusst als **Einmal-Code** (nicht Magic Link), um dieselbe Nutzer-UX wie bisher beizubehalten. Passkey selbst wird durch diesen Wechsel nicht automatisch gebaut — bleibt weiterhin Out of Scope dieser Spec-Version, ist aber jetzt eine machbare spätere Erweiterung statt eine mit vier offenen Blockern. | 2026-09-21 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
+
+> **Hinweis (2026-09-21):** Die folgenden Einträge bis einschliesslich "Issuer-URL für den Entra-Provider" beschreiben die **superseded** Entra-External-ID/NextAuth-Implementierung (siehe Fundamentaler Wechsel oben in den Product Decisions) und bleiben nur als historische Referenz stehen. Die technischen Entscheidungen für die neue Supabase-Auth-Implementierung werden beim nächsten `/architecture`-Lauf neu dokumentiert.
+
 | Decision | Rationale | Date |
 |----------|-----------|------|
 | NextAuth.js (Auth.js) mit Microsoft-Entra-External-ID-Provider | Standard-Lösung im Next.js-Ökosystem für OIDC-Logins, übernimmt Redirects, Token-Prüfung und sichere Session-Cookies | 2026-09-16 |

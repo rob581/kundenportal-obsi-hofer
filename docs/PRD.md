@@ -11,7 +11,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 | Priority | Feature | Status |
 |----------|---------|--------|
 | P0 (MVP) | Dataverse-Sync-Service | Planned |
-| P0 (MVP) | Kunden-Login (Microsoft Entra External ID) | Planned |
+| P0 (MVP) | Kunden-Login (Supabase Auth) | Planned |
 | P0 (MVP) | Geräte-Übersicht (eigene Geräte, Status) | Planned |
 | P0 (MVP) | Prüfberichte-Liste (PDF-Download folgt separat) | Planned |
 | P0 (MVP) | Dashboard (Geräte pro Status, Total Prüfberichte, letzte Prüfung) | Planned |
@@ -25,7 +25,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 ## Constraints
 - Dataverse ist Source of Truth für alle Daten (Kunden, Geräte, Prüfberichte, Artikel) inkl. Relationen
 - Architektur: periodischer Sync-Job Dataverse → Supabase/Postgres (kein Live-API-Call pro Request)
-- Auth: Microsoft Entra External ID (nicht Supabase Auth)
+- Auth: Supabase Auth (E-Mail-Einmal-Code; Passkey/WebAuthn als spätere Option möglich) — Wechsel von ursprünglich Microsoft Entra External ID, siehe PROJ-2 Decision Log (2026-09-21). Kein besonderer Grund für die ursprüngliche Festlegung erinnerlich; aufgehoben, solange das Portal noch keine Produktivnutzer hat
 - Kunden-Zuordnung: Login-E-Mail ↔ Dataverse-Kontakt/Account
 - Portal ist read-only – keine Schreibrechte für Kunden, kein Zurückschreiben nach Dataverse
 - Offen: genauer PDF-Speicherort in Dataverse (Notes/Attachments vs. SharePoint) – bei der PROJ-4-Spezifikation bewusst zurückgestellt (PROJ-4 deckt vorerst nur die Prüfberichte-Metadaten ohne PDF ab); muss geklärt sein, bevor der PDF-Download als eigene Erweiterung umgesetzt wird
