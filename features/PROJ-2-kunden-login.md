@@ -1,10 +1,10 @@
 # PROJ-2: Kunden-Login (Supabase Auth)
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-16
 **Last Updated:** 2026-09-21
 
-> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). Das "Tech Design" weiter unten wurde bereits für Supabase Auth neu erstellt (`/architecture`, 2026-09-21). Die Abschnitte "Implementation Notes", "QA Test Results" und "Deployment" beschreiben aber weiterhin die **bisherige, produktiv gelaufene Entra-Implementierung** und bleiben vorerst als historische Referenz stehen — sie sind **nicht mehr aktuell** und werden durch einen Durchlauf von `/frontend` → `/backend` → `/qa` → `/deploy` ersetzt. Die aktuell auf Vercel deployte Version läuft bis dahin unverändert mit Entra External ID weiter.
+> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). "Tech Design" (`/architecture`) und die Login-UI in "Implementation Notes (Frontend)" (`/frontend`) sind bereits für Supabase Auth aktualisiert. Backend-Anbindung (`@supabase/ssr`, echte `signInWithOtp`/`verifyOtp`-Aufrufe, Middleware/Layout-Umstellung) fehlt noch. Die Abschnitte "Implementation Notes (Backend)", "QA Test Results" und "Deployment" weiter unten beschreiben weiterhin die **bisherige, produktiv gelaufene Entra-Implementierung** und bleiben vorerst als historische Referenz stehen — werden durch einen Durchlauf von `/backend` → `/qa` → `/deploy` ersetzt. Die aktuell auf Vercel deployte Version läuft bis dahin unverändert mit Entra External ID weiter.
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — für den Abgleich der E-Mail-Adresse gegen synchronisierte Kontakt-/Relation-/Firma-Daten
@@ -160,6 +160,25 @@ App (mit Auth-Schutz)
 Datenmodell war identisch aufgebaut (E-Mail gegen Kontakt/Relation abgleichen, keine eigene Portal-Benutzer-Tabelle), nur mit der Entra-Token-E-Mail statt der Supabase-verifizierten E-Mail als Quelle. Abhängigkeiten waren `next-auth` (Entra-External-ID-Anbindung) + `@supabase/supabase-js` (nur für den Datenabgleich, nicht für Auth selbst).
 
 ## Implementation Notes (Frontend)
+
+**Erstellt 2026-09-21 (Supabase-Auth-UI, Platzhalter-Verhalten ohne echte Anbindung — folgt bei `/backend`):**
+- `src/app/login/page.tsx` — umgebaut: kein NextAuth-`auth()`/`signIn()`-Aufruf mehr, rendert stattdessen `<LoginForm />`
+- `src/components/login-form.tsx` — neuer zweistufiger Client-Component-Flow: Schritt 1 E-Mail eingeben ("Code anfordern"), Schritt 2 6-stelliger Einmal-Code (shadcn `InputOTP`) + "Anmelden" + "Andere E-Mail-Adresse verwenden" (springt zurück zu Schritt 1, leert E-Mail-Feld)
+- Neue shadcn/ui-Komponenten installiert: `input-otp`, `label`
+- Beide Schritte mit `TODO(/backend PROJ-2)`-Kommentaren markiert (`supabase.auth.signInWithOtp` / `supabase.auth.verifyOtp`); Absenden von Schritt 2 zeigt aktuell nur einen Platzhalter-Hinweis ("Anmeldung ist noch nicht angebunden")
+
+**Manuell verifiziert (Playwright, `npm run dev`):** Beide Schritte durchgeklickt (Light + Dark Mode, 375px Mobile-Breite), Design-System-Farben (Stahlblau-Primärfarbe, Destructive-Rot für die Platzhalter-Fehlermeldung) korrekt angewendet, keine Konsolenfehler. `npm run build` und `npm run lint` fehlerfrei. Dabei einen kleinen UX-Bug gefunden und direkt behoben: "Andere E-Mail-Adresse verwenden" leerte das E-Mail-Feld nicht.
+
+**Bewusst noch nicht gebaut (folgt bei `/backend`):**
+- Echte Supabase-Auth-Anbindung (`@supabase/ssr`, `signInWithOtp`/`verifyOtp`) — Formulare zeigen aktuell nur Platzhalter-Verhalten
+- Middleware/`(protected)/layout.tsx`/`app-header.tsx`/`kein-zugang/page.tsx` laufen technisch noch auf der alten NextAuth-`auth()`-Anbindung (unverändert in diesem Frontend-Durchlauf, wird bei `/backend` mit umgestellt)
+- Serverseitiger Schutz von `/login` (Redirect bei bereits bestehender Session) — TODO-Kommentar in `login/page.tsx`
+
+---
+
+### Archiviert — ursprüngliche Implementation Notes (Entra External ID, 2026-09-16)
+
+*Nur noch als historische Referenz, siehe Hinweis-Banner ganz oben.*
 
 **Erstellt (Platzhalter-Verhalten, ohne echte Auth — folgt bei `/backend`):**
 - `src/app/login/page.tsx` — Login-Seite mit "Mit Entra External ID anmelden"-Button
