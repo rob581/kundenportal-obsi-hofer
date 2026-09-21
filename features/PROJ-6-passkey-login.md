@@ -1,6 +1,6 @@
 # PROJ-6: Passkey-Login
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -150,7 +150,61 @@ Siehe Decision Log → Technical Decisions oben.
 **Manuelle Supabase-Dashboard-Einstellung nötig (nicht durch mich setzbar):** Unter **Authentication → Passkeys** musste "Enable Passkey authentication" aktiviert und Relying Party Display Name/ID/Origins gesetzt werden (lokal: `localhost` / `http://localhost:3000`). Für Production muss das bei `/deploy` auf die echte Domain umgestellt werden.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-21
+**App URL:** http://localhost:3000 (+ Live-Test durch den Nutzer mit echtem Gerät)
+**Tester:** QA Engineer (AI) + Nutzer (für den WebAuthn-Flow mit echtem Gerät)
+
+> Hinweis: `registerPasskey()`/`signInWithPasskey()` lösen eine echte WebAuthn-Zeremonie aus (Geräte-Biometrie/PIN) — nicht automatisierbar in headless Playwright ohne virtuellen Authenticator (hier nicht eingerichtet, unverhältnismässig für den Projektumfang). Der komplette Flow wurde daher **manuell vom Nutzer mit einem echten Gerät (Windows Hello)** getestet. Automatisiert getestet: alles ohne echtes Gerät erreichbare/prüfbare Verhalten (Button-Sichtbarkeit, Limit-Logik, Lösch-Bestätigung, Routen-Schutz).
+
+### Acceptance Criteria Status
+
+#### AC-1: Leere Liste + "Passkey hinzufügen" ohne registrierten Passkey
+- [x] Unit-Test verifiziert (`passkey-list.test.tsx`)
+
+#### AC-2: Erfolgreiche Registrierung zeigt neuen Passkey mit Datum
+- [x] Live verifiziert (echtes Gerät) + Unit-Test für die Reload-Logik nach erfolgreicher Registrierung
+
+#### AC-3: 5 Passkeys erreicht → Hinweistext statt "Hinzufügen"-Button
+- [x] Unit-Test verifiziert — nicht live mit 5 echten Geräten nachgestellt (unverhältnismässig), Logik ist eine simple Längenprüfung
+
+#### AC-4: Löschen zeigt Bestätigungsdialog vor der Aktion
+- [x] Unit-Test verifiziert (Dialog öffnet, `delete()` wird erst nach Bestätigung aufgerufen, Liste danach neu geladen)
+
+#### AC-5: Passkey-Login ohne E-Mail-Eingabe
+- [x] Live verifiziert (echtes Gerät) — landet nach erfolgreicher Geräte-Bestätigung korrekt im geschützten Bereich
+
+#### AC-6: Kein registrierter Passkey → native Browser-Meldung, E-Mail+Code bleibt nutzbar
+- [x] Durch WebAuthn-Standard garantiert (nicht durch unseren Code steuerbar); E2E-Test bestätigt, dass das E-Mail-Formular in jedem Fall sichtbar/nutzbar bleibt
+
+#### AC-7: Browser ohne WebAuthn-Support → Button ausgeblendet
+- [x] E2E-Test verifiziert (WebAuthn-API clientseitig deaktiviert simuliert, Button fehlt, E-Mail-Formular bleibt sichtbar)
+
+#### AC-8: Abgebrochene Geräte-Bestätigung → verständliche Fehlermeldung, kein Datenverlust
+- [x] Unit-Test verifiziert (Fehlerpfad von `registerPasskey()`), reales Abbrechen einer Geräte-Bestätigung nicht separat live durchgespielt
+
+### Security Audit Results
+- [x] Keine Secrets im Client-Bundle: `SUPABASE_SECRET_KEY` im frischen `.next/static`-Build gesucht — nicht gefunden. Der neue `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` ist erwartungsgemäss **im** Bundle enthalten (bewusst öffentlich, kein Secret)
+- [x] Kein XSS-Vektor: kein `dangerouslySetInnerHTML`; Passkey-Datum läuft durch `Date.toLocaleDateString`, keine rohe HTML-Ausgabe
+- [x] Autorisierung bleibt unverändert bei Supabase: `signInWithPasskey()` beweist nur die WebAuthn-Identität — die eigentliche Zugriffsprüfung (`getPortalAccess`) läuft danach serverseitig in `(protected)/layout.tsx`, exakt wie beim E-Mail+Code-Login. Kein Client-seitiger Bypass möglich, da die volle Navigation (`window.location.assign`) den Server-Check erzwingt
+- [x] Kein Cross-User-Zugriff über `passkey.list()`/`passkey.delete()` durch uns selbst möglich — beide Aufrufe laufen über die authentifizierte Sitzung, wir übergeben nie eine `userId`; die Isolation zwischen Kunden liegt vollständig bei Supabase
+- [ ] **Nicht unabhängig geprüft:** ob Supabase serverseitig tatsächlich verhindert, dass `passkey.delete({passkeyId})` einen fremden Passkey löschen kann, wenn man dessen ID erraten/erlangen würde — liegt vollständig in Supabase's Verantwortung, nicht in unserem Code; keine Möglichkeit, das ohne zweiten echten Testaccount zu verifizieren
+- [ ] **Bekannte Grenze (kein Bug, inhärent zu Passkeys):** Wer physischen Zugriff auf ein entsperrtes Gerät mit synchronisiertem Passkey hat, kann sich anmelden — dasselbe Risiko wie bei jedem Passkey-System, nicht durch unseren Code beeinflussbar
+
+### Bugs Found
+Keine.
+
+### Automatisierte Tests
+- **Unit-Tests (Vitest):** 73/73 grün, davon 7 neu für `src/components/passkey-list.test.tsx` (erste Component-Tests in diesem Projekt, mit `@testing-library/react` — bisher wurde nur reine Logik getestet). Deckt Leerzustand, Lade-Fehler, Liste mit Datum, erfolgreiche/fehlgeschlagene Registrierung, 5er-Limit, Lösch-Bestätigungsfluss ab
+- **E2E-Tests (Playwright):** 6/6 neu in `tests/PROJ-6-passkey-login.spec.ts` (Chromium + Mobile Safari) — Button-Sichtbarkeit mit/ohne WebAuthn-Support, Routen-Schutz für `/sicherheit`
+- **Regressionstest:** komplette E2E-Suite (24 Tests, inkl. PROJ-2/3/5) grün — keine Nebenwirkungen auf andere Features
+
+### Summary
+- **Acceptance Criteria:** 8/8 live oder durch Tests/Code-Review abgedeckt
+- **Bugs Found:** 0
+- **Security:** Solide — kein Secret-Leak, kein XSS-Vektor, Autorisierung läuft unverändert über den bestehenden serverseitigen Zugriffsschutz. Zwei Punkte liegen ausserhalb unserer Kontrolle bei Supabase (Cross-User-Löschschutz, physischer Geräteschutz — beides dokumentiert, kein Bug)
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen. Bei `/deploy`: Relying Party ID/Origins im Supabase-Dashboard von `localhost`/`http://localhost:3000` auf die echte Production-Domain umstellen — sonst funktioniert Passkey dort nicht (siehe Implementation Notes Backend)
 
 ## Deployment
 _To be added by /deploy_
