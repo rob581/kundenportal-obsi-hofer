@@ -1,10 +1,10 @@
 # PROJ-2: Kunden-Login (Supabase Auth)
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-16
 **Last Updated:** 2026-09-21
 
-> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). Die Abschnitte "Tech Design", "Implementation Notes", "QA Test Results" und "Deployment" weiter unten beschreiben die **bisherige, produktiv gelaufene Entra-Implementierung** und bleiben als historische Referenz stehen — sie sind **nicht mehr aktuell** und werden durch einen erneuten Durchlauf von `/architecture` → `/frontend` → `/backend` → `/qa` → `/deploy` ersetzt. Die aktuell auf Vercel deployte Version läuft bis dahin unverändert mit Entra External ID weiter.
+> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). Das "Tech Design" weiter unten wurde bereits für Supabase Auth neu erstellt (`/architecture`, 2026-09-21). Die Abschnitte "Implementation Notes", "QA Test Results" und "Deployment" beschreiben aber weiterhin die **bisherige, produktiv gelaufene Entra-Implementierung** und bleiben vorerst als historische Referenz stehen — sie sind **nicht mehr aktuell** und werden durch einen Durchlauf von `/frontend` → `/backend` → `/qa` → `/deploy` ersetzt. Die aktuell auf Vercel deployte Version läuft bis dahin unverändert mit Entra External ID weiter.
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — für den Abgleich der E-Mail-Adresse gegen synchronisierte Kontakt-/Relation-/Firma-Daten
@@ -72,10 +72,15 @@
 ### Technical Decisions
 <!-- Added by /architecture -->
 
-> **Hinweis (2026-09-21):** Die folgenden Einträge bis einschliesslich "Issuer-URL für den Entra-Provider" beschreiben die **superseded** Entra-External-ID/NextAuth-Implementierung (siehe Fundamentaler Wechsel oben in den Product Decisions) und bleiben nur als historische Referenz stehen. Die technischen Entscheidungen für die neue Supabase-Auth-Implementierung werden beim nächsten `/architecture`-Lauf neu dokumentiert.
+> **Hinweis (2026-09-21):** Die Einträge ab "NextAuth.js (Auth.js) mit Microsoft-Entra-External-ID-Provider" bis einschliesslich "Issuer-URL für den Entra-Provider" beschreiben die **superseded** Entra-External-ID/NextAuth-Implementierung (siehe Fundamentaler Wechsel oben in den Product Decisions) und bleiben nur als historische Referenz stehen. Die Einträge darüber sind die aktuellen, für Supabase Auth gültigen Entscheidungen.
 
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| `@supabase/ssr` für Session-Verwaltung statt NextAuth | Ersetzt NextAuth vollständig; Supabase's Standardmuster für Next.js-Sitzungscookies, arbeitet über Fetch-Aufrufe und ist dadurch Edge-Runtime-kompatibel (im Gegensatz zum bisherigen vollen `auth.ts` mit Supabase-Admin-Callback) | 2026-09-21 |
+| Middleware kann die Sitzungsprüfung (eingeloggt/nicht) jetzt direkt selbst übernehmen, ohne die bisherige Aufteilung in `auth.config.ts`/`auth.ts` | Supabase's Session-Check ist Edge-kompatibel; die feine Zugriffsprüfung (Kontakt/Firma, braucht Datenbankzugriff) bleibt weiterhin im geschützten Layout (Node.js-Runtime) — dieselbe Grund-Aufteilung wie bisher, aber ohne die bisherige Zwei-Config-Krücke | 2026-09-21 |
+| E-Mail-Einmal-Code (`signInWithOtp` mit OTP, nicht Magic Link) | Entspricht der bisherigen Nutzer-Erwartung (Entra lieferte ebenfalls einen Code, keinen Link); vermeidet zudem Probleme mit E-Mail-Scannern, die Links vorzeitig öffnen | 2026-09-21 |
+| Kein separater "Registrieren"-Schritt — `shouldCreateUser` bleibt auf Standard (aktiviert) | Erhält die bisherige Self-Service-UX (Produktentscheidung 2026-09-16): unbekannte, aber aktive Dataverse-Kontakte sollen beim ersten Login direkt Zugriff bekommen, ohne Extra-Schritt | 2026-09-21 |
+| Federated Logout (Redirect zu Microsofts `end_session_endpoint`) entfällt ersatzlos | War nur nötig, weil Entra zusätzlich zu unserer eigenen Sitzung eine eigene Microsoft-Sitzung führte, die sonst beim nächsten Login die E-Mail vorausgefüllt hätte; bei Supabase Auth gibt es keine separate externe Sitzung, normales Abmelden (`supabase.auth.signOut()`) reicht aus | 2026-09-21 |
 | NextAuth.js (Auth.js) mit Microsoft-Entra-External-ID-Provider | Standard-Lösung im Next.js-Ökosystem für OIDC-Logins, übernimmt Redirects, Token-Prüfung und sichere Session-Cookies | 2026-09-16 |
 | Zugriffsprüfung (Kontakt aktiv? + Relation zu Firma) läuft als eigener Schritt direkt nach dem Entra-Login, bevor eine gültige Portal-Sitzung entsteht | Trennt "bei Microsoft angemeldet" klar von "hat Zugriff auf Kundendaten" | 2026-09-16 |
 | Keine eigene "Portal-Benutzer"-Tabelle — Kontakt/Firmen-Zuordnung wird bei jedem Login frisch aus den PROJ-1-Tabellen ermittelt und nur in der Session gehalten | Passt zur Produktentscheidung "Zuordnung wird bei jedem Login neu geprüft"; vermeidet eine zusätzliche, potenziell veraltende Tabelle | 2026-09-16 |
@@ -98,8 +103,12 @@
 ```
 App (mit Auth-Schutz)
 ├── Login-Seite
-│   └── "Mit Entra External ID anmelden" → leitet zur gehosteten Entra-Anmeldeseite weiter
-├── Nach erfolgreichem Entra-Login: serverseitige Zugriffsprüfung
+│   ├── Schritt 1: E-Mail-Adresse eingeben → "Code anfordern"
+│   └── Schritt 2: 6-stelligen Einmal-Code eingeben → "Anmelden"
+│       (unbekannte E-Mail erhält denselben Code-Versand — Konto entsteht
+│       implizit beim ersten erfolgreichen Login, kein separater
+│       "Registrieren"-Schritt, wie bisher bei Entra)
+├── Nach erfolgreicher Code-Bestätigung: serverseitige Zugriffsprüfung (unverändert)
 │   ├── Kein aktiver, passender Kontakt gefunden
 │   │   └── "Kein Zugang"-Seite (Meldung + Kontakt-Link + "Abmelden/andere E-Mail versuchen")
 │   ├── Genau eine zugeordnete Firma
@@ -112,17 +121,43 @@ App (mit Auth-Schutz)
 
 ### Datenmodell (in Textform)
 
-Es wird keine eigene "Portal-Benutzer"-Tabelle angelegt. Bei jedem Login läuft dieser Ablauf:
-1. Die verifizierte E-Mail aus dem Entra-Token wird gegen die (aus PROJ-1 gespiegelten) Kontakt-Daten abgeglichen (Status muss aktiv sein)
+Es wird weiterhin keine eigene "Portal-Benutzer"-Tabelle angelegt — diese Entscheidung ändert sich durch den Provider-Wechsel nicht. Supabase Auth führt intern eine eigene, für uns unsichtbare Nutzerliste (E-Mail + Verifizierungsstatus); wir greifen nur auf die verifizierte E-Mail der aktuellen Sitzung zu. Bei jedem Login läuft weiterhin dieser Ablauf:
+1. Die von Supabase verifizierte E-Mail wird gegen die (aus PROJ-1 gespiegelten) Kontakt-Daten abgeglichen (Status muss aktiv sein)
 2. Ist der Kontakt aktiv, werden über die Relation-Tabelle alle zugeordneten Firmen ermittelt
 3. Kontakt-ID + Liste der Firmen + aktuell gewählte Firma werden nur für die Dauer der Sitzung gespeichert (Session), nicht dauerhaft in der Datenbank
+
+Die Sitzung selbst wird von Supabase Auth verwaltet (sichere, serverseitig lesbare Cookies) — technisch vergleichbar mit dem bisherigen NextAuth-Session-Cookie, nur ohne den Zwischenschritt über einen externen Microsoft-Tenant.
 
 ### Technische Entscheidungen (Begründung)
 Siehe Decision Log → Technical Decisions oben.
 
 ### Abhängigkeiten (Packages)
-- `next-auth` — Authentifizierung inkl. Entra-External-ID-Anbindung
-- `@supabase/supabase-js` — bereits vorhanden (PROJ-1), für den Abgleich gegen Kontakt/Relation/Firma
+- `@supabase/ssr` — neu: verwaltet die Supabase-Sitzung serverseitig (Cookies) für Next.js, ersetzt die Rolle von `next-auth`
+- `@supabase/supabase-js` — bereits vorhanden (PROJ-1), jetzt zusätzlich für Auth (E-Mail-Code anfordern/bestätigen) statt nur für den Abgleich gegen Kontakt/Relation/Firma
+- `next-auth` — wird entfernt, nicht mehr benötigt
+
+---
+
+### Archiviert — ursprüngliches Tech Design (Entra External ID, 2026-09-16)
+
+*Nur noch als historische Referenz, siehe Hinweis-Banner ganz oben. Beschreibt die Implementierung, die derzeit noch produktiv auf Vercel läuft.*
+
+```
+App (mit Auth-Schutz)
+├── Login-Seite
+│   └── "Mit Entra External ID anmelden" → leitet zur gehosteten Entra-Anmeldeseite weiter
+├── Nach erfolgreichem Entra-Login: serverseitige Zugriffsprüfung
+│   ├── Kein aktiver, passender Kontakt gefunden
+│   │   └── "Kein Zugang"-Seite (Meldung + Kontakt-Link + "Abmelden/andere E-Mail versuchen")
+│   ├── Genau eine zugeordnete Firma
+│   │   └── direkte Weiterleitung zur Firma-Übersicht (PROJ-3/4/5)
+│   └── Mehrere zugeordnete Firmen
+│       └── Firmen-Auswahl-Seite (Liste zum Anklicken)
+└── Navigation (eingeloggter Zustand)
+    └── "Abmelden"-Button
+```
+
+Datenmodell war identisch aufgebaut (E-Mail gegen Kontakt/Relation abgleichen, keine eigene Portal-Benutzer-Tabelle), nur mit der Entra-Token-E-Mail statt der Supabase-verifizierten E-Mail als Quelle. Abhängigkeiten waren `next-auth` (Entra-External-ID-Anbindung) + `@supabase/supabase-js` (nur für den Datenabgleich, nicht für Auth selbst).
 
 ## Implementation Notes (Frontend)
 
