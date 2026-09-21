@@ -1,10 +1,10 @@
 # PROJ-2: Kunden-Login (Supabase Auth)
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-16
 **Last Updated:** 2026-09-21
 
-> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). "Tech Design" (`/architecture`), Frontend (`/frontend`), Backend (`/backend`) und "QA Test Results" sind bereits vollständig für Supabase Auth aktualisiert — Production-Ready-Status: **noch nicht ganz**, AC-5 (Abmelden) fehlt noch ein Live-Test. Nur "Deployment" ganz unten beschreibt noch die **bisherige, produktiv gelaufene Entra-Implementierung** — die aktuell auf Vercel deployte Version läuft unverändert mit Entra External ID weiter, bis `/deploy` erneut läuft.
+> **Fundamentale Neuausrichtung (2026-09-21):** Auth-Provider gewechselt von Microsoft Entra External ID zu Supabase Auth (Details siehe Decision Log). "Tech Design" (`/architecture`), Frontend (`/frontend`), Backend (`/backend`) und "QA Test Results" sind vollständig für Supabase Auth aktualisiert und **production-ready** (7/7 Acceptance Criteria, siehe QA Test Results). Nur "Deployment" ganz unten beschreibt noch die **bisherige, produktiv gelaufene Entra-Implementierung** — die aktuell auf Vercel deployte Version läuft unverändert mit Entra External ID weiter, bis `/deploy` erneut läuft.
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — für den Abgleich der E-Mail-Adresse gegen synchronisierte Kontakt-/Relation-/Firma-Daten
@@ -293,7 +293,7 @@ Die zuerst verwendete App-Registrierung lag im **normalen Mitarbeiter-Tenant** v
 - [x] Logik unverändert (`getPortalAccess` gibt weiterhin `null` zurück, per Unit-Test abgedeckt); automatisiert bestätigt, dass `/kein-zugang` ohne Session zu `/login` umleitet. Nicht erneut live mit einem zweiten echten Supabase-Login für eine unbekannte E-Mail durchgespielt
 
 #### AC-5: Abmelden beendet die Sitzung
-- [ ] **Nicht in dieser Session getestet** (Nutzer hat "Abmelden" nach dem Live-Login noch nicht ausprobiert). Code-Review: `signOutEverywhere()` ruft jetzt `supabase.auth.signOut()` statt des bisherigen Federated-Logout-Redirects — einfacher als vorher, da Supabase (anders als Entra) keine externe Tenant-Sitzung offen hält. Empfehlung: kurz manuell nachtesten
+- [x] Live nachgetestet (2026-09-21, nachgeholt): "Abmelden" beendet die Sitzung korrekt, landet auf `/login`. `signOutEverywhere()` ruft jetzt `supabase.auth.signOut()` statt des bisherigen Federated-Logout-Redirects — einfacher als vorher, da Supabase (anders als Entra) keine externe Tenant-Sitzung offen hält
 
 #### AC-6: Datenscope pro gewählter Firma
 - [x] Logik unverändert (`current-firma.ts`, Cookie-basiert), nur die Identitätsquelle für `firmaIds` getauscht. Regressions-E2E-Tests von PROJ-3 (die auf demselben Access-Mechanismus aufbauen) laufen weiterhin grün
@@ -327,11 +327,11 @@ Keine neuen Bugs im Supabase-Auth-Code selbst gefunden. Drei **Konfigurationspro
 - **Regressionstest:** komplette E2E-Suite (18 Tests, inkl. PROJ-3/PROJ-5) grün — keine Nebenwirkungen auf andere Features durch den Auth-Wechsel
 
 ### Summary
-- **Acceptance Criteria:** 6/7 live oder durch unveränderte/verstärkte Logik abgedeckt, 1 (AC-5, Abmelden) noch nicht in dieser Session getestet
+- **Acceptance Criteria:** 7/7 live oder durch unveränderte/verstärkte Logik abgedeckt
 - **Bugs Found:** 0 neue Bugs im Code; 3 Dashboard-Konfigurationsprobleme gefunden und behoben (dokumentiert); 1 fortbestehendes, bekanntes und mitigiertes Low-Bug (Middleware lokal)
 - **Security:** Solide — kein Secret-Leak, kein XSS-Vektor, keine Enumeration, IDOR-Schutz unverändert intakt, Rate-Limiting jetzt Supabase-seitig statt eigenem TODO. Zwei Punkte nicht unabhängig verifiziert (Attack-Protection-Konfiguration, Cookie-Attribute)
-- **Production Ready:** **Noch nicht ganz** — bitte zuerst "Abmelden" (AC-5) einmal live testen, dann aus meiner Sicht bereit
-- **Recommendation:** Status vorerst auf "In Review" belassen, bis AC-5 bestätigt ist. Danach kann direkt auf "Approved" gesetzt werden, ohne erneuten vollen `/qa`-Lauf.
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen. Bei `/deploy`: Middleware auf Vercel erneut verifizieren (wie bei der ursprünglichen Entra-Version), da sie lokal nachweislich nicht läuft.
 
 ---
 
