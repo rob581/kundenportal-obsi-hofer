@@ -15,6 +15,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 | P0 (MVP) | Geräte-Übersicht (eigene Geräte, Status) | Planned |
 | P0 (MVP) | Prüfberichte-Liste (PDF-Download folgt separat) | Planned |
 | P0 (MVP) | Dashboard (Geräte pro Status, Total Prüfberichte, letzte Prüfung) | Planned |
+| P1 | Passkey-Login (zusätzlich zu E-Mail+Code) | Planned |
 
 ## Success Metrics
 - Reduktion der internen Zeit für manuelle Excel-Aufbereitung/Versand von Prüfberichten
