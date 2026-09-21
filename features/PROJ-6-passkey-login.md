@@ -52,6 +52,7 @@
 ## Open Questions
 - [x] Verhindert Supabase/der Browser automatisch die doppelte Registrierung desselben Geräts als zweiter Passkey? → In Supabase's spärlicher Beta-Doku nicht explizit dokumentiert; WebAuthn selbst kennt dafür den Standard-Mechanismus `excludeCredentials`, den Browser üblicherweise respektieren. Wird bei `/backend` empirisch geprüft, kein Blocker für die Architektur (2026-09-21)
 - [x] Erfordert `registerPasskey()` eine kürzlich abgeschlossene Anmeldung (analog zu Entras "MFA in den letzten 5 Minuten")? → Laut Doku nicht spezifiziert/nicht erforderlich, anders als bei Entra — eine bestehende, gültige Sitzung genügt. Wird bei `/backend` verifiziert (2026-09-21)
+- [x] **Live bestätigt (2026-09-21):** Nutzer hat den kompletten Flow mit echtem Gerät (Windows Hello) durchgespielt — Registrierung über `/sicherheit`, danach erfolgreicher Passkey-Login ohne E-Mail-Eingabe. Keine unerwartete Recency- oder Doppel-Geräte-Blockade aufgetreten
 
 ## Decision Log
 
@@ -74,6 +75,7 @@
 | Server Actions für Registrierung/Löschung, analog zu `login/actions.ts` | Passt zum bestehenden Projekt-Muster (PROJ-2); kein separater API-Route-Handler nötig | 2026-09-21 |
 | Browser-Kompatibilitätsprüfung rein clientseitig | WebAuthn-Verfügbarkeit lässt sich direkt im Browser feststellen, kein Server-Overhead nötig | 2026-09-21 |
 | Sitzungsprüfung auf "/sicherheit" wiederverwendet dieselbe `(protected)`-Route-Group wie die bestehenden Seiten | Kein neuer Schutzmechanismus nötig — "/sicherheit" ist einfach eine weitere Seite unter dem bestehenden PROJ-2-Schutz | 2026-09-21 |
+| **Korrektur bei `/backend`:** Server Actions durch direkten Browser-Supabase-Client ersetzt (alle vier Passkey-Operationen) | `registerPasskey`/`signInWithPasskey` müssen zwingend im Browser laufen (WebAuthn-Zeremonie braucht `navigator.credentials`); `list`/`delete` wurden aus Konsistenzgründen ebenfalls darüber aufgerufen statt über einen separaten Server-Action-Umweg. Erfordert zwei neue `NEXT_PUBLIC_`-Env-Variablen (dieselben, bereits unbedenklichen Werte wie serverseitig) | 2026-09-21 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
@@ -124,6 +126,28 @@ Siehe Decision Log → Technical Decisions oben.
 **Bewusst noch nicht gebaut (folgt bei `/backend`):**
 - Echte Supabase-Passkey-Anbindung (`registerPasskey`, `signInWithPasskey`, Listen/Löschen) — aktuell rein lokale UI-Simulation
 - Die zwei bei `/architecture` recherchierten, aber nicht abschliessend bestätigten Verhaltensweisen (Doppel-Geräte-Schutz, Recency-Anforderung) werden hier empirisch verifiziert
+
+## Implementation Notes (Backend)
+
+**Korrektur zur Tech-Design-Annahme:** Die geplante technische Entscheidung "Server Actions für Registrierung/Löschung, analog zu `login/actions.ts`" hat sich beim Implementieren als nicht umsetzbar herausgestellt: `registerPasskey()` und `signInWithPasskey()` müssen zwingend **im Browser** laufen, da die WebAuthn-Zeremonie (`navigator.credentials.create()`/`.get()`) direkten Zugriff auf die Browser-API braucht — anders als beim E-Mail+Code-Login gibt es hier keinen reinen Server-Weg. `passkey.list()`/`passkey.delete()` brauchen zwar keine Geräte-Zeremonie, wurden aber aus Konsistenzgründen ebenfalls über denselben Browser-Client aufgerufen statt über einen zusätzlichen Server-Action-Umweg.
+
+**Erstellt 2026-09-21:**
+- `src/lib/supabase/client.ts` — neuer Browser-Supabase-Client (`createBrowserClient` aus `@supabase/ssr`) mit aktiviertem Passkey-Beta-Opt-in (`auth.experimental.passkey: true`); alle Passkey-Operationen laufen ausschliesslich client-seitig darüber
+- `.env.local` / `.env.local.example` — zwei neue `NEXT_PUBLIC_`-Variablen ergänzt (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`), da der Browser-Client öffentlich zugängliche Env-Variablen braucht. Keine neuen Secrets — dieselben, bereits öffentlich unbedenklichen Werte wie die bestehenden Server-Variablen
+- `src/components/login-form.tsx` — `handlePasskeyLogin` ruft jetzt echtes `signInWithPasskey()` auf; bei Erfolg volle Navigation zu `/uebersicht` (nicht Client-Router), damit die serverseitige Zugriffsprüfung (`(protected)/layout.tsx`) und Firmen-Auswahl-Weiterleitung (`getCurrentFirmaId`) dieselbe Sitzung garantiert sehen — identische Weiterleitungslogik wie beim bestehenden E-Mail+Code-Login
+- `src/components/passkey-list.tsx` — lädt die echte Liste per `passkey.list()` beim Mount, `handleAdd`/`handleDelete` rufen `registerPasskey()`/`passkey.delete()` auf und laden danach die Liste neu (kein optimistisches lokales Update, um denselben Datenstand wie Supabase zu garantieren)
+
+**Technischer Fund:** Dieselbe `react-hooks/set-state-in-effect`-Regel wie schon im Frontend-Durchlauf blockierte zunächst das Laden der Passkey-Liste beim Mount (`promise.finally(() => setState(...))`). Gelöst durch eine benannte `async function load()` innerhalb des Effekts statt einer direkt angehängten `.finally()`-Kette — funktional identisch, aber von der Regel akzeptiert; entspricht dem in der React-Doku selbst gezeigten "Fetching data"-Effect-Muster.
+
+**Live gegen die echte Supabase-Instanz verifiziert (Nutzer, echtes Gerät/Windows Hello):**
+- Passkey-Registrierung über `/sicherheit` (nach vorherigem E-Mail+Code-Login) — funktioniert, Geräte-Bestätigung wird korrekt ausgelöst
+- Anschliessender Passkey-Login auf der Login-Seite — funktioniert ohne E-Mail-Eingabe, landet korrekt im geschützten Bereich
+- Beide offenen technischen Fragen aus der Spec damit implizit positiv beantwortet (siehe Open Questions)
+- `npm run build`, `npm run lint`, `npm test` (66/66) fehlerfrei
+
+**Nicht automatisiert testbar:** der komplette WebAuthn-Flow selbst (braucht ein echtes Gerät mit Biometrie/Security-Key) — wie schon bei PROJ-2 nur manuell durch den Nutzer verifizierbar, nicht wiederholbar in CI.
+
+**Manuelle Supabase-Dashboard-Einstellung nötig (nicht durch mich setzbar):** Unter **Authentication → Passkeys** musste "Enable Passkey authentication" aktiviert und Relying Party Display Name/ID/Origins gesetzt werden (lokal: `localhost` / `http://localhost:3000`). Für Production muss das bei `/deploy` auf die echte Domain umgestellt werden.
 
 ## QA Test Results
 _To be added by /qa_

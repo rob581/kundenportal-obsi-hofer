@@ -10,6 +10,7 @@ import {
   InputOTPSlot,
 } from "@/components/ui/input-otp";
 import { requestLoginCode, verifyLoginCode } from "@/app/login/actions";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Step = "email" | "code";
 
@@ -42,15 +43,25 @@ export function LoginForm() {
   const [passkeyPending, setPasskeyPending] = useState(false);
   const [passkeyError, setPasskeyError] = useState<string | null>(null);
 
-  function handlePasskeyLogin() {
+  async function handlePasskeyLogin() {
     setPasskeyError(null);
     setPasskeyPending(true);
-    // TODO(/backend PROJ-6): supabase.auth.signInWithPasskey() aufrufen
-    // (discoverable credentials, keine E-Mail nötig), danach dieselbe
-    // Weiterleitung wie bei verifyLoginCode (Firmen-Auswahl/Übersicht/
-    // Kein Zugang je nach getPortalAccess).
-    setPasskeyPending(false);
-    setPasskeyError("Passkey-Login ist noch nicht angebunden (folgt bei /backend).");
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: passkeyLoginError } = await supabase.auth.signInWithPasskey();
+
+    if (passkeyLoginError) {
+      setPasskeyPending(false);
+      setPasskeyError("Passkey-Anmeldung fehlgeschlagen oder abgebrochen. Bitte erneut versuchen.");
+      return;
+    }
+
+    // Volle Navigation statt Client-Router: (protected)/layout.tsx prüft die
+    // Sitzung serverseitig (getPortalAccess -> ggf. Kein Zugang) und
+    // /uebersicht leitet bei mehreren Firmen selbst zur Firmen-Auswahl um
+    // (getCurrentFirmaId) — exakt dieselbe Weiterleitungslogik wie beim
+    // E-Mail+Code-Login in verifyLoginCode.
+    window.location.assign("/uebersicht");
   }
 
   function handleRequestCode(event: FormEvent) {

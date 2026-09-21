@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -14,12 +14,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const MAX_PASSKEYS = 5;
 
 type Passkey = {
   id: string;
-  createdAt: string;
+  created_at: string;
 };
 
 function formatDate(iso: string): string {
@@ -32,23 +33,65 @@ function formatDate(iso: string): string {
 
 export function PasskeyList() {
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isPending, setIsPending] = useState(false);
+
+  async function reloadPasskeys() {
+    const supabase = createSupabaseBrowserClient();
+    const { data, error: listError } = await supabase.auth.passkey.list();
+    if (listError) {
+      setError("Passkeys konnten nicht geladen werden.");
+      return;
+    }
+    setPasskeys(data);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      await reloadPasskeys();
+      if (!cancelled) setIsLoading(false);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleAdd() {
     setError(null);
     setIsPending(true);
-    // TODO(/backend PROJ-6): supabase.auth.registerPasskey() aufrufen
-    // (löst die native Geräte-Bestätigung aus), danach die echte Liste
-    // neu laden statt lokal zu simulieren.
-    setPasskeys((current) => [...current, { id: crypto.randomUUID(), createdAt: new Date().toISOString() }]);
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: registerError } = await supabase.auth.registerPasskey();
+
+    if (registerError) {
+      setError("Passkey konnte nicht eingerichtet werden — abgebrochen oder Gerät nicht unterstützt.");
+      setIsPending(false);
+      return;
+    }
+
+    // Liste neu laden statt den neuen Eintrag selbst zusammenzubauen —
+    // stellt sicher, dass wir denselben Datenstand wie Supabase zeigen.
+    await reloadPasskeys();
     setIsPending(false);
   }
 
-  function handleDelete(id: string) {
-    // TODO(/backend PROJ-6): den Passkey serverseitig löschen, danach die
-    // echte Liste neu laden statt lokal zu simulieren.
-    setPasskeys((current) => current.filter((p) => p.id !== id));
+  async function handleDelete(id: string) {
+    setError(null);
+    const supabase = createSupabaseBrowserClient();
+    const { error: deleteError } = await supabase.auth.passkey.delete({ passkeyId: id });
+
+    if (deleteError) {
+      setError("Passkey konnte nicht gelöscht werden.");
+      return;
+    }
+    await reloadPasskeys();
+  }
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Wird geladen…</p>;
   }
 
   const limitReached = passkeys.length >= MAX_PASSKEYS;
@@ -64,7 +107,7 @@ export function PasskeyList() {
           {passkeys.map((passkey) => (
             <Card key={passkey.id}>
               <CardContent className="flex items-center justify-between py-3">
-                <span className="text-sm">Passkey vom {formatDate(passkey.createdAt)}</span>
+                <span className="text-sm">Passkey vom {formatDate(passkey.created_at)}</span>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button type="button" variant="outline" size="sm">
