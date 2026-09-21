@@ -119,16 +119,18 @@ export default async function DashboardPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-              <Card>
-                <CardHeader className="text-center">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total Geräte
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <p className="text-2xl font-semibold">{kennzahlen!.totalGeraete}</p>
-                </CardContent>
-              </Card>
+              <Link href="/uebersicht" className="block">
+                <Card className="transition-colors hover:bg-muted/50">
+                  <CardHeader className="text-center">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Total Geräte
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <p className="text-2xl font-semibold">{kennzahlen!.totalGeraete}</p>
+                  </CardContent>
+                </Card>
+              </Link>
               <Card>
                 <CardHeader className="text-center">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
