@@ -29,6 +29,9 @@ export async function AppHeader({ firmaName }: { firmaName?: string }) {
           <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
             Dashboard
           </Link>
+          <Link href="/sicherheit" className="text-muted-foreground hover:text-foreground">
+            Sicherheit
+          </Link>
         </nav>
         {hatMehrereFirmen && (
           <form action={changeFirma}>

@@ -1,6 +1,6 @@
 # PROJ-6: Passkey-Login
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-21
 
@@ -107,6 +107,23 @@ Siehe Decision Log → Technical Decisions oben.
 ### Abhängigkeiten (Packages)
 - `@supabase/supabase-js` — bereits vorhanden, Passkey-Funktionalität wird über einen expliziten Opt-in beim Client aktiviert (Beta-Feature)
 - shadcn `alert-dialog` — neu zu installieren, für den Lösch-Bestätigungsdialog (entspricht der Konvention aus dem Decision Log: "eigener Namen für Bestätigungsdialoge" wie z. B. bereits für andere destruktive Aktionen üblich)
+
+## Implementation Notes (Frontend)
+
+**Erstellt 2026-09-21 (Platzhalter-Verhalten, ohne echte WebAuthn-Anbindung — folgt bei `/backend`):**
+- `src/app/(protected)/sicherheit/page.tsx` — neue geschützte Seite, wiederverwendet `AppHeader` + Card-Layout analog zu `firmen-auswahl/page.tsx`
+- `src/components/passkey-list.tsx` — neue Client-Component: Liste, leerer Zustand, "Passkey hinzufügen" (simuliert lokal einen Eintrag mit aktuellem Datum), Lösch-Button mit `AlertDialog`-Bestätigung, Hinweistext bei 5/5 erreicht. Beide Aktionen mit `TODO(/backend PROJ-6)`-Kommentaren markiert
+- `src/components/app-header.tsx` — neuer Navigationslink "Sicherheit"
+- `src/components/login-form.tsx` — neuer "Mit Passkey anmelden"-Button oberhalb des E-Mail-Formulars (Schritt 1), nur sichtbar bei WebAuthn-Browser-Unterstützung; Klick zeigt aktuell nur eine Platzhalter-Fehlermeldung
+- Neue shadcn-Komponente installiert: `alert-dialog`
+
+**Technischer Fund:** Eine neue ESLint-Regel (`react-hooks/set-state-in-effect`, vermutlich aus einem eslint-config-next-Update) verbietet das übliche `useState`+`useEffect`-Muster für "Browser-Feature nach dem Mount prüfen" (Hydration-sicher). Stattdessen `useSyncExternalStore` mit einem No-op-`subscribe` verwendet — laut React-Doku ohnehin der sauberere Ansatz für stabile externe Werte wie Browser-Capability-Checks, nicht nur ein Workaround für die Lint-Regel.
+
+**Manuell verifiziert:** Login-Seite mit neuem Passkey-Button in Light/Dark Mode + Mobile (375px) per Playwright geprüft, keine Konsolenfehler, Platzhalter-Fehlermeldung erscheint korrekt bei Klick. `/sicherheit` ohne Session leitet korrekt zu `/login` um. `/sicherheit`-UI selbst (Liste, Hinzufügen, Löschen mit Bestätigung) vom Nutzer live im eingeloggten Zustand bestätigt ("funktioniert"). `npm run build`, `npm run lint`, `npm test` (66/66), volle E2E-Suite (18/18) fehlerfrei.
+
+**Bewusst noch nicht gebaut (folgt bei `/backend`):**
+- Echte Supabase-Passkey-Anbindung (`registerPasskey`, `signInWithPasskey`, Listen/Löschen) — aktuell rein lokale UI-Simulation
+- Die zwei bei `/architecture` recherchierten, aber nicht abschliessend bestätigten Verhaltensweisen (Doppel-Geräte-Schutz, Recency-Anforderung) werden hier empirisch verifiziert
 
 ## QA Test Results
 _To be added by /qa_

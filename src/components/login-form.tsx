@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useState, useSyncExternalStore, useTransition, type FormEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,12 +13,45 @@ import { requestLoginCode, verifyLoginCode } from "@/app/login/actions";
 
 type Step = "email" | "code";
 
+// WebAuthn-Unterstützung ändert sich nie während einer Sitzung, daher
+// braucht subscribe() keine echte Subscription — trotzdem
+// useSyncExternalStore statt useState+useEffect, damit der Server-Snapshot
+// (false, `window` existiert dort nicht) sauber vom Client-Snapshot
+// getrennt bleibt und kein Hydration-Mismatch entsteht.
+function subscribeNoop() {
+  return () => {};
+}
+function getPasskeySupportSnapshot() {
+  return typeof window !== "undefined" && !!window.PublicKeyCredential;
+}
+function getPasskeySupportServerSnapshot() {
+  return false;
+}
+
 export function LoginForm() {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const passkeySupported = useSyncExternalStore(
+    subscribeNoop,
+    getPasskeySupportSnapshot,
+    getPasskeySupportServerSnapshot
+  );
+  const [passkeyPending, setPasskeyPending] = useState(false);
+  const [passkeyError, setPasskeyError] = useState<string | null>(null);
+
+  function handlePasskeyLogin() {
+    setPasskeyError(null);
+    setPasskeyPending(true);
+    // TODO(/backend PROJ-6): supabase.auth.signInWithPasskey() aufrufen
+    // (discoverable credentials, keine E-Mail nötig), danach dieselbe
+    // Weiterleitung wie bei verifyLoginCode (Firmen-Auswahl/Übersicht/
+    // Kein Zugang je nach getPortalAccess).
+    setPasskeyPending(false);
+    setPasskeyError("Passkey-Login ist noch nicht angebunden (folgt bei /backend).");
+  }
 
   function handleRequestCode(event: FormEvent) {
     event.preventDefault();
@@ -59,25 +92,46 @@ export function LoginForm() {
 
   if (step === "email") {
     return (
-      <form onSubmit={handleRequestCode} className="flex flex-col gap-4">
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="email">E-Mail-Adresse</Label>
-          <Input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            placeholder="name@firma.ch"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <Button type="submit" className="w-full" disabled={isPending}>
-          {isPending ? "Code wird gesendet…" : "Code anfordern"}
-        </Button>
-      </form>
+      <div className="flex flex-col gap-4">
+        {passkeySupported && (
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handlePasskeyLogin}
+              disabled={passkeyPending}
+            >
+              {passkeyPending ? "Wird geprüft…" : "Mit Passkey anmelden"}
+            </Button>
+            {passkeyError && <p className="text-sm text-destructive">{passkeyError}</p>}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              <div className="h-px flex-1 bg-border" />
+              oder
+              <div className="h-px flex-1 bg-border" />
+            </div>
+          </>
+        )}
+        <form onSubmit={handleRequestCode} className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="email">E-Mail-Adresse</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              placeholder="name@firma.ch"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" className="w-full" disabled={isPending}>
+            {isPending ? "Code wird gesendet…" : "Code anfordern"}
+          </Button>
+        </form>
+      </div>
     );
   }
 
