@@ -16,6 +16,7 @@ function makeRequest(secret?: string) {
 
 beforeEach(() => {
   process.env.CRON_SECRET = "test-cron-secret";
+  delete process.env.CRON_NOTIFY_ON_SUCCESS;
   runDataverseSyncMock.mockReset();
   sendSyncAlertEmailMock.mockClear();
 });
@@ -80,6 +81,26 @@ describe("GET /api/cron/sync-dataverse", () => {
     expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
       "Dataverse-Sync fehlgeschlagen",
       expect.stringContaining("Dataverse unreachable")
+    );
+  });
+
+  // Temporaerer CRON_NOTIFY_ON_SUCCESS-Schalter (Vercel Hobby zeigt Logs nur
+  // 30 Minuten lang, Cron laeuft nachts) - Standard bleibt unveraendert
+  // (kein Mail-Spam bei jedem sauberen Lauf), siehe .env.local.example.
+  it("sends a summary email on a clean run only when CRON_NOTIFY_ON_SUCCESS is set", async () => {
+    process.env.CRON_NOTIFY_ON_SUCCESS = "true";
+    runDataverseSyncMock.mockResolvedValue({
+      entities: [{ slug: "firmen", fetched: 302, deleted: 3, skippedDueToThreshold: false }],
+      warnings: [],
+      errors: [],
+    });
+
+    const res = await GET(makeRequest("test-cron-secret"));
+
+    expect(res.status).toBe(200);
+    expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
+      "Dataverse-Sync: erfolgreich",
+      expect.stringContaining("firmen")
     );
   });
 

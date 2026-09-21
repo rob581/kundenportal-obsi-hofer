@@ -30,6 +30,16 @@ export async function GET(request: Request) {
         "Dataverse-Sync: Probleme beim täglichen Lauf",
         allIssues.join("\n")
       );
+    } else if (process.env.CRON_NOTIFY_ON_SUCCESS) {
+      // TEMPORÄR (siehe .env.local.example): Vercel Hobby zeigt Logs nur für
+      // die letzten 30 Minuten an, der Cron läuft aber nachts um 3 Uhr — ohne
+      // diese Mail lässt sich ein sauberer Lauf morgens nicht mehr
+      // nachvollziehen. Einfach CRON_NOTIFY_ON_SUCCESS wieder entfernen,
+      // sobald die Überwachungsphase vorbei ist.
+      const summary = result.entities
+        .map((e) => `"${e.slug}": ${e.fetched} geladen, ${e.deleted} gelöscht${e.skippedDueToThreshold ? " (Löschung übersprungen)" : ""}`)
+        .join("\n");
+      await sendSyncAlertEmail("Dataverse-Sync: erfolgreich", summary || "Keine Entities konfiguriert.");
     }
 
     return NextResponse.json(result);
