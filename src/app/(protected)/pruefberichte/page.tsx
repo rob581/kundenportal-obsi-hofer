@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
-import { getPruefberichteFuerFirma } from "@/lib/pruefberichte/mock-data";
+import { getPruefberichteFuerFirma } from "@/lib/pruefberichte/queries";
 import type { Zeitraum } from "@/lib/pruefberichte/types";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";

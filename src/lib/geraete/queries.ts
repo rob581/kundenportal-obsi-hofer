@@ -96,7 +96,10 @@ function mapGeraetRow(row: GeraetRow, standortName: string | null, artikel: Arti
   };
 }
 
-async function getArtikelMapFuerIds(artikelIds: string[]): Promise<Map<string, ArtikelInfo>> {
+// Exportiert seit PROJ-9 — auch die firmenweite Prüfberichte-Übersicht
+// braucht Artikel-Infos für ihre "Gerät"-Spalte, batcht dafür aber selbst
+// nur eine kleine, bereits paginierte Geräte-Menge (siehe pruefberichte/queries.ts).
+export async function getArtikelMapFuerIds(artikelIds: string[]): Promise<Map<string, ArtikelInfo>> {
   if (artikelIds.length === 0) return new Map();
 
   const supabase = getSupabaseAdmin();

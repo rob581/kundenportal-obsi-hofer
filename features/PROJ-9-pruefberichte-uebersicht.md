@@ -130,6 +130,19 @@ Keine neuen — nutzt die bestehenden shadcn-Komponenten (`Select`, `Table`, `Pa
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` (117 Tests, unverändert) und `npm run build` laufen fehlerfrei durch.
 - Noch offen (für `/backend`): echte `getPruefberichteFuerFirma`-Implementierung mit der in der Architektur festgelegten gruppierten Abfrage (Chunking über Geräte-IDs), In-Memory-Sortierung/Paginierung, und Geräte-/Artikel-Anreicherung nur für die aktuell angezeigte Seite.
 
+## Implementation Notes (Backend)
+
+- `src/lib/geraete/queries.ts`: `getArtikelMapFuerIds` exportiert (bisher privat) — die firmenweite Prüfberichte-Übersicht braucht dieselbe Artikel-Batch-Abfrage für ihre "Gerät"-Spalte, batcht dabei aber nur eine kleine, bereits paginierte Geräte-Menge.
+- `src/lib/pruefberichte/queries.ts`: Mock-Data-Schicht durch echte Implementierung von `getPruefberichteFuerFirma` ersetzt, wie in der Architektur festgelegt:
+  1. Firma→Standort→Geräte-Auflösung (wiederverwendet `getStandortIdsFuerFirma` aus PROJ-8) liefert die Geräte-IDs der Firma
+  2. Diese IDs werden in Gruppen von 200 (`GERAET_ID_CHUNK_SIZE`, gleiche Grösse/Begründung wie PROJ-8) gegen `dv_pruefberichte` abgefragt (`deleted_at is null`, optional `pruefdatum >= Zeitraum-Cutoff`), alle Gruppen-Ergebnisse zusammengeführt
+  3. In JS nach Datum absteigend sortiert (undatierte Berichte ans Ende, gleiche Konvention wie `getPruefberichteFuerGeraet`/PROJ-4), dann die gewünschte Seite (25 Einträge) ausgeschnitten
+  4. Erst danach: Geräte-/Artikel-Lookup ausschliesslich für die auf der Seite tatsächlich vorkommenden Geräte-IDs (max. 25), `formatArtikelInfo` (PROJ-3) liefert das "Gerät"-Label
+- Mock-Data-Schicht `src/lib/pruefberichte/mock-data.ts` gelöscht, Seite importiert jetzt direkt aus `queries.ts`.
+- Kein neuer API-Endpoint — Server Component liest weiterhin direkt über `getSupabaseAdmin()`, konsistent mit PROJ-3/5/7/8.
+- 10 neue Tests in `queries.test.ts`: leere Firma (keine Standorte/Geräte), Firma-Isolation (Prüfbericht eines fremden Geräts wird nicht mitgezählt), Soft-Delete-Ausschluss, Sortierung über mehrere Geräte hinweg inkl. undatierter Berichte, Zeitraum-Filter (konkreter Wert und "alle"), In-Memory-Paginierung über 30 simulierte Einträge, Artikel-Info-Anreicherung, Bemerkungen/Prüfer-Durchreichung. Mock-Query-Builder in `queries.test.ts` um `.in()`/`.gte()` ergänzt. Insgesamt 127 Tests grün.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
+
 ## QA Test Results
 _To be added by /qa_
 
