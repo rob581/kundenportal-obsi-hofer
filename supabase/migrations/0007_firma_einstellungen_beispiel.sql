@@ -10,13 +10,18 @@
 -- Gültige Keys (siehe ZUSATZSPALTEN_POOL in src/lib/geraete/zusatzspalten.ts):
 -- seriennummer, barcode, kundenId, zubehoer, bemerkungen, artikelTyp, artikelDimension
 --
--- Vorsicht bei mehrdeutigen Namen: liefert der ilike-Filter mehr als eine
--- Firma, schlägt der insert mit "more than one row returned by a subquery"
--- fehl (kein stiller Fehltreffer) — Namen dann präziser fassen.
+-- dv_firmen hat zwei Namensfelder (name, name2, siehe PROJ-1-Schema) — der
+-- gesuchte Firmenname steht nicht immer in name, deshalb beide durchsuchen.
+--
+-- Vorsicht bei mehrdeutigen Namen: liefert der Filter mehr als eine Firma,
+-- schlägt der insert mit "more than one row returned by a subquery" fehl
+-- (kein stiller Fehltreffer). Liefert er gar keine Zeile, wird auch nichts
+-- eingefügt — aber ohne jede Fehlermeldung. Bei Unsicherheit vorher separat
+-- prüfen: select id, name, name2 from dv_firmen where name ilike '%...%' or name2 ilike '%...%';
 insert into portal_firma_einstellungen (firma_id, zusatzspalten)
 select id, array['seriennummer', 'kundenId']
 from dv_firmen
-where name ilike '%Firmenname hier%'
+where name ilike '%Firmenname hier%' or name2 ilike '%Firmenname hier%'
 on conflict (firma_id) do update set
   zusatzspalten = excluded.zusatzspalten,
   updated_at = now();
