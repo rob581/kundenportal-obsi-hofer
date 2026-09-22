@@ -14,10 +14,9 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const NAV_LINKS = [
-  { href: "/uebersicht", label: "Übersicht" },
   { href: "/dashboard", label: "Dashboard" },
+  { href: "/uebersicht", label: "Geräte" },
   { href: "/pruefberichte", label: "Prüfberichte" },
-  { href: "/sicherheit", label: "Sicherheit" },
 ];
 
 export function AppHeaderMobileMenu({
@@ -69,6 +68,13 @@ export function AppHeaderMobileMenu({
               Abmelden
             </Button>
           </form>
+          <Link
+            href="/sicherheit"
+            onClick={() => setOpen(false)}
+            className="text-center text-sm text-muted-foreground hover:text-foreground"
+          >
+            Sicherheit
+          </Link>
           <div className="flex justify-center pt-2">
             <ThemeToggle />
           </div>

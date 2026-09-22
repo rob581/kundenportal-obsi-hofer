@@ -29,17 +29,14 @@ export async function AppHeader({ firmaName }: { firmaName?: string }) {
       )}
       <div className="hidden items-center gap-4 sm:flex sm:justify-self-end">
         <nav className="flex items-center gap-4 text-sm">
-          <Link href="/uebersicht" className="text-muted-foreground hover:text-foreground">
-            Übersicht
-          </Link>
           <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
             Dashboard
           </Link>
+          <Link href="/uebersicht" className="text-muted-foreground hover:text-foreground">
+            Geräte
+          </Link>
           <Link href="/pruefberichte" className="text-muted-foreground hover:text-foreground">
             Prüfberichte
-          </Link>
-          <Link href="/sicherheit" className="text-muted-foreground hover:text-foreground">
-            Sicherheit
           </Link>
         </nav>
         {hatMehrereFirmen && (
@@ -54,6 +51,9 @@ export async function AppHeader({ firmaName }: { firmaName?: string }) {
             Abmelden
           </Button>
         </form>
+        <Link href="/sicherheit" className="text-sm text-muted-foreground hover:text-foreground">
+          Sicherheit
+        </Link>
         <ThemeToggle />
       </div>
       <AppHeaderMobileMenu
