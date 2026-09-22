@@ -1,6 +1,6 @@
 # PROJ-9: Prüfberichte-Übersicht
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -240,4 +240,7 @@ Keine neuen — nutzt die bestehenden shadcn-Komponenten (`Select`, `Table`, `Pa
 - **Recommendation:** Status auf "Approved" setzen. BUG-1 (robustere `zeitraumCutoff`) vor oder während der Umsetzung von PROJ-10 mitnehmen, kein Grund für einen Deployment-Aufschub von PROJ-9 selbst.
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-22 (automatisch via Vercel bei Push auf `main`, alle PROJ-9-Commits liefen bereits vor diesem `/deploy`-Schritt live)
+- **Verifiziert:** `npm run build`/`npm run lint` lokal fehlerfrei vor jedem Push; keine neuen Umgebungsvariablen, keine neue Migration nötig. Live-Verifikation der neuen Seite (echte Firma-Daten, Zeitraum-Filter, Dashboard-Verlinkung, Header-Nav-Link) steht beim Nutzer noch aus — bitte nach dem Rollout kurz auf `/pruefberichte` gegenprüfen.
+- **Bekannte, nicht blockierende Restarbeit:** BUG-1 aus den QA-Ergebnissen (`zeitraumCutoff` nicht robust gegen ungültige Werte) — vor oder während PROJ-10 (CSV-Export der Prüfberichte-Übersicht) mitnehmen, da diese Funktion dort voraussichtlich wiederverwendet wird.
