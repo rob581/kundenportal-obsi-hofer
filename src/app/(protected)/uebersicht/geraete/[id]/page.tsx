@@ -78,6 +78,7 @@ export default async function GeraetDetailPage({
           <CardContent className="grid grid-cols-1 gap-4 py-6 sm:grid-cols-2">
             <Field label="Seriennummer" value={geraet.seriennummer} />
             <Field label="Barcode" value={geraet.barcode} />
+            <Field label="KundenID" value={geraet.kundenId} />
             <Field label="Standort" value={geraet.standortName} />
             <Field label="Lagerort" value={geraet.lagerort} />
             <Field label="Letzte Prüfung" value={formatDatum(geraet.letztePruefung)} />
