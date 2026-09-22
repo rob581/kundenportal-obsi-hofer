@@ -1,6 +1,6 @@
 # PROJ-8: CSV-Export der Geräte-Übersicht
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -231,4 +231,7 @@ Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibli
 - **Recommendation:** Status auf "Approved" setzen. BUG-1 (Rate-Limiting) optional bei einem künftigen, projektweiten Rate-Limiting-Durchgang mitnehmen, kein Grund für einen Deployment-Aufschub.
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-22 (automatisch via Vercel bei Push auf `main`, Commit `88d10ad` und alle vorherigen PROJ-8-Commits liefen bereits vor diesem `/deploy`-Schritt live)
+- **Verifiziert:** `npm run build`/`npm run lint` lokal fehlerfrei vor jedem Push; keine neuen Umgebungsvariablen nötig (nutzt ausschliesslich die bestehende Supabase-Anbindung); Deployment-Log ohne Warnungen. Live-Verifikation des eigentlichen Downloads (echte Firma-Daten, Zusatzspalten, Excel-Öffnen) steht beim Nutzer noch aus — bitte nach dem Rollout kurz auf `/uebersicht` gegenprüfen.
+- **Bekannte, nicht blockierende Restarbeit:** BUG-1 aus den QA-Ergebnissen (kein Rate-Limiting) — optional bei einem künftigen, projektweiten Rate-Limiting-Durchgang.
