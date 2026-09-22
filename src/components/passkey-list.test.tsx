@@ -4,11 +4,12 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 const listMock = vi.fn();
 const registerPasskeyMock = vi.fn();
 const deleteMock = vi.fn();
+const updateMock = vi.fn();
 
 vi.mock("@/lib/supabase/client", () => ({
   createSupabaseBrowserClient: () => ({
     auth: {
-      passkey: { list: listMock, delete: deleteMock },
+      passkey: { list: listMock, delete: deleteMock, update: updateMock },
       registerPasskey: registerPasskeyMock,
     },
   }),
@@ -20,6 +21,7 @@ beforeEach(() => {
   listMock.mockReset();
   registerPasskeyMock.mockReset();
   deleteMock.mockReset();
+  updateMock.mockReset();
 });
 
 describe("PasskeyList", () => {
@@ -116,5 +118,81 @@ describe("PasskeyList", () => {
 
     await waitFor(() => expect(deleteMock).toHaveBeenCalledWith({ passkeyId: "pk1" }));
     expect(await screen.findByText("Noch kein Passkey eingerichtet.")).toBeInTheDocument();
+  });
+
+  it("shows the friendly name instead of the creation date once one is set", async () => {
+    listMock.mockResolvedValue({
+      data: [{ id: "pk1", created_at: "2026-09-21T10:00:00.000Z", friendly_name: "iPhone von Robert" }],
+      error: null,
+    });
+
+    render(<PasskeyList />);
+
+    expect(await screen.findByText("iPhone von Robert")).toBeInTheDocument();
+    expect(screen.queryByText("Passkey vom 21.09.2026")).not.toBeInTheDocument();
+  });
+
+  it("prompts for a name right after registering a new passkey, and saves it", async () => {
+    listMock
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [{ id: "pk1", created_at: "2026-09-21T10:00:00.000Z" }], error: null })
+      .mockResolvedValueOnce({
+        data: [{ id: "pk1", created_at: "2026-09-21T10:00:00.000Z", friendly_name: "iPhone von Robert" }],
+        error: null,
+      });
+    registerPasskeyMock.mockResolvedValue({ data: { id: "pk1" }, error: null });
+    updateMock.mockResolvedValue({ data: null, error: null });
+
+    render(<PasskeyList />);
+    fireEvent.click(await screen.findByRole("button", { name: "Passkey hinzufügen" }));
+
+    expect(await screen.findByText("Passkey benennen")).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "iPhone von Robert" } });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith({ passkeyId: "pk1", friendlyName: "iPhone von Robert" })
+    );
+    expect(await screen.findByText("iPhone von Robert")).toBeInTheDocument();
+  });
+
+  it("keeps the passkey unnamed when the naming dialog is skipped", async () => {
+    listMock
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [{ id: "pk1", created_at: "2026-09-21T10:00:00.000Z" }], error: null });
+    registerPasskeyMock.mockResolvedValue({ data: { id: "pk1" }, error: null });
+
+    render(<PasskeyList />);
+    fireEvent.click(await screen.findByRole("button", { name: "Passkey hinzufügen" }));
+
+    fireEvent.click(await screen.findByRole("button", { name: "Überspringen" }));
+
+    expect(updateMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Passkey benennen")).not.toBeInTheDocument();
+  });
+
+  it("allows renaming an already existing passkey", async () => {
+    listMock
+      .mockResolvedValueOnce({
+        data: [{ id: "pk1", created_at: "2026-09-21T10:00:00.000Z" }],
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: [{ id: "pk1", created_at: "2026-09-21T10:00:00.000Z", friendly_name: "Laptop Büro" }],
+        error: null,
+      });
+    updateMock.mockResolvedValue({ data: null, error: null });
+
+    render(<PasskeyList />);
+    fireEvent.click(await screen.findByRole("button", { name: "Umbenennen" }));
+
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Laptop Büro" } });
+    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() =>
+      expect(updateMock).toHaveBeenCalledWith({ passkeyId: "pk1", friendlyName: "Laptop Büro" })
+    );
+    expect(await screen.findByText("Laptop Büro")).toBeInTheDocument();
   });
 });

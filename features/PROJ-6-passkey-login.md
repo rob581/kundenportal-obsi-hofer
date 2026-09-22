@@ -149,6 +149,8 @@ Siehe Decision Log → Technical Decisions oben.
 
 **Manuelle Supabase-Dashboard-Einstellung nötig (nicht durch mich setzbar):** Unter **Authentication → Passkeys** musste "Enable Passkey authentication" aktiviert und Relying Party Display Name/ID/Origins gesetzt werden (lokal: `localhost` / `http://localhost:3000`). Für Production muss das bei `/deploy` auf die echte Domain umgestellt werden.
 
+**Revidiert Out-of-Scope-Entscheid (2026-09-22, Nutzerwunsch):** Der ursprüngliche Entscheid "Eigene Namensvergabe für Passkeys durch den Kunden — automatische Datums-Benennung für v1" (Out of Scope, siehe Decision Log 2026-09-21) ist damit aufgehoben. Passkeys lassen sich jetzt benennen, statt nur "Passkey vom {Datum}" anzuzeigen — WebAuthn liefert selbst keinen verlässlichen Gerätenamen (Privacy-Feature des Standards), Supabase löst das über das vorhandene, bisher ungenutzte `friendly_name`-Feld (`supabase.auth.passkey.update({ passkeyId, friendlyName })`). Direkt nach `registerPasskey()` öffnet sich jetzt ein neuer Namens-Dialog (`Dialog`, neu installierte shadcn-Komponente, z.B. "iPhone von Robert"); zusätzlich gibt es einen "Umbenennen"-Button pro Eintrag, um bereits bestehende oder übersprungene Passkeys nachträglich zu benennen. Anzeige fällt weiterhin auf "Passkey vom {Datum}" zurück, solange kein Name gesetzt ist. `Passkey`-Typ um optionales `friendly_name` erweitert. 4 neue Tests (Namensanzeige, Benennen direkt nach Registrierung, Überspringen, nachträgliches Umbenennen) — 84 Tests grün.
+
 ## QA Test Results
 
 **Tested:** 2026-09-21
