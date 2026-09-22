@@ -74,12 +74,50 @@ Keine offenen Fragen — alle Kernentscheidungen wurden im Interview getroffen.
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Neuer Route Handler (`src/app/api/uebersicht/export`) statt Server Action | Ein Datei-Download braucht eine echte, navigierbare URL mit passenden HTTP-Headern (Dateiname, Dateityp); ein einfacher Link, den der Browser direkt aufruft, ist robuster als eine Server Action, die im Client erst eine Datei aus Rohdaten zusammenbauen müsste | 2026-09-22 |
+| Route Handler prüft die Kunden-Session selbst (analog zum bestehenden Cron-Endpoint, nur mit normaler Supabase-Session statt Secret) | API-Routen liegen ausserhalb der automatischen Schutzschicht von `(protected)/layout.tsx`, die nur für Seiten gilt | 2026-09-22 |
+| Export-Abfrage wiederverwendet dieselbe Firma→Standort-Auflösung und denselben Status-/Suche-/Zu-prüfen-Filter wie `getGeraeteList` (PROJ-3/PROJ-7), nur ohne `.range()`-Seitenbegrenzung | Vermeidet zwei unabhängige Implementierungen derselben Firma-Isolation und Filterlogik — ein künftiger Fix an einer Stelle wirkt automatisch auch am Export | 2026-09-22 |
+| Artikel-Zusatzinformationen für den Export werden in Gruppen abgefragt (Batching), nicht in einer einzigen Anfrage mit allen Artikel-IDs | Gleiche Ursache wie der bereits behobene Dashboard-Bug (PROJ-5 BUG-2): eine `.in()`-Anfrage mit sehr vielen IDs kann die Anfrage-URL so lang machen, dass die zugrunde liegende Anfrage fehlschlägt, statt eine saubere Antwort zu liefern | 2026-09-22 |
+| Die komplette CSV wird in einem Rutsch im Arbeitsspeicher erzeugt und zurückgegeben, kein Streaming | Bei der zu erwartenden Grössenordnung (deutlich unter 100'000 Geräte pro Firma) unproblematisch und deutlich einfacher umzusetzen als eine gestreamte Antwort | 2026-09-22 |
+| Kein neues Package für die CSV-Erzeugung | Die nötigen Regeln (Semikolon-Trennung, Anführungszeichen bei Sonderzeichen, Formel-Escaping) sind einfach genug für eine kleine, selbst geschriebene Hilfsfunktion — spart eine zusätzliche Abhängigkeit für eine überschaubare Aufgabe | 2026-09-22 |
+| Export-Button lebt als serverseitig gerenderter Link (kein Client-Component-Zustand nötig) | Der Deaktiviert-Zustand (0 Treffer) ist bereits auf der Seite bekannt (`result.total`); die aktuellen Filter stehen bereits als URL-Parameter zur Verfügung und werden 1:1 an den Export-Link weitergereicht | 2026-09-22 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+/uebersicht (bestehende PROJ-3/PROJ-7-Seite, erweitert)
+├── AppHeader (unverändert)
+├── GeraeteFilterBar (unverändert)
+├── NEU: "Als CSV exportieren"-Link/Button
+│   ├── Deaktiviert, wenn die aktuellen Filter 0 Treffer liefern
+│   └── Trägt die aktuellen Filter (Status/Suche/Zu-prüfen) als URL-Parameter zum Export-Endpunkt weiter
+└── Geräte-Tabelle (unverändert, PROJ-3/PROJ-7)
+
+NEU: /api/uebersicht/export (Route Handler)
+├── Prüft die Kunden-Session (wie jede geschützte Seite, aber selbst implementiert)
+├── Löst die aktuell ausgewählte Firma auf (wie /uebersicht)
+├── Liest dieselben Filter-Parameter wie /uebersicht (Status, Suche, Zu-prüfen)
+├── Liest die Firma-Einstellungen (PROJ-7), um die aktivierten Zusatzspalten zu bestimmen
+├── Baut die vollständige, ungepaginierte Geräteliste inkl. aller Detailfelder
+└── Liefert eine CSV-Datei als Download-Antwort (Dateiname, Content-Type als HTTP-Header)
+```
+
+### Datenmodell (in Textform)
+
+- Kein neues Datenfeld, keine neue Tabelle — der Export liest exakt dieselben Daten wie die Übersicht (Geräte, Artikel, Firma-Einstellungen), nur ohne die 25er-Seitenbegrenzung
+- Jede Export-Zeile entspricht einem Gerät mit denselben Feldern, die im Interview festgelegt wurden (Standard-/Detailfelder immer, PROJ-7-Zusatzspalten nur wenn für die Firma aktiviert, in derselben festen Reihenfolge wie in der Übersicht-Tabelle)
+- Die Datei wird nicht gespeichert — sie entsteht bei jedem Klick frisch aus der Datenbank und wird direkt zum Download geschickt, kein Zwischenspeichern in Supabase Storage o.ä.
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibliothek nötig (siehe Decision Log).
 
 ## QA Test Results
 _To be added by /qa_
