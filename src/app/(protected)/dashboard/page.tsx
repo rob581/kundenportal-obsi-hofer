@@ -58,7 +58,8 @@ export default async function DashboardPage() {
   let loadError: string | null = null;
   try {
     kennzahlen = await getDashboardKennzahlen(currentFirmaId);
-  } catch {
+  } catch (error) {
+    console.error("getDashboardKennzahlen fehlgeschlagen:", error);
     loadError = "Die Kennzahlen konnten nicht geladen werden.";
   }
 

@@ -150,6 +150,26 @@ describe("getDashboardKennzahlen", () => {
     expect(result.totalPruefberichte).toBe(3);
   });
 
+  it("counts Prüfberichte correctly across chunked queries for a Firma with many Geräte", async () => {
+    // Regression test for a live bug: .in("geraet_id", ...) with hundreds of
+    // IDs in one request made the underlying fetch() fail outright. 250
+    // Geräte forces the 200-per-chunk batching to actually kick in.
+    const geraete = Array.from({ length: 250 }, (_, i) => ({
+      id: `g${i}`,
+      standort_id: STANDORT_A,
+      status: "Freigabe",
+      letzte_pruefung: "2026-01-01",
+    }));
+    const pruefberichte = geraete.map((g, i) => ({ id: `pb${i}`, geraet_id: g.id, deleted_at: null }));
+
+    seedFirma(geraete, pruefberichte);
+
+    const result = await getDashboardKennzahlen("f1");
+
+    expect(result.totalGeraete).toBe(250);
+    expect(result.totalPruefberichte).toBe(250);
+  });
+
   it("counts a Gerät as 'zu prüfen' when never inspected or inspected over 360 days ago", async () => {
     seedFirma([
       { id: "recent", standort_id: STANDORT_A, status: "Freigabe", letzte_pruefung: daysAgo(10) },

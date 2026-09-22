@@ -18,6 +18,21 @@ function getZuPruefenCutoff(): string {
   return cutoff.toISOString().slice(0, 10);
 }
 
+// PostgREST's .in() inlines every ID into the request URL — with a Firma
+// that has hundreds/thousands of Geräte, that URL can get long enough to
+// make the underlying fetch() fail outright (seen live as "TypeError: fetch
+// failed", not even a proper HTTP error) instead of returning a clean
+// response. Chunking keeps each request's URL to a safe size.
+const PRUEFBERICHTE_COUNT_CHUNK_SIZE = 200;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 const EMPTY_KENNZAHLEN: DashboardKennzahlen = {
   totalGeraete: 0,
   statusFreigabe: 0,
@@ -91,15 +106,21 @@ export async function getDashboardKennzahlen(firmaId: string): Promise<Dashboard
   }
 
   const geraetIds = geraete.map((g) => g.id);
-  const { count, error: pruefberichteError } = await supabase
-    .from("dv_pruefberichte")
-    .select("id", { count: "exact", head: true })
-    .in("geraet_id", geraetIds)
-    .is("deleted_at", null);
+  const geraetIdChunks = chunk(geraetIds, PRUEFBERICHTE_COUNT_CHUNK_SIZE);
+  const chunkCounts = await Promise.all(
+    geraetIdChunks.map(async (idChunk) => {
+      const { count, error: pruefberichteError } = await supabase
+        .from("dv_pruefberichte")
+        .select("id", { count: "exact", head: true })
+        .in("geraet_id", idChunk)
+        .is("deleted_at", null);
 
-  if (pruefberichteError) {
-    throw new Error(`Dashboard-Prüfberichte-Lookup fehlgeschlagen: ${pruefberichteError.message}`);
-  }
+      if (pruefberichteError) {
+        throw new Error(`Dashboard-Prüfberichte-Lookup fehlgeschlagen: ${pruefberichteError.message}`);
+      }
+      return count ?? 0;
+    })
+  );
 
   return {
     totalGeraete: geraete.length,
@@ -107,7 +128,7 @@ export async function getDashboardKennzahlen(firmaId: string): Promise<Dashboard
     statusKeineFreigabe,
     statusLetzteFreigabe,
     statusKeinStatus,
-    totalPruefberichte: count ?? 0,
+    totalPruefberichte: chunkCounts.reduce((sum, c) => sum + c, 0),
     letztePruefung,
     zuPruefen,
   };
