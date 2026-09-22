@@ -1,8 +1,8 @@
 # PROJ-7: Kundenspezifische Spalten in der Geräte-Übersicht
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-21
-**Last Updated:** 2026-09-21
+**Last Updated:** 2026-09-22
 
 ## Dependencies
 - Requires: PROJ-3 (Geräte-Übersicht) — erweitert die dort bestehende Tabelle um optionale Zusatzspalten
@@ -68,12 +68,42 @@ Keine offenen Fragen — alle Kernentscheidungen wurden im Interview getroffen.
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Neue, eigenständige Supabase-Tabelle `portal_firma_einstellungen` statt Erweiterung von `dv_firmen` | `dv_firmen` wird bei jedem nächtlichen Sync-Lauf komplett aus Dataverse neu geschrieben — eine reine Portal-Einstellung dort würde beim nächsten Sync verloren gehen | 2026-09-22 |
+| `bmvcc_KundenID` wird über den bestehenden PROJ-1-Sync-Mechanismus synchronisiert (gleiches Feld-Mapping-Muster wie alle anderen Gerätefelder, z.B. Lagerort/Zubehör) | Konsistent mit der bestehenden Sync-Architektur, keine separate Pipeline oder Sonderbehandlung nötig | 2026-09-22 |
+| Zusatzspalten-Logik erweitert die bestehende Geräte-Abfrage-Schicht (`src/lib/geraete/queries.ts`), kein neuer API-Endpoint | Server Components lesen bereits direkt aus Supabase (PROJ-3-Muster); eine zusätzliche Konfigurationsabfrage fügt sich dort nahtlos ein | 2026-09-22 |
+| Feste Pool-Reihenfolge der Zusatzspalten wird als Code-Konstante geführt, nicht als Datenbank-Feld | Die Firma-Konfiguration muss nur speichern, WELCHE Spalten aktiv sind, nicht in welcher Reihenfolge — hält die Konfiguration minimal und die Pflege durch OBSI Hofer einfach (nur eine Liste von Keys pro Firma) | 2026-09-22 |
+| Unbekannte/ungültige Spalten-Keys aus der Konfiguration werden beim Lesen stillschweigend herausgefiltert, statt einen Fehler zu werfen | Ein Tippfehler beim manuellen Pflegen der Konfiguration darf die gesamte Übersicht nicht unbrauchbar machen (siehe AC "unbekannter Spalten-Key") | 2026-09-22 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+/uebersicht (bestehende PROJ-3-Seite, erweitert)
+├── AppHeader (unverändert)
+├── GeraeteFilterBar (unverändert)
+└── Geräte-Tabelle (erweitert)
+    ├── Standard-Spalten (unverändert, immer sichtbar): Gerät, Status, Lagerort, Letzte Prüfung
+    └── NEU: 0–N Zusatzspalten, abhängig von der Firma-Konfiguration
+        └── Auswahl + feste Anzeige-Reihenfolge aus dem Pool: Seriennummer, Barcode, KundenID, Zubehör, Bemerkungen, Typ, Dimension
+```
+
+Keine neuen Seiten oder Navigationselemente — die Detailseite (`/uebersicht/geraete/[id]`) bleibt wie in PROJ-3 unverändert, da sie bereits alle Felder zeigt.
+
+### Datenmodell (in Textform)
+
+- **Neue Konfigurationsquelle "Firma-Einstellungen":** Pro Firma wird festgehalten, welche Zusatzspalten aktiviert sind (eine Liste von Spalten-Kennungen, z.B. "Seriennummer", "KundenID"). Diese Information lebt in einer eigenen, neuen Ablage in Supabase — komplett getrennt von den Dataverse-synchronisierten Tabellen (`dv_*`) und vom nächtlichen Sync-Job unberührt. Firmen ohne Eintrag gelten automatisch als "keine Zusatzspalten".
+- **Erweiterung der Geräte-Daten:** Jedes Gerät bekommt ein zusätzliches Feld "Kunden-Gerätebezeichnung" (Quelle: Dataverse `bmvcc_KundenID`), das genauso wie die bereits vorhandenen Felder (Seriennummer, Barcode, Lagerort, Zubehör, Bemerkungen, Typ, Dimension) beim nächtlichen Sync mitgeführt wird.
+- **Zusammenspiel beim Seitenaufruf:** Die Geräte-Übersicht liest wie bisher die Geräteliste der aktuell gewählten Firma (PROJ-2/PROJ-3) und zusätzlich einmalig die Firma-Einstellungen. Aus beidem zusammen ergibt sich die tatsächlich anzuzeigende Spaltenliste: immer die vier Standard-Spalten, plus die für diese Firma aktivierten Zusatzspalten in fester Pool-Reihenfolge. Unbekannte Spalten-Kennungen in der Konfiguration werden dabei ignoriert.
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+Keine neuen — nutzt weiterhin die bestehende Supabase-Anbindung und die bereits installierte shadcn-`Table`-Komponente (PROJ-3).
 
 ## QA Test Results
 _To be added by /qa_
