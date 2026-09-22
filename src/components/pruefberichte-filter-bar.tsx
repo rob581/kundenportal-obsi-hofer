@@ -30,7 +30,7 @@ export function PruefberichteFilterBar() {
   }
 
   return (
-    <div className="mb-4">
+    <div className="flex-1">
       <Select value={zeitraum} onValueChange={updateZeitraum}>
         <SelectTrigger className="sm:w-56">
           <SelectValue />

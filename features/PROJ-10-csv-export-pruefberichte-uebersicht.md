@@ -1,6 +1,6 @@
 # PROJ-10: CSV-Export der Prüfberichte-Übersicht
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -109,6 +109,15 @@ Siehe Decision Log → Technical Decisions oben.
 
 ### Abhängigkeiten (Packages)
 Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibliothek nötig.
+
+## Implementation Notes (Frontend)
+
+- `src/components/export-csv-button.tsx` (PROJ-8) wiederverwendet statt dupliziert — die Komponente war bereits generisch (`href`/`disabled`-Props, kein Bezug zu Geräten im Verhalten). Einzige Anpassung: Fallback-Dateiname von `"geraete-uebersicht.csv"` auf das generische `"export.csv"` geändert (greift ohnehin nur, falls der Server ausnahmsweise keinen `Content-Disposition`-Header sendet).
+- `src/components/pruefberichte-filter-bar.tsx`: eigenen `mb-4` entfernt, `flex-1` ergänzt — gleiche Umstrukturierung wie bei `GeraeteFilterBar` in PROJ-8, damit der neue Export-Button ohne doppelten Abstand daneben Platz hat.
+- `src/app/(protected)/pruefberichte/page.tsx`: `PruefberichteFilterBar` und `ExportCsvButton` in einem gemeinsamen Flex-Wrapper (identisches Muster wie `/uebersicht`, PROJ-8). Export-Link übernimmt nur `zeitraum` (falls nicht "alle"), lässt `seite` bewusst weg.
+- Der Route Handler `/api/pruefberichte/export` existiert noch nicht — der Button führt bis `/backend` zu einem Fehler beim Klick (Content-Type-Check schlägt fehl, zeigt die normale Fehlermeldung). Kein Mock nötig, gleiche Begründung wie bei PROJ-8.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` (127 Tests, unverändert) und `npm run build` laufen fehlerfrei durch.
+- Noch offen (für `/backend`): der eigentliche Route Handler, `getPruefberichteExportRows` (ungepaginiert, mit für alle Treffer gebatchter Geräte-/Artikel-Anreicherung), robuste `zeitraumCutoff`-Behandlung (behebt PROJ-9 BUG-1), und `buildPruefberichteExportCsv`.
 
 ## QA Test Results
 _To be added by /qa_

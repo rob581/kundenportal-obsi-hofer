@@ -6,6 +6,7 @@ import type { Zeitraum } from "@/lib/pruefberichte/types";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
 import { PruefberichteFilterBar } from "@/components/pruefberichte-filter-bar";
+import { ExportCsvButton } from "@/components/export-csv-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -57,6 +58,11 @@ export default async function PruefberichtePage({
 
   const totalPages = result ? Math.ceil(result.total / result.pageSize) : 0;
 
+  // Export übernimmt den Zeitraum-Filter, aber nie die Seite — er umfasst
+  // laut Spec immer alle zum Zeitraum passenden Prüfberichte (PROJ-10).
+  const exportParams = new URLSearchParams();
+  if (zeitraum !== "alle") exportParams.set("zeitraum", zeitraum);
+
   return (
     <div>
       <AppHeader firmaName={firma?.name ?? "Ihre Firma"} />
@@ -76,7 +82,13 @@ export default async function PruefberichtePage({
           </Card>
         ) : (
           <>
-            <PruefberichteFilterBar />
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <PruefberichteFilterBar />
+              <ExportCsvButton
+                href={`/api/pruefberichte/export?${exportParams.toString()}`}
+                disabled={result!.total === 0}
+              />
+            </div>
 
             {result!.total === 0 ? (
               <Card>
