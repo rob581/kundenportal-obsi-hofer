@@ -14,7 +14,13 @@ import {
 
 const ALL_STATUS_VALUE = "__alle__";
 
-export function GeraeteFilterBar({ statusOptions }: { statusOptions: string[] }) {
+export function GeraeteFilterBar({
+  statusOptions,
+  sucheKundenId = false,
+}: {
+  statusOptions: string[];
+  sucheKundenId?: boolean;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [suche, setSuche] = useState(searchParams.get("suche") ?? "");
@@ -62,7 +68,11 @@ export function GeraeteFilterBar({ statusOptions }: { statusOptions: string[] })
         }}
       >
         <Input
-          placeholder="Suche nach Seriennummer, Barcode oder Lagerort…"
+          placeholder={
+            sucheKundenId
+              ? "Suche nach Seriennummer, Barcode, Lagerort oder KundenID…"
+              : "Suche nach Seriennummer, Barcode oder Lagerort…"
+          }
           value={suche}
           onChange={(e) => setSuche(e.target.value)}
         />

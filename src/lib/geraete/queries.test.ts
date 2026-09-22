@@ -231,6 +231,16 @@ describe("getGeraeteList", () => {
     expect(byName.items).toEqual([]);
   });
 
+  it("only searches KundenID when sucheKundenId is set (Zusatzspalte muss aktiv sein, PROJ-7)", async () => {
+    seedZweiFirmen();
+
+    const ohneFlag = await getGeraeteList("f1", { suche: "KD-2026-001" });
+    expect(ohneFlag.items).toEqual([]);
+
+    const mitFlag = await getGeraeteList("f1", { suche: "KD-2026-001", sucheKundenId: true });
+    expect(mitFlag.items.map((g) => g.id)).toEqual(["g1"]);
+  });
+
   it("sorts by letzte_pruefung descending with never-inspected devices first", async () => {
     seedZweiFirmen();
 

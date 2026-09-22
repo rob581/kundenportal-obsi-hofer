@@ -53,6 +53,8 @@ export default async function UebersichtPage({
     console.error("getFirmaEinstellungen fehlgeschlagen:", error);
   }
 
+  const sucheKundenId = zusatzspalten.some((spalte) => spalte.key === "kundenId");
+
   const params = await searchParams;
   const seite = params.seite ? Number(params.seite) : 1;
 
@@ -64,6 +66,7 @@ export default async function UebersichtPage({
       suche: params.suche,
       seite,
       zuPruefen: params.zuPruefen === "1",
+      sucheKundenId,
     });
   } catch {
     loadError = "Die Gerätedaten konnten nicht geladen werden.";
@@ -93,7 +96,7 @@ export default async function UebersichtPage({
           </Card>
         ) : (
           <>
-            <GeraeteFilterBar statusOptions={result!.statusOptions} />
+            <GeraeteFilterBar statusOptions={result!.statusOptions} sucheKundenId={sucheKundenId} />
 
             {result!.total === 0 ? (
               <Card>

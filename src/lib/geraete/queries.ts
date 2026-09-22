@@ -161,9 +161,9 @@ export async function getGeraeteList(firmaId: string, query: GeraeteQuery): Prom
   }
   if (query.suche) {
     const needle = escapeOrListValue(query.suche.trim());
-    geraeteQuery = geraeteQuery.or(
-      `seriennummer.ilike.%${needle}%,barcode.ilike.%${needle}%,lagerort.ilike.%${needle}%`
-    );
+    const sucheFelder = ["seriennummer", "barcode", "lagerort"];
+    if (query.sucheKundenId) sucheFelder.push("kunden_id");
+    geraeteQuery = geraeteQuery.or(sucheFelder.map((feld) => `${feld}.ilike.%${needle}%`).join(","));
   }
   if (query.zuPruefen) {
     // Eigene .or()-Gruppe, wird laut bestehendem Supabase-Verhalten (siehe

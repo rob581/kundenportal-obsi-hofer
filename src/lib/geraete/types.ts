@@ -28,6 +28,9 @@ export type GeraeteQuery = {
   // Deckt sich exakt mit der "Zu prüfen"-Kennzahl auf dem Dashboard (PROJ-5) —
   // siehe src/lib/geraete/zu-pruefen.ts.
   zuPruefen?: boolean;
+  // Nur true, wenn die Firma die Zusatzspalte "kundenId" aktiviert hat (siehe
+  // PROJ-7) — Suche über ein für die Firma unsichtbares Feld wäre verwirrend.
+  sucheKundenId?: boolean;
 };
 
 export type GeraeteResult = {
