@@ -1,6 +1,6 @@
 # PROJ-7: Kundenspezifische Spalten in der Geräte-Übersicht
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-22
 
@@ -104,6 +104,16 @@ Siehe Decision Log → Technical Decisions oben.
 
 ### Abhängigkeiten (Packages)
 Keine neuen — nutzt weiterhin die bestehende Supabase-Anbindung und die bereits installierte shadcn-`Table`-Komponente (PROJ-3).
+
+## Implementation Notes (Frontend)
+
+- `Geraet`-Typ (`src/lib/geraete/types.ts`) um `kundenId: string | null` erweitert; `mapGeraetRow` in `src/lib/geraete/queries.ts` setzt das Feld vorerst hart auf `null`, da `bmvcc_KundenID` noch nicht Teil der Supabase-Abfrage/-Tabelle ist — wird erst mit der PROJ-1-Sync-Erweiterung befüllt (`/backend`).
+- Neuer Helper `src/lib/geraete/zusatzspalten.ts`: `ZUSATZSPALTEN_POOL` (feste Reihenfolge: Seriennummer, Barcode, KundenID, Zubehör, Bemerkungen, Typ, Dimension) + `resolveZusatzspalten(aktivierteKeys)`, der aus einer Liste aktivierter Keys die anzuzeigenden Spalten in fester Pool-Reihenfolge ableitet — unbekannte Keys werden durch den Filter automatisch ignoriert, Duplikate automatisch dedupliziert (Set-Lookup).
+- Neue Mock-Data-Schicht `src/lib/firma-einstellungen/` (`types.ts`, `mock-data.ts`) mit `getFirmaEinstellungen(firmaId)` — liefert testweise zwei aktive Zusatzspalten (Seriennummer, KundenID), ignoriert `firmaId` bewusst wie bei den anderen Features in ihrer jeweiligen Mock-Phase (PROJ-3/4/5). `/backend` ersetzt nur die Funktionsinnereien durch eine echte Abfrage der neuen `portal_firma_einstellungen`-Tabelle, gleiche async Signatur.
+- `src/app/(protected)/uebersicht/page.tsx` liest die Firma-Einstellungen zusätzlich zur Geräteliste, löst die Zusatzspalten auf und rendert sie nach den vier Standard-Spalten in Tabellenkopf und -zeilen; fehlender Wert zeigt "—" (gleiche Konvention wie die Standard-Spalten).
+- Keine neuen shadcn-Komponenten nötig — nutzt die bestehende `Table`.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` (74 Tests, unverändert) und `npm run build` laufen fehlerfrei durch (ein vorbestehender, unabhängiger `tsc`-Fehler in `passkey-list.test.tsx` bleibt unverändert). Manuelle Live-Verifikation mit echtem Login steht noch aus (Nutzer-Review), da sich der Login-Flow wie bei den anderen Features nicht automatisiert durchspielen lässt.
+- Noch offen (für `/backend`): echte Supabase-Tabelle `portal_firma_einstellungen` + Abfrage, PROJ-1-Sync-Erweiterung für `bmvcc_KundenID` inkl. Migration.
 
 ## QA Test Results
 _To be added by /qa_

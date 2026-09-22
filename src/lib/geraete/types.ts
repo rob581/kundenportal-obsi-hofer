@@ -17,6 +17,10 @@ export type Geraet = {
   artikelNorm: string | null;
   artikelTyp: string | null;
   artikelDimension: string | null;
+  // Kunden-eigene Gerätebezeichnung (Dataverse bmvcc_KundenID) — siehe PROJ-7.
+  // Noch nicht synchronisiert (siehe PROJ-1 Decision Log), daher aktuell
+  // immer null; /backend befüllt dies über die PROJ-1-Sync-Erweiterung.
+  kundenId: string | null;
 };
 
 export type GeraeteQuery = {

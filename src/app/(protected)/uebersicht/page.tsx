@@ -3,6 +3,8 @@ import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraeteList } from "@/lib/geraete/queries";
 import { formatArtikelInfo } from "@/lib/geraete/artikel-info";
+import { resolveZusatzspalten } from "@/lib/geraete/zusatzspalten";
+import { getFirmaEinstellungen } from "@/lib/firma-einstellungen/mock-data";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
 import { GeraeteFilterBar } from "@/components/geraete-filter-bar";
@@ -38,6 +40,9 @@ export default async function UebersichtPage({
   const currentFirmaId = await getCurrentFirmaId();
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
+
+  const einstellungen = await getFirmaEinstellungen(currentFirmaId);
+  const zusatzspalten = resolveZusatzspalten(einstellungen.zusatzspalten);
 
   const params = await searchParams;
   const seite = params.seite ? Number(params.seite) : 1;
@@ -95,6 +100,9 @@ export default async function UebersichtPage({
                           <TableHead>Status</TableHead>
                           <TableHead>Lagerort</TableHead>
                           <TableHead>Letzte Prüfung</TableHead>
+                          {zusatzspalten.map((spalte) => (
+                            <TableHead key={spalte.key}>{spalte.label}</TableHead>
+                          ))}
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -119,6 +127,9 @@ export default async function UebersichtPage({
                             </TableCell>
                             <TableCell>{geraet.lagerort ?? "—"}</TableCell>
                             <TableCell>{formatDatum(geraet.letztePruefung)}</TableCell>
+                            {zusatzspalten.map((spalte) => (
+                              <TableCell key={spalte.key}>{spalte.getValue(geraet) ?? "—"}</TableCell>
+                            ))}
                           </TableRow>
                         ))}
                       </TableBody>

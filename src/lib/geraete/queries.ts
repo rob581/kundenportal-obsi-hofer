@@ -73,6 +73,9 @@ function mapGeraetRow(row: GeraetRow, standortName: string | null, artikel: Arti
     artikelNorm: artikel?.norm ?? null,
     artikelTyp: artikel?.artikeltyp ?? null,
     artikelDimension: artikel?.dimension ?? null,
+    // Noch nicht Teil von GeraetRow/der Supabase-Abfrage — siehe PROJ-7,
+    // wird erst mit der PROJ-1-Sync-Erweiterung für bmvcc_KundenID befüllt.
+    kundenId: null,
   };
 }
 
