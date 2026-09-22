@@ -40,7 +40,7 @@ export function GeraeteFilterBar({
   }
 
   return (
-    <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+    <div className="flex flex-1 flex-col gap-2 sm:flex-row sm:items-center">
       <Select
         value={searchParams.get("status") ?? ALL_STATUS_VALUE}
         onValueChange={(value) =>

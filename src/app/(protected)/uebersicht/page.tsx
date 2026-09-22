@@ -9,6 +9,7 @@ import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
 import { GeraeteFilterBar } from "@/components/geraete-filter-bar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -74,6 +75,14 @@ export default async function UebersichtPage({
 
   const totalPages = result ? Math.ceil(result.total / result.pageSize) : 0;
 
+  // Export übernimmt dieselben Filter wie die aktuelle Ansicht, aber nie die
+  // Seite — er umfasst laut Spec immer alle gefilterten Geräte, nicht nur
+  // die aktuell angezeigte Seite (siehe PROJ-8).
+  const exportParams = new URLSearchParams();
+  if (params.status) exportParams.set("status", params.status);
+  if (params.suche) exportParams.set("suche", params.suche);
+  if (params.zuPruefen) exportParams.set("zuPruefen", params.zuPruefen);
+
   return (
     <div>
       <AppHeader firmaName={firma?.name ?? "Ihre Firma"} />
@@ -96,7 +105,18 @@ export default async function UebersichtPage({
           </Card>
         ) : (
           <>
-            <GeraeteFilterBar statusOptions={result!.statusOptions} sucheKundenId={sucheKundenId} />
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <GeraeteFilterBar statusOptions={result!.statusOptions} sucheKundenId={sucheKundenId} />
+              {result!.total === 0 ? (
+                <Button type="button" variant="outline" disabled className="shrink-0">
+                  Als CSV exportieren
+                </Button>
+              ) : (
+                <Button type="button" variant="outline" asChild className="shrink-0">
+                  <a href={`/api/uebersicht/export?${exportParams.toString()}`}>Als CSV exportieren</a>
+                </Button>
+              )}
+            </div>
 
             {result!.total === 0 ? (
               <Card>

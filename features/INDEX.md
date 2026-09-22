@@ -22,7 +22,7 @@
 | PROJ-5 | Dashboard | Deployed | [Spec](../features/PROJ-5-dashboard.md) | 2026-09-15 |
 | PROJ-6 | Passkey-Login | Deployed | [Spec](../features/PROJ-6-passkey-login.md) | 2026-09-21 |
 | PROJ-7 | Kundenspezifische Spalten in der Geräte-Übersicht | Deployed | [Spec](../features/PROJ-7-kundenspezifische-spalten.md) | 2026-09-21 |
-| PROJ-8 | CSV-Export der Geräte-Übersicht | Architected | [Spec](../features/PROJ-8-csv-export-geraete-uebersicht.md) | 2026-09-22 |
+| PROJ-8 | CSV-Export der Geräte-Übersicht | In Progress | [Spec](../features/PROJ-8-csv-export-geraete-uebersicht.md) | 2026-09-22 |
 
 <!-- Add features above this line -->
 

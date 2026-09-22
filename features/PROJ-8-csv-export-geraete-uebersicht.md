@@ -1,6 +1,6 @@
 # PROJ-8: CSV-Export der Geräte-Übersicht
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -118,6 +118,15 @@ Siehe Decision Log → Technical Decisions oben.
 
 ### Abhängigkeiten (Packages)
 Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibliothek nötig (siehe Decision Log).
+
+## Implementation Notes (Frontend)
+
+- `src/app/(protected)/uebersicht/page.tsx`: neuer "Als CSV exportieren"-Button neben `GeraeteFilterBar`, in einem gemeinsamen Flex-Wrapper (Verantwortung für den Zeilenabstand von `GeraeteFilterBar` in den Wrapper verschoben, um doppelten Abstand zu vermeiden — `GeraeteFilterBar` selbst dafür um `flex-1` ergänzt).
+- Bei `result.total === 0` wird ein deaktivierter `Button` gerendert; sonst ein `Button` mit `asChild`, der einen echten `<a href="/api/uebersicht/export?...">` umschliesst — bewusst kein Client-Component-Zustand nötig, da sowohl der Deaktiviert-Zustand als auch die aktuellen Filter bereits server-seitig auf der Seite bekannt sind.
+- Export-Link übernimmt `status`, `suche` und `zuPruefen` 1:1 aus den aktuellen `searchParams`, lässt `seite` bewusst weg (Export ist laut Spec nie auf eine Seite beschränkt).
+- Der Route Handler `/api/uebersicht/export` existiert noch nicht — der Link führt bis `/backend` zu einem 404. Kein Mock nötig, da hier (anders als bei früheren Features) keine UI von den Antwortdaten abhängt, die getestet werden müsste — nur der Link selbst, sein deaktivierter Zustand und die Filter-Weitergabe.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` (92 Tests, unverändert) und `npm run build` laufen fehlerfrei durch.
+- Noch offen (für `/backend`): der eigentliche Route Handler inkl. Session-Prüfung, ungepaginierte Firma-gefilterte Geräteabfrage (mit Batching für die Artikel-Zusatzinfos), CSV-Erzeugung (Semikolon, UTF-8-BOM, Formel-Escaping, Quoting) und der Download-Response-Header.
 
 ## QA Test Results
 _To be added by /qa_
