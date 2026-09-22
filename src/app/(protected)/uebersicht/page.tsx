@@ -8,8 +8,8 @@ import { getFirmaEinstellungen } from "@/lib/firma-einstellungen/queries";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
 import { GeraeteFilterBar } from "@/components/geraete-filter-bar";
+import { ExportCsvButton } from "@/components/export-csv-button";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Table,
@@ -107,15 +107,10 @@ export default async function UebersichtPage({
           <>
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <GeraeteFilterBar statusOptions={result!.statusOptions} sucheKundenId={sucheKundenId} />
-              {result!.total === 0 ? (
-                <Button type="button" variant="outline" disabled className="shrink-0">
-                  Als CSV exportieren
-                </Button>
-              ) : (
-                <Button type="button" variant="outline" asChild className="shrink-0">
-                  <a href={`/api/uebersicht/export?${exportParams.toString()}`}>Als CSV exportieren</a>
-                </Button>
-              )}
+              <ExportCsvButton
+                href={`/api/uebersicht/export?${exportParams.toString()}`}
+                disabled={result!.total === 0}
+              />
             </div>
 
             {result!.total === 0 ? (

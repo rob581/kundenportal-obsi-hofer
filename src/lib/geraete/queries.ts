@@ -29,6 +29,23 @@ function extractYear(date: string | null): string | null {
   return date ? date.slice(0, 4) : null;
 }
 
+// PostgREST's .in() inlines every ID into the request URL — with a Firma
+// that has hundreds of distinct Artikel, that URL can get long enough to
+// make the underlying fetch() fail outright (same root cause as the
+// PROJ-5 BUG-2 dashboard fix). Chunking keeps each request's URL small.
+// A no-op in practice for the paginated getGeraeteList (max 25 Geräte per
+// page → at most 25 distinct Artikel-IDs), but required for the
+// unpaginated PROJ-8 export.
+const ARTIKEL_LOOKUP_CHUNK_SIZE = 200;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
 type GeraetRow = {
   id: string;
   name: string | null;
@@ -82,15 +99,21 @@ function mapGeraetRow(row: GeraetRow, standortName: string | null, artikel: Arti
 async function getArtikelMapFuerIds(artikelIds: string[]): Promise<Map<string, ArtikelInfo>> {
   if (artikelIds.length === 0) return new Map();
 
-  const { data, error } = await getSupabaseAdmin()
-    .from("dv_artikel")
-    .select("id, bezeichnung, hersteller, norm, artikeltyp, dimension")
-    .in("id", artikelIds);
+  const supabase = getSupabaseAdmin();
+  const chunks = await Promise.all(
+    chunk(artikelIds, ARTIKEL_LOOKUP_CHUNK_SIZE).map(async (idChunk) => {
+      const { data, error } = await supabase
+        .from("dv_artikel")
+        .select("id, bezeichnung, hersteller, norm, artikeltyp, dimension")
+        .in("id", idChunk);
 
-  if (error) throw new Error(`Artikel-Lookup fehlgeschlagen: ${error.message}`);
+      if (error) throw new Error(`Artikel-Lookup fehlgeschlagen: ${error.message}`);
+      return data ?? [];
+    })
+  );
 
   return new Map(
-    (data ?? []).map((row) => [
+    chunks.flat().map((row) => [
       row.id as string,
       {
         bezeichnung: row.bezeichnung as string | null,
@@ -103,7 +126,7 @@ async function getArtikelMapFuerIds(artikelIds: string[]): Promise<Map<string, A
   );
 }
 
-async function getStandorteFuerFirma(firmaId: string) {
+export async function getStandorteFuerFirma(firmaId: string) {
   const { data, error } = await getSupabaseAdmin()
     .from("dv_standorte")
     .select("id, name")
@@ -118,6 +141,31 @@ async function getStandorteFuerFirma(firmaId: string) {
 export async function getStandortIdsFuerFirma(firmaId: string): Promise<string[]> {
   const standorte = await getStandorteFuerFirma(firmaId);
   return standorte.map((s) => s.id);
+}
+
+// Shared between getGeraeteList (PROJ-3/7) and getGeraeteExportRows (PROJ-8)
+// so both apply exactly the same Status-/Suche-/Zu-prüfen-Filter — a future
+// fix here (or a new filter) only needs to happen in one place.
+function applyGeraeteFilters<T extends { ilike: (...args: any[]) => T; or: (...args: any[]) => T }>(
+  geraeteQuery: T,
+  filters: Pick<GeraeteQuery, "status" | "suche" | "zuPruefen" | "sucheKundenId">
+): T {
+  let q = geraeteQuery;
+  if (filters.status) {
+    q = q.ilike("status", filters.status);
+  }
+  if (filters.suche) {
+    const needle = escapeOrListValue(filters.suche.trim());
+    const sucheFelder = ["seriennummer", "barcode", "lagerort"];
+    if (filters.sucheKundenId) sucheFelder.push("kunden_id");
+    q = q.or(sucheFelder.map((feld) => `${feld}.ilike.%${needle}%`).join(","));
+  }
+  if (filters.zuPruefen) {
+    // Eigene .or()-Gruppe, wird laut bestehendem Supabase-Verhalten (siehe
+    // Status+Suche-Kombination) mit den übrigen Filtern UND-verknüpft.
+    q = q.or(`letzte_pruefung.is.null,letzte_pruefung.lt.${getZuPruefenCutoff()}`);
+  }
+  return q;
 }
 
 // Two-step lookup by design (see PROJ-3 Tech Design): dv_geraete/dv_standorte
@@ -156,20 +204,7 @@ export async function getGeraeteList(firmaId: string, query: GeraeteQuery): Prom
     )
     .in("standort_id", standortIds);
 
-  if (query.status) {
-    geraeteQuery = geraeteQuery.ilike("status", query.status);
-  }
-  if (query.suche) {
-    const needle = escapeOrListValue(query.suche.trim());
-    const sucheFelder = ["seriennummer", "barcode", "lagerort"];
-    if (query.sucheKundenId) sucheFelder.push("kunden_id");
-    geraeteQuery = geraeteQuery.or(sucheFelder.map((feld) => `${feld}.ilike.%${needle}%`).join(","));
-  }
-  if (query.zuPruefen) {
-    // Eigene .or()-Gruppe, wird laut bestehendem Supabase-Verhalten (siehe
-    // Status+Suche-Kombination) mit den übrigen Filtern UND-verknüpft.
-    geraeteQuery = geraeteQuery.or(`letzte_pruefung.is.null,letzte_pruefung.lt.${getZuPruefenCutoff()}`);
-  }
+  geraeteQuery = applyGeraeteFilters(geraeteQuery, query);
 
   const start = (page - 1) * PAGE_SIZE;
   const end = start + PAGE_SIZE - 1;
@@ -242,4 +277,47 @@ export async function getGeraetById(id: string, firmaId: string): Promise<Geraet
   }
 
   return mapGeraetRow(row, standort.name as string | null, artikel);
+}
+
+// PROJ-8: liefert ALLE zu den Filtern passenden Geräte einer Firma, ohne
+// Paginierung (im Gegensatz zu getGeraeteList) — für den CSV-Export, der
+// laut Spec nie auf eine Seite beschränkt sein soll. Nutzt dieselbe
+// Firma→Standort-Auflösung und dieselbe Filterlogik wie getGeraeteList
+// (siehe applyGeraeteFilters), damit Übersicht und Export nie auseinanderlaufen.
+export async function getGeraeteExportRows(
+  firmaId: string,
+  filters: Pick<GeraeteQuery, "status" | "suche" | "zuPruefen" | "sucheKundenId">
+): Promise<Geraet[]> {
+  const standorte = await getStandorteFuerFirma(firmaId);
+  const standortIds = standorte.map((s) => s.id);
+  const standortNamen = new Map(standorte.map((s) => [s.id, s.name]));
+
+  if (standortIds.length === 0) return [];
+
+  const supabase = getSupabaseAdmin();
+
+  let geraeteQuery = supabase
+    .from("dv_geraete")
+    .select(
+      "id, name, seriennummer, barcode, status, letzte_pruefung, ablegereife, herstelljahr, standort_id, artikel_id, lagerort, pruefer, zubehoer, bemerkungen, kunden_id"
+    )
+    .in("standort_id", standortIds);
+
+  geraeteQuery = applyGeraeteFilters(geraeteQuery, filters);
+
+  const { data, error } = await geraeteQuery.order("letzte_pruefung", { ascending: false, nullsFirst: true });
+
+  if (error) throw new Error(`Geräte-Export-Lookup fehlgeschlagen: ${error.message}`);
+
+  const rows = (data ?? []) as GeraetRow[];
+  const artikelIds = [...new Set(rows.map((row) => row.artikel_id).filter((id): id is string => !!id))];
+  const artikelMap = await getArtikelMapFuerIds(artikelIds);
+
+  return rows.map((row) =>
+    mapGeraetRow(
+      row,
+      standortNamen.get(row.standort_id ?? "") ?? null,
+      row.artikel_id ? artikelMap.get(row.artikel_id) ?? null : null
+    )
+  );
 }

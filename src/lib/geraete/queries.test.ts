@@ -81,7 +81,7 @@ vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: (table: string) => makeQuery(table) }),
 }));
 
-import { getGeraeteList, getGeraetById } from "./queries";
+import { getGeraeteList, getGeraetById, getGeraeteExportRows } from "./queries";
 
 beforeEach(() => {
   for (const key of Object.keys(tableData)) delete tableData[key];
@@ -436,5 +436,89 @@ describe("getGeraetById", () => {
     const geraet = await getGeraetById("g5", "f1");
 
     expect(geraet).toBeNull();
+  });
+});
+
+describe("getGeraeteExportRows", () => {
+  it("returns an empty array for a Firma with no Standorte", async () => {
+    tableData.dv_standorte = [];
+    tableData.dv_geraete = [];
+
+    const items = await getGeraeteExportRows("f-unknown", {});
+
+    expect(items).toEqual([]);
+  });
+
+  it("returns ALL matching Geräte, not just a page (PROJ-8: Export ist nie paginiert)", async () => {
+    tableData.dv_standorte = [{ id: STANDORT_A, name: "Hauptlager Zürich", firma_id: "f1" }];
+    tableData.dv_geraete = Array.from({ length: 30 }, (_, i) => ({
+      id: `bulk-${i}`,
+      name: `Gerät ${i}`,
+      seriennummer: `SN-${i}`,
+      barcode: null,
+      status: "Freigabe",
+      letzte_pruefung: "2026-01-01",
+      ablegereife: null,
+      herstelljahr: null,
+      standort_id: STANDORT_A,
+      artikel_id: null,
+      lagerort: null,
+      pruefer: null,
+      zubehoer: null,
+      bemerkungen: null,
+      kunden_id: null,
+    }));
+
+    const items = await getGeraeteExportRows("f1", {});
+
+    expect(items.length).toBe(30);
+  });
+
+  it("applies the same status/suche/zuPruefen filters as getGeraeteList", async () => {
+    seedZweiFirmen();
+
+    const byStatus = await getGeraeteExportRows("f1", { status: "freigabe" });
+    expect(byStatus.map((g) => g.id)).toEqual(["g1"]);
+
+    const bySuche = await getGeraeteExportRows("f1", { suche: "RM-1187" });
+    expect(bySuche.map((g) => g.id)).toEqual(["g2"]);
+
+    const byKundenId = await getGeraeteExportRows("f1", { suche: "KD-2026-001", sucheKundenId: true });
+    expect(byKundenId.map((g) => g.id)).toEqual(["g1"]);
+  });
+
+  it("batches the Artikel lookup so it still works with hundreds of distinct Artikel-IDs", async () => {
+    tableData.dv_standorte = [{ id: STANDORT_A, name: "Hauptlager Zürich", firma_id: "f1" }];
+    tableData.dv_geraete = Array.from({ length: 250 }, (_, i) => ({
+      id: `g${i}`,
+      name: null,
+      seriennummer: null,
+      barcode: null,
+      status: "Freigabe",
+      letzte_pruefung: "2026-01-01",
+      ablegereife: null,
+      herstelljahr: null,
+      standort_id: STANDORT_A,
+      artikel_id: `a${i}`,
+      lagerort: null,
+      pruefer: null,
+      zubehoer: null,
+      bemerkungen: null,
+      kunden_id: null,
+    }));
+    tableData.dv_artikel = Array.from({ length: 250 }, (_, i) => ({
+      id: `a${i}`,
+      bezeichnung: `Artikel ${i}`,
+      hersteller: null,
+      norm: null,
+      artikeltyp: null,
+      dimension: null,
+    }));
+
+    const items = await getGeraeteExportRows("f1", {});
+
+    expect(items.length).toBe(250);
+    expect(items.find((g) => g.id === "g0")?.artikelBezeichnung).toBe("Artikel 0");
+    expect(items.find((g) => g.id === "g249")?.artikelBezeichnung).toBe("Artikel 249");
   });
 });
