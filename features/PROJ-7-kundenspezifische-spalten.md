@@ -1,6 +1,6 @@
 # PROJ-7: Kundenspezifische Spalten in der Geräte-Übersicht
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-22
 
@@ -130,7 +130,84 @@ Keine neuen — nutzt weiterhin die bestehende Supabase-Anbindung und die bereit
 - **Wichtig, noch offen:** Die beiden neuen Migrationen sind als SQL-Dateien im Repo bereit, aber noch **nicht** gegen die echte Supabase-Instanz ausgeführt — das übernimmt der Nutzer manuell über den Supabase SQL Editor (gleiches Vorgehen wie bei den bisherigen Migrationen). Erst danach befüllt der nächste nächtliche Sync-Lauf (03:00 Uhr) `kunden_id` für alle Geräte; die Zusatzspalten-Konfiguration pro Firma muss der Nutzer ebenfalls manuell in `portal_firma_einstellungen` eintragen, damit Kunden tatsächlich Zusatzspalten sehen.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-22
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Wie bei allen bisherigen Features lässt sich der echte Login nicht automatisiert/wiederholbar durchspielen. Die Zusatzspalten-Logik selbst (Pool-Reihenfolge, Deduplizierung, unbekannte Keys, Firma-Isolation) ist vollständig über Vitest-Integrations-/Unit-Tests abgedeckt; die tatsächliche Anzeige in der Übersicht wurde vom Nutzer während Frontend-/Backend-Phase live gegen echte Daten bestätigt (mehrere Live-Fund-Bugfixes bereits eingearbeitet, siehe Implementation Notes: Detailseite-KundenID fehlte, dann unconditional statt firma-gated — beides behoben und hier erneut verifiziert).
+
+### Acceptance Criteria Status
+
+#### AC-1: Keine Zusatzspalten konfiguriert → nur Standard-Spalten
+- [x] `zusatzspalten.test.ts` ("returns an empty list for a Firma with no configured Zusatzspalten") + `firma-einstellungen/queries.test.ts` ("returns an empty list for a Firma without a configuration entry") + Code-Review (`uebersicht/page.tsx` rendert bei leerem Array keine Zusatzspalten)
+
+#### AC-2: Mindestens eine Zusatzspalte konfiguriert → erscheint zusätzlich
+- [x] `zusatzspalten.test.ts` ("returns only the configured columns") + `firma-einstellungen/queries.test.ts` ("returns configured Zusatzspalten for a Firma with an entry")
+
+#### AC-3: Mehrere Zusatzspalten → feste Pool-Reihenfolge unabhängig von Konfigurationsreihenfolge
+- [x] Neuer Test `zusatzspalten.test.ts` ("always returns columns in the fixed pool order, regardless of config order") — Konfiguration absichtlich in falscher Reihenfolge übergeben, Ergebnis prüft die korrekte Pool-Reihenfolge
+
+#### AC-4: Kein Wert für ein Gerät → Zelle zeigt "—"
+- [x] `zusatzspalten.test.ts` (getValue liefert `null` bei fehlendem Wert) + Code-Review (`{spalte.getValue(geraet) ?? "—"}` in `uebersicht/page.tsx`)
+
+#### AC-5: Unbekannter/ungültiger Spalten-Key → wird ignoriert, kein Fehler
+- [x] `zusatzspalten.test.ts` ("silently ignores unknown/invalid keys instead of throwing")
+
+#### AC-6: Firma-Wechsel zeigt Zusatzspalten der neu gewählten Firma
+- [x] Code-Review: `getFirmaEinstellungen(currentFirmaId)` wird bei jedem Seitenaufruf frisch aufgelöst (Server Component, kein Caching) — identisches Muster wie die bereits in PROJ-3 auditierte Geräteliste, die pro Firma-Wechsel ebenfalls neu lädt
+
+#### AC-7: Spaltenüberschrift für `bmvcc_KundenID` lautet "KundenID"
+- [x] `zusatzspalten.test.ts` ("labels the KundenID column exactly KundenID")
+
+### Zusätzlich verifiziert (nach dem ursprünglichen Interview ergänzte Funktionalität)
+- **KundenID auf der Geräte-Detailseite:** Nur sichtbar, wenn die Firma "kundenId" aktiviert hat — Code-Review (`zeigtKundenId`-Check in `geraete/[id]/page.tsx`), inkl. Fail-open bei Ladefehler
+- **KundenID in der Freitextsuche:** Nur durchsucht, wenn die Firma "kundenId" aktiviert hat — `geraete/queries.test.ts` ("only searches KundenID when sucheKundenId is set")
+- **"Zu prüfen"-Kachel-Link (Dashboard → Übersicht):** `geraete/queries.test.ts` ("filters by zuPruefen: never inspected or inspected over 360 days ago (matches the Dashboard-Kennzahl)") — nutzt denselben geteilten Cutoff-Helper wie die Dashboard-Kennzahl, garantiert identische Definition von "zu prüfen"
+
+### Edge Cases Status
+
+#### EC-1: Firma ganz ohne Konfigurationseintrag
+- [x] `firma-einstellungen/queries.test.ts` — identisch zu AC-1 behandelt
+
+#### EC-2: Konfiguration enthält denselben Spalten-Key mehrfach
+- [x] `zusatzspalten.test.ts` ("deduplicates a key listed more than once in the config")
+
+#### EC-3: Sehr lange Werte auf schmalem Viewport
+- [x] Bewusst nicht getestet — Out of Scope laut Spec, identisches (bekanntes, akzeptiertes) Verhalten wie PROJ-3 BUG-1
+
+#### EC-4: `bmvcc_KundenID` ist Freitext ohne Validierung
+- [x] Code-Review: Kein Validierungs-/Normalisierungscode an irgendeiner Stelle der Pipeline (Sync, Query, Anzeige) — Wert wird unverändert durchgereicht
+
+#### EC-5: Gerät ohne Artikel, Typ/Dimension konfiguriert
+- [x] `zusatzspalten.test.ts` deckt das generische "kein Wert → null"-Verhalten ab, das für alle Pool-Felder inkl. `artikelTyp`/`artikelDimension` identisch implementiert ist (`getValue` liest jeweils direkt vom `Geraet`-Objekt)
+
+### Security Audit Results
+- [x] Authentication: Neuer Query-Parameter `zuPruefen` auf `/uebersicht` umgeht die Session-Prüfung nicht (neuer Playwright-Test `tests/PROJ-7-kundenspezifische-spalten.spec.ts`, analog zum bestehenden PROJ-3-Test für status/suche/seite)
+- [x] Autorisierung/Firma-Isolation: `getFirmaEinstellungen` wird ausschliesslich mit der session-abgeleiteten `currentFirmaId` aufgerufen (`getCurrentFirmaId()`), nie mit einem URL-Parameter — keine neue Angriffsfläche
+- [x] RLS: `portal_firma_einstellungen` hat RLS aktiviert und **keine** Policies für `anon`/`authenticated` (Migration `0006`) — exakt dieselbe Deny-all-Konvention wie alle `dv_*`-Tabellen, nur der Service-Role-Key liest/schreibt serverseitig
+- [x] Keine Secrets im Client-Code: Per Grep bestätigt, dass `getSupabaseAdmin`/`firma-einstellungen`-Queries von keiner `"use client"`-Datei importiert werden
+- [x] Injection: Freitextsuche über `kunden_id` nutzt dieselbe bereits auditierte `escapeOrListValue`-Escaping-Funktion wie Seriennummer/Barcode/Lagerort — kein neuer Injection-Vektor über die Suche
+- [x] Konfigurationsintegrität: `resolveZusatzspalten` matcht ausschliesslich exakt gegen den hart codierten Pool (Set-Lookup) — selbst eine fehlerhafte/manipulierte Konfiguration in `portal_firma_einstellungen` kann keine beliebigen Felder oder Inhalte ausgeben, nur die 7 bekannten Pool-Spalten
+- [x] XSS: `kunden_id` wird ausschliesslich über JSX-Textinterpolation ausgegeben (React escaped automatisch), kein `dangerouslySetInnerHTML` im gesamten Feature — auch bei böswilligem Freitext in Dataverse unkritisch
+- [x] Rate-Limiting: Kein neuer API-Endpoint — gleiches Risikoprofil wie die bereits auditierte PROJ-3-Übersicht
+
+### Bugs Found
+Keine offenen Bugs. Alle während der Implementierungsphase live gefundenen Probleme (Dashboard-`fetch failed` bei vielen Geräten, fehlende/dann unconditional KundenID auf der Detailseite, Middleware blockierte Cron-Requests) wurden bereits behoben und sind in den jeweiligen Implementation Notes bzw. den betroffenen Feature-Specs (PROJ-1, PROJ-5) dokumentiert.
+
+Eine Lücke wurde in dieser QA-Runde geschlossen: `resolveZusatzspalten` (zentrale Logik für Pool-Reihenfolge, Deduplizierung, unbekannte Keys) hatte bisher keine eigene Testdatei — neu `src/lib/geraete/zusatzspalten.test.ts` mit 8 Tests ergänzt, die AC-3/AC-4/AC-5/AC-7 und EC-2/EC-5 direkt abdecken.
+
+### Automatisierte Tests
+- **Unit-/Integrationstests (Vitest):** 92/92 grün gesamt (8 neu in `zusatzspalten.test.ts`, plus die in Frontend-/Backend-Phase bereits ergänzten Tests in `firma-einstellungen/queries.test.ts` und `geraete/queries.test.ts`)
+- **E2E-Tests (Playwright):** 26/26 grün gesamt (24 unverändert + 2 neu in `tests/PROJ-7-kundenspezifische-spalten.spec.ts` für Chromium + Mobile Safari)
+- **Regression:** Alle bisherigen PROJ-1/2/3/4/5/6-Tests weiterhin grün — keine Regressionen durch PROJ-7. `npx tsc --noEmit`, `npm run lint` und `npm run build` laufen vollständig fehlerfrei (der zuvor bestehende, unabhängige `tsc`-Fehler in `passkey-list.test.tsx` wurde ausserhalb dieser QA-Runde bereits behoben)
+
+### Summary
+- **Acceptance Criteria:** 7/7 abgedeckt (davon 5 direkt durch neue/bestehende Unit-Tests, 2 durch Code-Review — Firma-Wechsel-Verhalten ist architektonisch garantiert, kein dedizierter Test nötig)
+- **Bugs Found:** 0 offene Bugs (mehrere Live-Funde während der Implementierung bereits behoben, siehe oben)
+- **Security:** Solide — Firma-Isolation ausschliesslich über die Session, RLS deny-all auf der neuen Tabelle, kein neuer Injection-/XSS-Vektor, keine Secrets im Client-Code
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen. Vor dem eigentlichen Live-Nutzen durch Kunden müssen die beiden Migrationen (`0005`, `0006`) sowie mindestens ein `portal_firma_einstellungen`-Eintrag in der echten Datenbank vorhanden sein (laut Nutzer bereits erledigt) und der Dataverse-Sync muss `kunden_id` erfolgreich befüllen (abhängig vom separat verfolgten PROJ-1-Zugangsdaten-Problem, nicht Teil dieses Features).
 
 ## Deployment
 _To be added by /deploy_
