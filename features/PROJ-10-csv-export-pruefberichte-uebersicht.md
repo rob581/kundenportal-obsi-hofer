@@ -1,6 +1,6 @@
 # PROJ-10: CSV-Export der Prüfberichte-Übersicht
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -133,7 +133,85 @@ Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibli
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-22
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Wie bei allen bisherigen Features lässt sich der echte Login nicht automatisiert/wiederholbar durchspielen. Die Export-Logik selbst (Firma-Isolation, Batching, CSV-Erzeugung, Zeitraum-Filter inkl. Robustheit gegen ungültige Werte) ist vollständig über Vitest-Tests abgedeckt.
+
+### Acceptance Criteria Status
+
+#### AC-1: Klick auf "Als CSV exportieren" lädt eine Datei mit korrektem Namen herunter
+- [x] `route.test.ts` ("returns a CSV download with the correct headers on success") prüft `Content-Disposition: attachment; filename="pruefberichte-uebersicht-YYYY-MM-DD.csv"`
+
+#### AC-2: Zeitraum-Filter gesetzt → Export enthält nur passende Prüfberichte, über alle Seiten hinweg
+- [x] `queries.test.ts` ("respects the Zeitraum-Filter", "returns ALL matching Prüfberichte, not just a page") — 30 simulierte Berichte, keine Paginierungs-Begrenzung in `getPruefberichteExportRows`
+
+#### AC-3: Zeitraum "Alle" → keine Zeit-Einschränkung im Export
+- [x] Code-Review: `zeitraum: undefined` (kein Parameter gesendet, da `page.tsx` "alle" nicht in die URL schreibt) → `zeitraumCutoff` liefert `null`, kein Filter angewendet; `route.test.ts` bestätigt die `undefined`-Weitergabe
+
+#### AC-4: CSV enthält genau die Spalten Gerät, Datum, Ergebnis, Bemerkungen, Prüfer
+- [x] `export-csv.test.ts` ("has exactly the five fixed columns, no Zusatzspalten-Konzept")
+
+#### AC-5: 0 Treffer → Export-Button deaktiviert
+- [x] Code-Review: `ExportCsvButton disabled={result!.total === 0}` in `pruefberichte/page.tsx` (identische, bereits für PROJ-8 auditierte Komponente)
+
+#### AC-6: Export schlägt fehl → Fehlermeldung, kein Download, Kunde bleibt auf der Seite
+- [x] Code-Review: `ExportCsvButton` (PROJ-8, wiederverwendet) nutzt `fetch()` statt Navigation; `route.test.ts` bestätigt 500 bei Datenbankfehler, ohne dass die Route crasht
+
+#### AC-7: Formel-Präfixe in Bemerkungen werden escaped
+- [x] `export-csv.test.ts` ("escapes a formula-like Bemerkung to prevent CSV injection") — nutzt dieselbe, bereits für PROJ-8 mit allen vier Präfixen (`=`/`+`/`-`/`@`) getestete `escapeCsvCell`-Funktion
+
+#### AC-8: Datei öffnet sich in Schweizer/deutschem Excel korrekt
+- [x] `export-csv.test.ts` (Semikolon-Trennung, `﻿`-Präfix) + `route.test.ts` prüft die rohen Antwort-Bytes explizit auf die UTF-8-BOM-Sequenz (`EF BB BF`)
+
+#### AC-9: Ungültiger/fehlender Zeitraum-Wert am Endpoint → wie "Alle" behandelt, kein Serverfehler (behebt PROJ-9 BUG-1)
+- [x] `queries.test.ts` — zwei Tests: einer für `getPruefberichteExportRows`, einer für die bestehende `getPruefberichteFuerFirma` (beide nutzen dieselbe `zeitraumCutoff`) mit einem nicht-numerischen Wert; `route.test.ts` bestätigt die `undefined`-Weitergabe bei fehlendem Parameter
+
+### Edge Cases Status
+
+#### EC-1: Firma mit vielen Prüfberichten/Geräten (Batching)
+- [x] `queries.test.ts` ("enriches every row with the Gerät's Artikel-Info label, even across many distinct Geräte") — 250 Geräte/Prüfberichte, `GERAET_ID_CHUNK_SIZE = 200` erzwingt mehrere Batches sowohl bei der Prüfberichte- als auch bei der neu gebatchten Geräte-Anreicherungs-Abfrage
+
+#### EC-2: Bemerkungsfeld enthält Semikolon/Zeilenumbruch
+- [x] Abgedeckt durch die bereits für PROJ-8 getestete, hier wiederverwendete `escapeCsvCell`-Funktion (keine Prüfberichte-spezifische Duplizierung nötig)
+
+#### EC-3: Fehlender Wert → leer statt "—"
+- [x] `export-csv.test.ts` ("leaves cells empty (not '—') for missing values")
+
+#### EC-4: Firma-Wechsel → Export bezieht sich auf neu gewählte Firma
+- [x] Code-Review: `firmaId` wird bei jedem Request frisch über `getCurrentFirmaId()` aufgelöst, identisches, bereits mehrfach auditiertes Muster
+
+#### EC-5: Manipulierter/unbekannter `zeitraum`-Parameter direkt am Endpoint
+- [x] Deckt sich mit AC-9 oben — abgedeckt
+
+### Security Audit Results
+- [x] **Authentication:** `/api/pruefberichte/export` ohne Session → Redirect zu `/login` (neuer Playwright-Test, live gegen die echte Next.js-Redirect-Implementierung) + `route.test.ts`
+- [x] **Query-Parameter umgehen die Session-Prüfung nicht:** zweiter Playwright-Test mit `zeitraum` gesetzt, landet trotzdem auf `/login`
+- [x] **Autorisierung/Firma-Isolation:** `firmaId` kommt ausschliesslich aus `getCurrentFirmaId()`, nie aus einem Query-Parameter; Prüfberichte werden ausschliesslich über die bereits firmengeprüfte Geräte-ID-Menge abgefragt (`queries.test.ts` "only includes Prüfberichte of Geräte belonging to the Firma") — kein IDOR-Vektor
+- [x] **Auth-Reihenfolge korrekt:** Route prüft E-Mail + Portal-Zugriff selbst, bevor `getCurrentFirmaId()` aufgerufen wird — identisches, bereits für PROJ-8 auditiertes Muster
+- [x] **Eingabevalidierung `zeitraum`:** jetzt robust gegen beliebige Strings (behebt PROJ-9 BUG-1) — kein Absturz, kein unerwartetes Verhalten bei manipulierten Werten
+- [x] **CSV-Injection:** Alle fünf Zellwerte durchlaufen ausnahmslos `escapeCsvCell` (identische, bereits für PROJ-8 auditierte Funktion)
+- [x] **Response-Header-Injection:** `Content-Disposition`-Dateiname wird ausschliesslich aus dem serverseitig berechneten Datum gebildet, nie aus Request-Daten
+- [x] **Content-Type/Content-Disposition verhindert Inline-Rendering:** identisch zu PROJ-8
+- [x] **Keine Secrets im Client-Code:** `getSupabaseAdmin` wird ausschliesslich in serverseitigen Dateien verwendet
+- [x] **Rate-Limiting:** kein Rate-Limiting, gleiches bereits akzeptiertes Risikoprofil wie der PROJ-8-Export-Endpoint (BUG-1 dort) — kein neuer, eigenständiger Befund nötig, da identische Ursache/Einschätzung
+
+### Bugs Found
+Keine neuen Bugs. PROJ-9 BUG-1 (`zeitraumCutoff`-Robustheit) wurde im Rahmen dieses Features wie geplant behoben und ist oben unter AC-9 verifiziert.
+
+### Automatisierte Tests
+- **Unit-/Integrationstests (Vitest):** 145/145 grün gesamt — 7 neu in `pruefberichte/queries.test.ts`, 5 neu in `pruefberichte/export-csv.test.ts`, 6 neu in `api/pruefberichte/export/route.test.ts`
+- **E2E-Tests (Playwright):** 38/38 grün gesamt (34 unverändert + 4 neu in `tests/PROJ-10-csv-export-pruefberichte.spec.ts` für Chromium + Mobile Safari)
+- **Regression:** Alle bisherigen PROJ-1–9-Tests weiterhin grün — keine Regressionen durch PROJ-10, insbesondere nicht durch den Refactor von `getPruefberichteFuerFirma` (bestehende PROJ-9-Tests laufen unverändert weiter). `npx tsc --noEmit`, `npm run lint` und `npm run build` laufen vollständig fehlerfrei
+
+### Summary
+- **Acceptance Criteria:** 9/9 abgedeckt
+- **Bugs Found:** 0 neue (PROJ-9 BUG-1 wie geplant behoben)
+- **Security:** Solide — korrekte Firma-Isolation, robuste Eingabeverarbeitung, kein IDOR-/Injection-/Header-Injection-Vektor, keine Secrets im Client-Code
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen.
 
 ## Deployment
 _To be added by /deploy_
