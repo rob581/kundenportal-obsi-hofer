@@ -66,12 +66,49 @@ Keine offenen Fragen — alle Kernentscheidungen wurden im Interview getroffen.
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Neuer Route Handler (`src/app/api/pruefberichte/export`) statt Server Action | Gleiche Begründung wie PROJ-8: ein Datei-Download braucht eine echte, navigierbare URL mit HTTP-Headern (Dateiname, Dateityp) | 2026-09-22 |
+| Route Handler prüft die Kunden-Session selbst | API-Routen liegen ausserhalb der automatischen Schutzschicht von `(protected)/layout.tsx` — identisches Muster wie PROJ-8 | 2026-09-22 |
+| Neue Funktion `getPruefberichteExportRows(firmaId, { zeitraum })` erweitert `pruefberichte/queries.ts`, wiederverwendet dieselbe Firma→Geräte-Auflösung, Chunking- und Sortierlogik wie `getPruefberichteFuerFirma` (PROJ-9), aber ohne die Paginierungs-Slice — alle Treffer werden zurückgegeben | Vermeidet eine zweite unabhängige Implementierung derselben Firma-Isolation/Filterlogik | 2026-09-22 |
+| Geräte-/Artikel-Anreicherung für die "Gerät"-Spalte erfolgt für **alle** Treffer, nicht nur eine Seite (anders als PROJ-9) — dafür genauso gebatcht wie die Prüfberichte-Abfrage selbst | Der Export enthält per Definition alle Treffer; die Anzahl unterschiedlicher Geräte darüber kann gross sein und braucht daher dieselbe Chunking-Vorsicht wie die Haupt-Abfrage | 2026-09-22 |
+| `zeitraumCutoff` (PROJ-9) wird robust gegen ungültige/fehlende Werte gemacht (fällt auf "kein Filter" zurück statt eine Exception zu werfen) | Behebt PROJ-9 BUG-1 — der Export-Endpoint liest `zeitraum` eigenständig aus der URL, ohne die Validierung der Seite zu durchlaufen | 2026-09-22 |
+| Eigene, kleine CSV-Bau-Funktion (`buildPruefberichteExportCsv`) statt Wiederverwendung/Verallgemeinerung von `buildGeraeteExportCsv` (PROJ-8) — nutzt aber dieselbe `escapeCsvCell`-Hilfsfunktion | Die beiden Export-Formate (Geräte vs. Prüfberichte) haben unterschiedliche, feste Spaltensets ohne Zusatzspalten-Konzept bei Prüfberichten — eine gemeinsame Abstraktion würde hier nur unnötige Komplexität hinzufügen; das eigentlich wiederverwendbare Stück (Zell-Escaping) wird geteilt | 2026-09-22 |
+| Kein neues Package für die CSV-Erzeugung | Gleiche Begründung wie PROJ-8 | 2026-09-22 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+/pruefberichte (bestehende PROJ-9-Seite, erweitert)
+├── AppHeader (unverändert)
+├── Zeitraum-Filter (unverändert)
+├── NEU: "Als CSV exportieren"-Button (Client-Component mit fetch()+Blob-Download,
+│        gleicher Mechanismus wie PROJ-8 — kein einfacher Link, da Fehler
+│        laut Spec auf der Seite bleiben und angezeigt werden müssen)
+└── Prüfberichte-Tabelle (unverändert)
+
+NEU: /api/pruefberichte/export (Route Handler)
+├── Prüft die Kunden-Session selbst (wie PROJ-8, ausserhalb der (protected)-Schutzschicht)
+├── Löst die aktuell ausgewählte Firma auf
+├── Liest den zeitraum-Parameter (jetzt robust gegen ungültige Werte, siehe Technical Decisions)
+├── Baut die vollständige, ungepaginierte Prüfberichte-Liste inkl. Gerät-Label für alle Treffer
+└── Liefert eine CSV-Datei als Download-Antwort (Dateiname, Content-Type als HTTP-Header)
+```
+
+### Datenmodell (in Textform)
+
+- Kein neues Datenfeld, keine neue Tabelle — der Export liest exakt dieselben Daten wie die Prüfberichte-Übersicht (PROJ-9), nur ohne die 25er-Seitenbegrenzung
+- Jede Export-Zeile entspricht einem Prüfbericht mit den fünf Feldern Gerät, Datum, Ergebnis, Bemerkungen, Prüfer
+- Die Datei wird nicht gespeichert — sie entsteht bei jedem Klick frisch aus der Datenbank und wird direkt zum Download geschickt
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibliothek nötig.
 
 ## QA Test Results
 _To be added by /qa_
