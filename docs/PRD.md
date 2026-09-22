@@ -10,11 +10,11 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 
 | Priority | Feature | Status |
 |----------|---------|--------|
-| P0 (MVP) | Dataverse-Sync-Service | Planned |
+| P0 (MVP) | Dataverse-Sync-Service | Deployed |
 | P0 (MVP) | Kunden-Login (Supabase Auth) | Deployed |
-| P0 (MVP) | Geräte-Übersicht (eigene Geräte, Status) | Planned |
-| P0 (MVP) | Prüfberichte-Liste | Planned |
-| P0 (MVP) | Dashboard (Geräte pro Status, Total Prüfberichte, letzte Prüfung) | Planned |
+| P0 (MVP) | Geräte-Übersicht (eigene Geräte, Status) | Deployed |
+| P0 (MVP) | Prüfberichte-Liste | Deployed |
+| P0 (MVP) | Dashboard (Geräte pro Status, Total Prüfberichte, letzte Prüfung) | Deployed |
 | P1 | Passkey-Login (zusätzlich zu E-Mail+Code) | Deployed |
 | P2 | Kundenspezifische Spalten in der Geräte-Übersicht | Deployed |
 | P1 | CSV-Export der Geräte-Übersicht | Deployed |
