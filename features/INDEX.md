@@ -23,7 +23,7 @@
 | PROJ-6 | Passkey-Login | Deployed | [Spec](../features/PROJ-6-passkey-login.md) | 2026-09-21 |
 | PROJ-7 | Kundenspezifische Spalten in der Geräte-Übersicht | Deployed | [Spec](../features/PROJ-7-kundenspezifische-spalten.md) | 2026-09-21 |
 | PROJ-8 | CSV-Export der Geräte-Übersicht | Deployed | [Spec](../features/PROJ-8-csv-export-geraete-uebersicht.md) | 2026-09-22 |
-| PROJ-9 | Prüfberichte-Übersicht | In Progress | [Spec](../features/PROJ-9-pruefberichte-uebersicht.md) | 2026-09-22 |
+| PROJ-9 | Prüfberichte-Übersicht | Approved | [Spec](../features/PROJ-9-pruefberichte-uebersicht.md) | 2026-09-22 |
 
 <!-- Add features above this line -->
 

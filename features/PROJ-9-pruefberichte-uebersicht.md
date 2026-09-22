@@ -1,6 +1,6 @@
 # PROJ-9: Prüfberichte-Übersicht
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -144,7 +144,100 @@ Keine neuen — nutzt die bestehenden shadcn-Komponenten (`Select`, `Table`, `Pa
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-22
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Wie bei allen bisherigen Features lässt sich der echte Login nicht automatisiert/wiederholbar durchspielen. Die Abfragelogik selbst (Firma-Isolation, Batching über Geräte-IDs, In-Memory-Sortierung/Paginierung, Zeitraum-Filter, Artikel-Info-Anreicherung) ist vollständig über Vitest-Integrationstests abgedeckt. `/pruefberichte` liegt unter der `(protected)`-Routengruppe und wird bereits generisch durch `(protected)/layout.tsx` geschützt (identisch zu `/uebersicht`/`/dashboard`/`/sicherheit`) — kein eigener Session-Check nötig, anders als beim API-Endpoint in PROJ-8.
+
+### Acceptance Criteria Status
+
+#### AC-1: Firmenweite Liste zeigt Gerät, Datum, Ergebnis, Bemerkungen, Prüfer
+- [x] `queries.test.ts` ("only includes Prüfberichte of Geräte belonging to the Firma", "gibt Bemerkungen und Prüfer unverändert weiter") + Code-Review der Tabellen-Spalten in `page.tsx`
+
+#### AC-2: Standardsortierung neuestes Datum zuerst
+- [x] `queries.test.ts` ("sorts by Prüfdatum descending across multiple Geräte, undated reports last")
+
+#### AC-3: Zeitraum-Filter (30/90/365 Tage) schränkt auf das Prüfdatum ein
+- [x] `queries.test.ts` ("filters by Zeitraum (z.B. '30' = letzte 30 Tage)")
+
+#### AC-4: Zeitraum "Alle" (Standard) zeigt alles ohne Einschränkung
+- [x] `queries.test.ts` ("'alle' (Standard) liefert alle Prüfberichte unabhängig vom Datum") + Code-Review (`page.tsx` fällt bei fehlendem/unbekanntem Parameter auf `"alle"` zurück)
+
+#### AC-5: Paginierung bei mehr als 25 Treffern
+- [x] `queries.test.ts` ("paginiert im Speicher: Seite 1 hat 25, Seite 2 den Rest")
+
+#### AC-6: Klick auf Gerät führt zur Geräte-Detailseite
+- [x] Code-Review: `Link href="/uebersicht/geraete/${bericht.geraetId}"`, `geraetId` stammt aus derselben, bereits firmengeprüften Geräte-Menge
+
+#### AC-7: Dashboard-Kachel "Total Prüfberichte" verlinkt mit Zeitraum "Alle"
+- [x] Code-Review: `dashboard/page.tsx` verlinkt `/pruefberichte?zeitraum=alle`
+
+#### AC-8: Leermeldung unterscheidet "keine Prüfberichte" von "keine Treffer für Zeitraum"
+- [x] Code-Review: `page.tsx` prüft `zeitraum !== "alle"` für die passende Meldung; Datengrundlage (leeres Ergebnis) durch `queries.test.ts` (leere Firma) abgedeckt
+
+#### AC-9: Fehler-Zustand mit "Erneut versuchen", Header/Abmelden bleiben nutzbar
+- [x] Code-Review: `<AppHeader />` wird ausserhalb des try/catch-Zweigs gerendert, identisches Muster wie PROJ-3/5
+
+#### AC-10: Header-Nav-Link "Prüfberichte" führt zu `/pruefberichte`
+- [x] Code-Review: Link in `app-header.tsx` (Desktop) und `app-header-mobile-menu.tsx` (Mobile-Sheet) ergänzt
+
+### Edge Cases Status
+
+#### EC-1: Archivierte Prüfberichte erscheinen normal
+- [x] Keine Sonderbehandlung im Code (kein Filter auf `ist_archiviert`) — identisch zu PROJ-4, das bereits denselben Fall abdeckt
+
+#### EC-2: Soft-gelöschte Prüfberichte ausgeschlossen
+- [x] `queries.test.ts` ("excludes soft-deleted reports")
+
+#### EC-3: Firma mit sehr vielen Geräten/Prüfberichten (Batching)
+- [x] Code-Review: Chunking-Mechanismus identisch zu PROJ-8 (200er-Gruppen); kein dedizierter 250+-Test wie bei PROJ-8 nötig, da die Chunking-Funktion selbst unverändert aus `geraete/queries.ts` (`getArtikelMapFuerIds`) übernommen wurde und dort bereits mit 250 IDs getestet ist — die neue, hier hinzugekommene Gruppierung (`GERAET_ID_CHUNK_SIZE`) folgt exakt demselben, bereits verifizierten Muster
+
+#### EC-4: Zwei Prüfberichte am selben Datum
+- [x] Stabile Sortierung durch `Array.prototype.sort` (JS-Spezifikation garantiert Stabilität) — kein separater Test nötig, da kein Sekundärkriterium gefordert ist
+
+#### EC-5: Bemerkungsfeld leer
+- [x] Code-Review: `bericht.bemerkungen ?? "—"}`
+
+#### EC-6: Prüfbericht referenziert Gerät ausserhalb der Firma
+- [x] `queries.test.ts` ("only includes Prüfberichte of Geräte belonging to the Firma (Firma-Isolation)")
+
+#### EC-7: Firma-Wechsel zeigt Prüfberichte der neu gewählten Firma
+- [x] Code-Review: `firmaId` wird bei jedem Request frisch über `getCurrentFirmaId()` aufgelöst, identisches, bereits mehrfach auditiertes Muster (PROJ-3/7/8)
+
+### Security Audit Results
+- [x] **Authentication:** `/pruefberichte` ohne Session → Redirect zu `/login` (neuer Playwright-Test) — abgesichert durch die generische `(protected)/layout.tsx`-Schutzschicht, kein eigener Code nötig
+- [x] **Query-Parameter umgehen die Session-Prüfung nicht:** zweiter Playwright-Test mit `zeitraum`/`seite` gesetzt, landet trotzdem auf `/login`
+- [x] **Autorisierung/Firma-Isolation:** `firmaId` kommt ausschliesslich aus `getCurrentFirmaId()`, nie aus einem Query-Parameter; Prüfberichte werden ausschliesslich über die bereits firmengeprüfte Geräte-ID-Menge abgefragt — kein IDOR-Vektor, kein direkter `pruefbericht_id`- oder `geraet_id`-Parameter in der URL
+- [x] **Eingabevalidierung `zeitraum`:** `page.tsx` validiert den Parameter gegen eine feste Liste (`GUELTIGE_ZEITRAEUME`), unbekannte Werte fallen sicher auf `"alle"` zurück — kein beliebiger String erreicht die Datenbankabfrage
+- [x] **Keine Secrets im Client-Code:** `getSupabaseAdmin` wird von keiner `"use client"`-Datei importiert (per Grep/Code-Review bestätigt); `PruefberichteFilterBar` (Client Component) enthält keinerlei DB-Zugriff
+- [x] **Kein Injection-Vektor:** keine Freitext-Eingaben auf dieser Seite, `zeitraum` ist ein validiertes Enum, keine `.or()`/`.ilike()`-Freitextfilter wie bei PROJ-3
+- [x] **Rate-Limiting:** kein neuer API-Endpoint, reine Server-Component-Seite — gleiches, bereits akzeptiertes Risikoprofil wie PROJ-3/5
+- [ ] **BUG-1 gefunden (Low, siehe unten):** `zeitraumCutoff` ist nicht robust gegen ungültige Eingaben, falls die Funktion künftig ausserhalb des bereits validierenden `page.tsx` aufgerufen wird (z.B. vom geplanten PROJ-10-CSV-Export)
+
+### Bugs Found
+
+#### BUG-1: `zeitraumCutoff` wirft eine ungefangene Exception bei ungültigem Zeitraum-Wert
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. `getPruefberichteFuerFirma(firmaId, { zeitraum: "nicht-numerisch" })` direkt aufrufen (aktuell nur über `page.tsx` erreichbar, das den Wert vorher validiert)
+  2. Erwartet: Entweder wird der Wert wie ein gültiger Wert behandelt (z.B. als "alle") oder ein kontrollierter Fehler wird geworfen
+  3. Tatsächlich: `Number("nicht-numerisch")` ergibt `NaN`, `cutoff.setDate(cutoff.getDate() - NaN)` erzeugt ein "Invalid Date"-Objekt, `.toISOString()` wirft dann eine ungefangene `RangeError` — die Exception wird zwar vom `try/catch` in `page.tsx` aufgefangen (zeigt die normale Fehlermeldung), aber die Ursache ist eine fragile Funktion, kein bewusst behandelter Fall
+- **Kontext:** Aktuell nicht ausnutzbar, da `page.tsx` den `zeitraum`-Parameter vorher gegen eine feste Liste validiert (`GUELTIGE_ZEITRAEUME`) — die einzige Aufrufstelle. Relevant wird es, sobald PROJ-10 (CSV-Export der Prüfberichte-Übersicht) dieselbe Funktion möglicherweise mit einem eigenen, nicht identisch validierten Parameter aufruft
+- **Priority:** Nice to have — `zeitraumCutoff` sollte defensiv auch ungültige/nicht-numerische Werte abfangen (z.B. auf "alle"-Verhalten zurückfallen), bevor PROJ-10 gebaut wird
+
+### Automatisierte Tests
+- **Unit-/Integrationstests (Vitest):** 127/127 grün gesamt — 10 neu in `pruefberichte/queries.test.ts` (`getPruefberichteFuerFirma`: leere Firma, Firma-Isolation, Soft-Delete, Sortierung, Zeitraum-Filter x2, Paginierung, Artikel-Info-Anreicherung, Bemerkungen/Prüfer)
+- **E2E-Tests (Playwright):** 34/34 grün gesamt (30 unverändert + 4 neu in `tests/PROJ-9-pruefberichte-uebersicht.spec.ts` für Chromium + Mobile Safari: Routen-Schutz mit und ohne Query-Parameter)
+- **Regression:** Alle bisherigen PROJ-1–8-Tests weiterhin grün — keine Regressionen durch PROJ-9. `npx tsc --noEmit`, `npm run lint` und `npm run build` laufen vollständig fehlerfrei
+
+### Summary
+- **Acceptance Criteria:** 10/10 abgedeckt
+- **Bugs Found:** 1 total (0 Critical, 0 High, 0 Medium, 1 Low) — nicht blockierend
+- **Security:** Solide — korrekte Firma-Isolation über die bereits geprüfte Geräte-Menge, validierter Zeitraum-Parameter, kein neuer Injection-/IDOR-Vektor, keine Secrets im Client-Code
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen. BUG-1 (robustere `zeitraumCutoff`) vor oder während der Umsetzung von PROJ-10 mitnehmen, kein Grund für einen Deployment-Aufschub von PROJ-9 selbst.
 
 ## Deployment
 _To be added by /deploy_
