@@ -4,6 +4,7 @@ import { getFirmenNamen } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraetById } from "@/lib/geraete/queries";
 import { formatArtikelInfo } from "@/lib/geraete/artikel-info";
+import { getFirmaEinstellungen } from "@/lib/firma-einstellungen/queries";
 import { getPruefberichteFuerGeraet } from "@/lib/pruefberichte/queries";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
@@ -48,6 +49,17 @@ export default async function GeraetDetailPage({
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
 
+  // Gleiche defensive Behandlung wie auf der Übersicht (siehe PROJ-7): eine
+  // nicht ladbare Konfiguration blendet KundenID einfach aus, statt die
+  // Seite abstürzen zu lassen.
+  let zeigtKundenId = false;
+  try {
+    const einstellungen = await getFirmaEinstellungen(currentFirmaId);
+    zeigtKundenId = einstellungen.zusatzspalten.includes("kundenId");
+  } catch (error) {
+    console.error("getFirmaEinstellungen fehlgeschlagen:", error);
+  }
+
   let pruefberichte: Awaited<ReturnType<typeof getPruefberichteFuerGeraet>> = [];
   let pruefberichteError: string | null = null;
   try {
@@ -78,7 +90,7 @@ export default async function GeraetDetailPage({
           <CardContent className="grid grid-cols-1 gap-4 py-6 sm:grid-cols-2">
             <Field label="Seriennummer" value={geraet.seriennummer} />
             <Field label="Barcode" value={geraet.barcode} />
-            <Field label="KundenID" value={geraet.kundenId} />
+            {zeigtKundenId && <Field label="KundenID" value={geraet.kundenId} />}
             <Field label="Standort" value={geraet.standortName} />
             <Field label="Lagerort" value={geraet.lagerort} />
             <Field label="Letzte Prüfung" value={formatDatum(geraet.letztePruefung)} />
