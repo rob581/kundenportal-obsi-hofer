@@ -1,6 +1,6 @@
 # PROJ-8: CSV-Export der Geräte-Übersicht
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -142,7 +142,93 @@ Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibli
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-22
+**App URL:** http://localhost:3000
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Wie bei allen bisherigen Features lässt sich der echte Login nicht automatisiert/wiederholbar durchspielen — ein echter Export mit echten Firma-Daten/Zusatzspalten-Konfiguration erfordert eine reale Session. Die komplette CSV-Erzeugungslogik (Spalten, Escaping, Quoting, BOM, Batching, Filterweitergabe) ist vollständig über Vitest-Unit-/Integrationstests abgedeckt; automatisiert per Playwright geprüft wurde, was ohne Session erreichbar ist (Routen-Schutz des neuen API-Endpoints). Dies ist der **erste kundenseitig erreichbare API-Endpoint** des Projekts (bisher nur der Secret-geschützte Cron-Endpoint) — entsprechend gründlicher Fokus auf den Security-Teil unten.
+
+### Acceptance Criteria Status
+
+#### AC-1: Klick auf "Als CSV exportieren" lädt eine Datei mit korrektem Namen herunter
+- [x] `route.test.ts` ("returns a CSV download with the correct headers on success") prüft `Content-Disposition: attachment; filename="geraete-uebersicht-YYYY-MM-DD.csv"` + Code-Review von `export-csv-button.tsx` (übernimmt den Dateinamen aus dem Header, mit Fallback)
+
+#### AC-2: Export enthält alle gefilterten Geräte über alle Seiten hinweg, nicht nur die aktuelle Seite
+- [x] `queries.test.ts` ("returns ALL matching Geräte, not just a page") — 30 simulierte Geräte, keine `.range()`-Begrenzung in `getGeraeteExportRows`, alle 30 werden zurückgegeben
+
+#### AC-3: Aktivierte Zusatzspalten (PROJ-7) erscheinen im Export
+- [x] `export-csv.test.ts` ("appends activated Zusatzspalten after the always-included columns") + `route.test.ts` (Parameter-Weitergabe-Test bestätigt, dass `resolveZusatzspalten`-Ergebnis in die CSV-Erzeugung einfliesst)
+
+#### AC-4: Keine Zusatzspalten aktiviert → nur Standard-/Detailfelder
+- [x] `export-csv.test.ts` ("always includes the standard/detail columns in the fixed order, even with no Zusatzspalten")
+
+#### AC-5: 0 Treffer → Export-Button deaktiviert
+- [x] Code-Review: `ExportCsvButton disabled={result!.total === 0}` in `uebersicht/page.tsx`, `Button`-Komponente setzt bei `disabled` automatisch `pointer-events-none`/`opacity-50` (shadcn-Standard)
+
+#### AC-6: Export schlägt fehl → Fehlermeldung, kein Download, Kunde bleibt auf der Seite
+- [x] Code-Review: `ExportCsvButton` nutzt `fetch()` statt Navigation; `catch`-Block setzt nur lokalen `error`-State, keine Navigation/kein `window.location` im gesamten Feature. `route.test.ts` bestätigt 500 bei einem Datenbankfehler, ohne dass die Route crasht
+
+#### AC-7: Formel-Präfixe (`=`/`+`/`-`/`@`) werden escaped, Excel interpretiert sie nicht als Formel
+- [x] `export-csv.test.ts`, parametrisierter Test über alle vier Präfixe — führendes Apostroph wird korrekt vorangestellt; zusätzlicher Test bestätigt, dass ein Präfix-Zeichen *mitten* im Wert unangetastet bleibt (keine Über-Eskalation)
+
+#### AC-8: Datei öffnet sich in Schweizer/deutschem Excel korrekt (Spalten, Umlaute)
+- [x] `export-csv.test.ts` (Header/Zeilen mit `;` getrennt, `﻿`-Präfix vorhanden) + `route.test.ts` prüft die rohen Bytes der Antwort explizit auf die UTF-8-BOM-Byte-Sequenz (`EF BB BF`) — wichtig, da `Response.text()` den BOM beim Dekodieren automatisch entfernt und ein reiner String-Vergleich das Vorhandensein auf dem Wire fälschlich negativ hätte testen können
+
+### Edge Cases Status
+
+#### EC-1: Firma mit mehreren hundert Geräten (Batching)
+- [x] `queries.test.ts` ("batches the Artikel lookup...") — 250 Geräte mit 250 distinct Artikel-IDs, `ARTIKEL_LOOKUP_CHUNK_SIZE = 200` erzwingt zwei Batches, alle 250 Zeilen korrekt angereichert
+
+#### EC-2: Freitextfeld enthält das Trennzeichen Semikolon
+- [x] `export-csv.test.ts` ("quotes values containing the semicolon delimiter")
+
+#### EC-3: Freitextfeld enthält Zeilenumbrüche
+- [x] `export-csv.test.ts` ("quotes values containing a line break")
+
+#### EC-4: Firma-Wechsel → Export bezieht sich auf die neu gewählte Firma
+- [x] Code-Review: `firmaId` wird bei jedem Request frisch über `getCurrentFirmaId()` aufgelöst (keine Server-seitige Zwischenspeicherung), identisches, bereits für PROJ-3/7 auditiertes Muster
+
+#### EC-5: Fehlender Wert → Zelle bleibt leer statt "—"
+- [x] `export-csv.test.ts` ("leaves cells empty (not '—') for missing values")
+
+#### EC-6: CSV-Injection-Schutz
+- [x] Deckt sich mit AC-7 oben — abgedeckt
+
+### Security Audit Results
+- [x] **Authentication:** `/api/uebersicht/export` ohne Session → Redirect zu `/login` (neuer Playwright-Test, live gegen die echte Next.js-Redirect-Implementierung, nicht nur gemockt) + `route.test.ts`
+- [x] **Query-Parameter umgehen die Session-Prüfung nicht:** zweiter Playwright-Test mit `status`/`suche`/`zuPruefen` gesetzt, landet trotzdem auf `/login`
+- [x] **Autorisierung/Firma-Isolation:** `firmaId` kommt ausschliesslich aus `getCurrentFirmaId()` (Session/Cookie-abgeleitet), nie aus einem Query-Parameter — es gibt keinen Parameter, über den eine fremde Firma-ID angefordert werden könnte (kein IDOR-Vektor)
+- [x] **Auth-Reihenfolge korrekt:** Route prüft E-Mail + Portal-Zugriff **selbst**, bevor `getCurrentFirmaId()` aufgerufen wird — wichtig, da `getCurrentFirmaId()` allein einen nicht angemeldeten Besucher fälschlich zu `/firmen-auswahl` statt `/login` geschickt hätte (verifiziert per Code-Review und den zwei redirect-Tests in `route.test.ts`)
+- [x] **Injection:** Suche über `kunden_id`/Seriennummer/Barcode/Lagerort nutzt dieselbe bereits auditierte `escapeOrListValue`-Funktion wie die Übersicht (PROJ-3) — kein neuer Vektor
+- [x] **CSV-Injection:** Alle Zellwerte durchlaufen ausnahmslos `escapeCsvCell` (keine Sonderbehandlung, die ein Feld auslässt) — verifiziert per Code-Review des `buildGeraeteExportCsv`-Spaltenmappings
+- [x] **Response-Header-Injection:** `Content-Disposition`-Dateiname wird ausschliesslich aus dem serverseitig berechneten Datum gebildet, nie aus Request-Daten — Query-Parameter fliessen nirgends in HTTP-Header ein
+- [x] **Content-Type/Content-Disposition verhindert Inline-Rendering:** `attachment`-Disposition + `text/csv`-Content-Type zwingen den Browser zum Download statt zur Anzeige — kein XSS-Vektor über den CSV-Inhalt
+- [x] **Keine Secrets im Client-Code:** `getSupabaseAdmin` wird ausschliesslich in serverseitigen Dateien verwendet (Route Handler läuft per Definition nur serverseitig); `export-csv-button.tsx` (Client Component) enthält keinerlei DB-Zugriff, nur `fetch()` gegen die eigene, bereits geschützte Route
+- [ ] **BUG-1 gefunden (Low, siehe unten):** Kein Rate-Limiting auf dem neuen Endpoint
+
+### Bugs Found
+
+#### BUG-1: Kein Rate-Limiting auf `/api/uebersicht/export`
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Als eingeloggter Kunde wiederholt `/api/uebersicht/export` aufrufen (z.B. Skript/Postman)
+  2. Erwartet: irgendeine Drosselung bei exzessiven Anfragen
+  3. Tatsächlich: keine Begrenzung — jeder Aufruf löst eine volle, ungepaginierte Datenbankabfrage aus
+- **Kontext:** Dies ist der erste kundenseitig erreichbare API-Endpoint des Projekts; alle bisherigen Seiten (PROJ-3/5/7) haben dasselbe, bereits akzeptierte Risikoprofil ("kein neuer öffentlicher API-Endpoint" war dort die Begründung, hier trifft sie nicht mehr zu). Kein Autorisierungs-Bypass möglich — ein Angreifer könnte nur wiederholt seine **eigenen** Firma-Daten abfragen, kein Zugriff auf fremde Daten
+- **Priority:** Nice to have — kein Blocker, da kein Datenzugriff über die eigene Firma hinaus möglich ist; guter Kandidat für einen späteren Rate-Limiting-Durchgang (siehe `docs/production/rate-limiting.md`), falls weitere API-Endpoints dazukommen
+
+### Automatisierte Tests
+- **Unit-/Integrationstests (Vitest):** 117/117 grün gesamt — 15 neu in `export-csv.test.ts`, 4 neu in `queries.test.ts` (`getGeraeteExportRows`), 6 neu in `route.test.ts`
+- **E2E-Tests (Playwright):** 30/30 grün gesamt (26 unverändert + 4 neu in `tests/PROJ-8-csv-export.spec.ts` für Chromium + Mobile Safari: Routen-Schutz mit und ohne Query-Parameter)
+- **Regression:** Alle bisherigen PROJ-1–7-Tests weiterhin grün — keine Regressionen durch PROJ-8. `npx tsc --noEmit`, `npm run lint` und `npm run build` laufen vollständig fehlerfrei
+
+### Summary
+- **Acceptance Criteria:** 8/8 abgedeckt
+- **Bugs Found:** 1 total (0 Critical, 0 High, 0 Medium, 1 Low) — nicht blockierend
+- **Security:** Solide für den ersten kundenseitig erreichbaren API-Endpoint — korrekte Auth-Reihenfolge, keine IDOR-/Injection-/CSV-Injection-/Header-Injection-Vektoren gefunden; einzige Lücke (Rate-Limiting) ist Low-Priority und ohne Datenzugriffs-Risiko
+- **Production Ready:** JA
+- **Recommendation:** Status auf "Approved" setzen. BUG-1 (Rate-Limiting) optional bei einem künftigen, projektweiten Rate-Limiting-Durchgang mitnehmen, kein Grund für einen Deployment-Aufschub.
 
 ## Deployment
 _To be added by /deploy_
