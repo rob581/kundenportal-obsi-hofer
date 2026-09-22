@@ -114,7 +114,7 @@ describe("PasskeyList", () => {
     expect(await screen.findByText("Passkey löschen?")).toBeInTheDocument();
     expect(deleteMock).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole("button", { name: "Löschen", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Löschen" }));
 
     await waitFor(() => expect(deleteMock).toHaveBeenCalledWith({ passkeyId: "pk1" }));
     expect(await screen.findByText("Noch kein Passkey eingerichtet.")).toBeInTheDocument();
