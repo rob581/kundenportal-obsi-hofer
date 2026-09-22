@@ -41,8 +41,17 @@ export default async function UebersichtPage({
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
 
-  const einstellungen = await getFirmaEinstellungen(currentFirmaId);
-  const zusatzspalten = resolveZusatzspalten(einstellungen.zusatzspalten);
+  // Defensiv: portal_firma_einstellungen ist eine eigene, manuell zu
+  // migrierende Tabelle (siehe PROJ-7) — falls die Migration auf dieser
+  // Umgebung noch nicht gelaufen ist, soll die Übersicht trotzdem ohne
+  // Zusatzspalten funktionieren statt mit einem Server-Fehler abzustürzen.
+  let zusatzspalten: ReturnType<typeof resolveZusatzspalten> = [];
+  try {
+    const einstellungen = await getFirmaEinstellungen(currentFirmaId);
+    zusatzspalten = resolveZusatzspalten(einstellungen.zusatzspalten);
+  } catch (error) {
+    console.error("getFirmaEinstellungen fehlgeschlagen:", error);
+  }
 
   const params = await searchParams;
   const seite = params.seite ? Number(params.seite) : 1;
