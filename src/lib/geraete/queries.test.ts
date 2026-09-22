@@ -33,14 +33,21 @@ function makeQuery(table: string) {
       });
       return builder;
     },
+    // Extended (PROJ-7) beyond plain ilike to also understand is.null/lt,
+    // needed for the "zuPruefen" filter's .or("letzte_pruefung.is.null,letzte_pruefung.lt.<cutoff>").
     or: (expr: string) => {
       const conditions = expr.split(",").map((clause) => {
-        const [column, , ...rest] = clause.split(".");
-        const raw = rest.join(".");
-        return { column, needle: raw.replace(/^%|%$/g, "").toLowerCase() };
+        const [column, op, ...rest] = clause.split(".");
+        return { column, op, raw: rest.join(".") };
       });
       rows = rows.filter((r) =>
-        conditions.some((c) => String(r[c.column] ?? "").toLowerCase().includes(c.needle))
+        conditions.some((c) => {
+          const value = r[c.column];
+          if (c.op === "is") return c.raw === "null" ? value == null : value != null;
+          if (c.op === "lt") return value != null && String(value) < c.raw;
+          const needle = c.raw.replace(/^%|%$/g, "").toLowerCase();
+          return String(value ?? "").toLowerCase().includes(needle);
+        })
       );
       return builder;
     },
@@ -82,6 +89,12 @@ beforeEach(() => {
 
 const STANDORT_A = "st-a";
 const STANDORT_B = "st-b";
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0, 10);
+}
 
 function seedZweiFirmen() {
   tableData.dv_standorte = [
@@ -294,6 +307,67 @@ describe("getGeraeteList", () => {
 
     expect(result.items.find((g) => g.id === "g1")?.kundenId).toBe("KD-2026-001");
     expect(result.items.find((g) => g.id === "g2")?.kundenId).toBeNull();
+  });
+
+  it("filters by zuPruefen: never inspected or inspected over 360 days ago (matches the Dashboard-Kennzahl)", async () => {
+    tableData.dv_standorte = [{ id: STANDORT_A, name: "Hauptlager Zürich", firma_id: "f1" }];
+    tableData.dv_geraete = [
+      {
+        id: "recent",
+        name: "Aktuell geprüft",
+        seriennummer: "R-1",
+        barcode: null,
+        status: "Freigabe",
+        letzte_pruefung: daysAgo(10),
+        ablegereife: null,
+        herstelljahr: null,
+        standort_id: STANDORT_A,
+        artikel_id: null,
+        lagerort: null,
+        pruefer: null,
+        zubehoer: null,
+        bemerkungen: null,
+        kunden_id: null,
+      },
+      {
+        id: "overdue",
+        name: "Überfällig",
+        seriennummer: "O-1",
+        barcode: null,
+        status: "Freigabe",
+        letzte_pruefung: daysAgo(400),
+        ablegereife: null,
+        herstelljahr: null,
+        standort_id: STANDORT_A,
+        artikel_id: null,
+        lagerort: null,
+        pruefer: null,
+        zubehoer: null,
+        bemerkungen: null,
+        kunden_id: null,
+      },
+      {
+        id: "never",
+        name: "Nie geprüft",
+        seriennummer: "N-1",
+        barcode: null,
+        status: "Freigabe",
+        letzte_pruefung: null,
+        ablegereife: null,
+        herstelljahr: null,
+        standort_id: STANDORT_A,
+        artikel_id: null,
+        lagerort: null,
+        pruefer: null,
+        zubehoer: null,
+        bemerkungen: null,
+        kunden_id: null,
+      },
+    ];
+
+    const result = await getGeraeteList("f1", { zuPruefen: true });
+
+    expect(result.items.map((g) => g.id).sort()).toEqual(["never", "overdue"]);
   });
 });
 

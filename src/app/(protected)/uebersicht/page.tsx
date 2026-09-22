@@ -35,7 +35,7 @@ function formatDatum(iso: string | null): string {
 export default async function UebersichtPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; suche?: string; seite?: string }>;
+  searchParams: Promise<{ status?: string; suche?: string; seite?: string; zuPruefen?: string }>;
 }) {
   const currentFirmaId = await getCurrentFirmaId();
   const firmen = await getFirmenNamen([currentFirmaId]);
@@ -59,7 +59,12 @@ export default async function UebersichtPage({
   let result: Awaited<ReturnType<typeof getGeraeteList>> | null = null;
   let loadError: string | null = null;
   try {
-    result = await getGeraeteList(currentFirmaId, { status: params.status, suche: params.suche, seite });
+    result = await getGeraeteList(currentFirmaId, {
+      status: params.status,
+      suche: params.suche,
+      seite,
+      zuPruefen: params.zuPruefen === "1",
+    });
   } catch {
     loadError = "Die Gerätedaten konnten nicht geladen werden.";
   }

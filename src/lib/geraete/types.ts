@@ -25,6 +25,9 @@ export type GeraeteQuery = {
   status?: string;
   suche?: string;
   seite?: number;
+  // Deckt sich exakt mit der "Zu prüfen"-Kennzahl auf dem Dashboard (PROJ-5) —
+  // siehe src/lib/geraete/zu-pruefen.ts.
+  zuPruefen?: boolean;
 };
 
 export type GeraeteResult = {

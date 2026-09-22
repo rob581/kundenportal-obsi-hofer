@@ -1,4 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getZuPruefenCutoff } from "./zu-pruefen";
 import type { Geraet, GeraeteQuery, GeraeteResult } from "./types";
 
 const PAGE_SIZE = 25;
@@ -163,6 +164,11 @@ export async function getGeraeteList(firmaId: string, query: GeraeteQuery): Prom
     geraeteQuery = geraeteQuery.or(
       `seriennummer.ilike.%${needle}%,barcode.ilike.%${needle}%,lagerort.ilike.%${needle}%`
     );
+  }
+  if (query.zuPruefen) {
+    // Eigene .or()-Gruppe, wird laut bestehendem Supabase-Verhalten (siehe
+    // Status+Suche-Kombination) mit den übrigen Filtern UND-verknüpft.
+    geraeteQuery = geraeteQuery.or(`letzte_pruefung.is.null,letzte_pruefung.lt.${getZuPruefenCutoff()}`);
   }
 
   const start = (page - 1) * PAGE_SIZE;

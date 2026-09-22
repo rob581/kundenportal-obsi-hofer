@@ -1,21 +1,11 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getStandortIdsFuerFirma } from "@/lib/geraete/queries";
+import { getZuPruefenCutoff } from "@/lib/geraete/zu-pruefen";
 import type { DashboardKennzahlen } from "./types";
 
 function normalizeStatus(status: string | null): string | null {
   if (!status) return null;
   return status.trim().toLowerCase();
-}
-
-// "Zu prüfen": kein Prüfdatum, oder älter als das (per Nutzerentscheidung
-// akzeptierte) 360-Tage-Intervall. String-Vergleich funktioniert korrekt für
-// ISO-Datumsstrings (YYYY-MM-DD), wie sie letzte_pruefung liefert.
-const ZU_PRUEFEN_TAGE = 360;
-
-function getZuPruefenCutoff(): string {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - ZU_PRUEFEN_TAGE);
-  return cutoff.toISOString().slice(0, 10);
 }
 
 // PostgREST's .in() inlines every ID into the request URL — with a Firma
