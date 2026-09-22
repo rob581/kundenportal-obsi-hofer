@@ -78,12 +78,45 @@ Keine offenen Fragen — alle Kernentscheidungen wurden im Interview getroffen.
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Firma→Geräte-Zuordnung wird wie bei PROJ-3/PROJ-8 in Gruppen (Chunks) abgefragt, alle Treffer serverseitig zusammengeführt, dann sortiert und die gewünschte Seite ausgeschnitten — statt direkter Datenbank-Paginierung | Eine über mehrere Gruppen verteilte Abfrage lässt sich nicht zuverlässig direkt in der Datenbank paginieren (`.range()` funktioniert nur auf einer einzelnen Abfrage); bei der erwarteten Grössenordnung (PROJ-1-Datenfund: rund 65 Prüfberichte pro Firma im Schnitt) ist das In-Memory-Sortieren/Paginieren unproblematisch | 2026-09-22 |
+| Geräte-/Artikel-Anreicherung für die "Gerät"-Spalte erfolgt erst NACH der Paginierung, nur für die aktuell angezeigten (max. 25) Zeilen | Hält den zusätzlichen Aufwand konstant klein, unabhängig von der Firmengrösse — dieselbe Optimierung wie bereits bei `getGeraeteList` (PROJ-3) für die Artikel-Info | 2026-09-22 |
+| Neue Funktion `getPruefberichteFuerFirma` erweitert die bestehende Query-Schicht `src/lib/pruefberichte/queries.ts` (PROJ-4), statt eine neue Datei anzulegen | Gleiche fachliche Domäne (Prüfberichte), `getPruefberichteFuerGeraet` bleibt für die Pro-Gerät-Ansicht unverändert bestehen | 2026-09-22 |
+| Wiederverwendung von `getStandorteFuerFirma` (bereits seit PROJ-8 exportiert) für die Firma→Standort→Geräte-Auflösung | Vermeidet eine dritte unabhängige Implementierung derselben Auflösung (nach PROJ-3 und PROJ-8) | 2026-09-22 |
+| Kein neuer API-Endpoint | Server Component liest wie bei allen bisherigen Übersichtsseiten (PROJ-3/5) direkt aus Supabase | 2026-09-22 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### Komponenten-Struktur
+
+```
+/pruefberichte (neue Seite, analog zu /uebersicht)
+├── AppHeader (erweitert: neuer Nav-Link "Prüfberichte")
+├── Zeitraum-Filter (Dropdown: Letzte 30/90/365 Tage, Alle — Standard: Alle)
+├── Prüfberichte-Tabelle
+│   ├── Spalten: Gerät (verlinkt zur Geräte-Detailseite), Datum, Ergebnis, Bemerkungen, Prüfer
+│   ├── Leer-Zustand ("keine Prüfberichte" bzw. "keine Treffer für diesen Zeitraum")
+│   └── Fehler-Zustand mit "Erneut versuchen"
+└── Pagination (25 pro Seite, gleiche Komponente wie PROJ-3)
+
+Dashboard (erweitert)
+└── Kachel "Total Prüfberichte" verlinkt neu zu /pruefberichte (Zeitraum "Alle")
+```
+
+### Datenmodell (in Textform)
+
+- Die Seite liest firmenweit alle nicht gelöschten Prüfberichte über alle Geräte der Firma — dieselbe Firma→Standort→Geräte-Auflösung wie in der Geräte-Übersicht (PROJ-3), nur ohne die Geräte selbst anzuzeigen
+- Da eine Firma potenziell hunderte Geräte hat, wird die zugehörige Geräte-ID-Liste in Gruppen aufgeteilt abgefragt (gleiches Muster wie der PROJ-5-Dashboard-Fix), alle Treffer über alle Gruppen zusammengeführt, nach Zeitraum-Filter gefiltert, nach Datum absteigend sortiert, und erst dann die gewünschte Seite (25 Einträge) ausgeschnitten
+- Für die "Gerät"-Spalte werden ausschliesslich für die aktuell angezeigten Zeilen die zugehörigen Geräte- und Artikel-Infos nachgeladen (Wiederverwendung derselben Artikel-Info-Formatierung wie PROJ-3) — kein Mehraufwand, der mit der Firmengrösse wächst
+- Zeitraum-Filter wird als URL-Parameter geführt (analog zu Status/Suche in PROJ-3), Seite wird bei Filteränderung zurückgesetzt
+
+### Technische Entscheidungen (Begründung)
+Siehe Decision Log → Technical Decisions oben.
+
+### Abhängigkeiten (Packages)
+Keine neuen — nutzt die bestehenden shadcn-Komponenten (`Select`, `Table`, `Pagination`) und die vorhandene Supabase-Anbindung.
 
 ## QA Test Results
 _To be added by /qa_
