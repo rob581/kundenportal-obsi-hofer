@@ -1,6 +1,6 @@
 # PROJ-10: CSV-Export der Prüfberichte-Übersicht
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -214,4 +214,6 @@ Keine neuen Bugs. PROJ-9 BUG-1 (`zeitraumCutoff`-Robustheit) wurde im Rahmen die
 - **Recommendation:** Status auf "Approved" setzen.
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-22 (automatisch via Vercel bei Push auf `main`, alle PROJ-10-Commits liefen bereits vor diesem `/deploy`-Schritt live)
+- **Verifiziert:** `npm run build`/`npm run lint` lokal fehlerfrei vor jedem Push; keine neuen Umgebungsvariablen, keine neue Migration nötig. Live-Verifikation des eigentlichen Downloads (echte Firma-Daten, Zeitraum-Filter, Excel-Öffnen) steht beim Nutzer noch aus.
