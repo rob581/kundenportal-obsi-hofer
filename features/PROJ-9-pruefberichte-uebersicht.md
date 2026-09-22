@@ -1,6 +1,6 @@
 # PROJ-9: Prüfberichte-Übersicht
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-22
 **Last Updated:** 2026-09-22
 
@@ -117,6 +117,18 @@ Siehe Decision Log → Technical Decisions oben.
 
 ### Abhängigkeiten (Packages)
 Keine neuen — nutzt die bestehenden shadcn-Komponenten (`Select`, `Table`, `Pagination`) und die vorhandene Supabase-Anbindung.
+
+## Implementation Notes (Frontend)
+
+- `src/lib/pruefberichte/types.ts` um `PruefberichtMitGeraet` (Pruefbericht + `geraetId`/`geraetLabel`), `Zeitraum` (`"30" | "90" | "365" | "alle"`) und die Query-/Result-Typen erweitert — `Pruefbericht`/`getPruefberichteFuerGeraet` (PROJ-4) bleiben unverändert für die Pro-Gerät-Ansicht.
+- Neue Mock-Data-Schicht `src/lib/pruefberichte/mock-data.ts` (`getPruefberichteFuerFirma`) — 40 simulierte Einträge über 5 Geräte, verschiedene Ergebnisse/leere Bemerkungen/fehlender Prüfer, genug für Zeitraum-Filter- und Paginierungs-Tests. Ignoriert `firmaId` bewusst wie bei den anderen Features in ihrer jeweiligen Mock-Phase. `/backend` ersetzt nur die Funktionsinnereien, gleiche async Signatur.
+- Neue Seite `src/app/(protected)/pruefberichte/page.tsx`: löst Firma wie bei PROJ-3/5/7 auf, validiert den `zeitraum`-Parameter gegen eine feste Liste (unbekannter/fehlender Wert fällt auf `"alle"` zurück), rendert Filterleiste, Tabelle (Gerät-Link, Datum, Ergebnis-Badge wie in PROJ-4, Bemerkungen, Prüfer) und Paginierung. Leer-Zustand unterscheidet "keine Prüfberichte überhaupt" von "keine Treffer für diesen Zeitraum", Fehler-Zustand mit "Erneut versuchen" — beides analog zu PROJ-3.
+- Neue Client-Component `src/components/pruefberichte-filter-bar.tsx`: einzelnes Zeitraum-`Select` (shadcn), URL-Parameter-getrieben wie `GeraeteFilterBar`, setzt die Seite bei Filteränderung zurück.
+- `src/components/app-header.tsx` und `app-header-mobile-menu.tsx`: neuer Nav-Link "Prüfberichte" (Desktop-Nav + mobiles Sheet-Menü).
+- `src/app/(protected)/dashboard/page.tsx`: Kachel "Total Prüfberichte" ist jetzt ein `Link` zu `/pruefberichte?zeitraum=alle`, mit demselben Hover-Effekt wie die anderen verlinkten Kacheln.
+- Keine neuen shadcn-Komponenten nötig — nutzt bestehende `Select`/`Table`/`Pagination`/`Badge`.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` (117 Tests, unverändert) und `npm run build` laufen fehlerfrei durch.
+- Noch offen (für `/backend`): echte `getPruefberichteFuerFirma`-Implementierung mit der in der Architektur festgelegten gruppierten Abfrage (Chunking über Geräte-IDs), In-Memory-Sortierung/Paginierung, und Geräte-/Artikel-Anreicherung nur für die aktuell angezeigte Seite.
 
 ## QA Test Results
 _To be added by /qa_

@@ -35,6 +35,9 @@ export async function AppHeader({ firmaName }: { firmaName?: string }) {
           <Link href="/dashboard" className="text-muted-foreground hover:text-foreground">
             Dashboard
           </Link>
+          <Link href="/pruefberichte" className="text-muted-foreground hover:text-foreground">
+            Prüfberichte
+          </Link>
           <Link href="/sicherheit" className="text-muted-foreground hover:text-foreground">
             Sicherheit
           </Link>

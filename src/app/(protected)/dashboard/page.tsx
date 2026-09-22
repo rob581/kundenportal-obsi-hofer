@@ -134,16 +134,18 @@ export default async function DashboardPage() {
                   </CardContent>
                 </Card>
               </Link>
-              <Card>
-                <CardHeader className="text-center">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
-                    Total Prüfberichte
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-center">
-                  <p className="text-2xl font-semibold">{kennzahlen!.totalPruefberichte}</p>
-                </CardContent>
-              </Card>
+              <Link href="/pruefberichte?zeitraum=alle" className="block">
+                <Card className="transition-colors hover:bg-muted/50">
+                  <CardHeader className="text-center">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Total Prüfberichte
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <p className="text-2xl font-semibold">{kennzahlen!.totalPruefberichte}</p>
+                  </CardContent>
+                </Card>
+              </Link>
               <Card>
                 <CardHeader className="text-center">
                   <CardTitle className="text-sm font-medium text-muted-foreground">
