@@ -48,7 +48,7 @@ vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: (table: string) => makeQuery(table) }),
 }));
 
-import { getPruefberichteFuerGeraet, getPruefberichteFuerFirma } from "./queries";
+import { getPruefberichteFuerGeraet, getPruefberichteFuerFirma, getPruefberichteExportRows } from "./queries";
 
 beforeEach(() => {
   for (const key of Object.keys(tableData)) delete tableData[key];
@@ -279,5 +279,103 @@ describe("getPruefberichteFuerFirma", () => {
     const result = await getPruefberichteFuerFirma("f1", {});
 
     expect(result.items[0]).toMatchObject({ bemerkungen: "Alles ok", pruefer: "M. Keller" });
+  });
+
+  it("behandelt einen ungültigen/nicht-numerischen Zeitraum wie 'alle' statt zu werfen (PROJ-9 BUG-1)", async () => {
+    seedFirmaMitGeraeten();
+    tableData.dv_pruefberichte = [
+      { id: "pb1", geraet_id: "g1", pruefdatum: daysAgo(400), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
+    ];
+
+    const result = await getPruefberichteFuerFirma("f1", { zeitraum: "nicht-numerisch" as never });
+
+    expect(result.items.map((i) => i.id)).toEqual(["pb1"]);
+  });
+});
+
+describe("getPruefberichteExportRows", () => {
+  it("returns an empty array for a Firma with no Standorte", async () => {
+    tableData.dv_standorte = [];
+
+    const items = await getPruefberichteExportRows("f-unknown", {});
+
+    expect(items).toEqual([]);
+  });
+
+  it("returns ALL matching Prüfberichte, not just a page (PROJ-10: Export ist nie paginiert)", async () => {
+    seedFirmaMitGeraeten();
+    tableData.dv_pruefberichte = Array.from({ length: 30 }, (_, i) => ({
+      id: `pb${i}`,
+      geraet_id: "g1",
+      pruefdatum: daysAgo(i),
+      ergebnis: "Freigabe",
+      bemerkungen: null,
+      pruefer: null,
+      deleted_at: null,
+    }));
+
+    const items = await getPruefberichteExportRows("f1", {});
+
+    expect(items.length).toBe(30);
+  });
+
+  it("only includes Prüfberichte of Geräte belonging to the Firma (Firma-Isolation)", async () => {
+    seedFirmaMitGeraeten();
+    tableData.dv_pruefberichte = [
+      { id: "pb1", geraet_id: "g1", pruefdatum: daysAgo(1), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
+      { id: "pb-fremd", geraet_id: "g-fremd", pruefdatum: daysAgo(1), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
+    ];
+
+    const items = await getPruefberichteExportRows("f1", {});
+
+    expect(items.map((i) => i.id)).toEqual(["pb1"]);
+  });
+
+  it("respects the Zeitraum-Filter", async () => {
+    seedFirmaMitGeraeten();
+    tableData.dv_pruefberichte = [
+      { id: "aktuell", geraet_id: "g1", pruefdatum: daysAgo(10), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
+      { id: "alt", geraet_id: "g1", pruefdatum: daysAgo(400), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
+    ];
+
+    const items = await getPruefberichteExportRows("f1", { zeitraum: "30" });
+
+    expect(items.map((i) => i.id)).toEqual(["aktuell"]);
+  });
+
+  it("treats an invalid/unknown zeitraum value as 'alle' instead of throwing (PROJ-9 BUG-1)", async () => {
+    seedFirmaMitGeraeten();
+    tableData.dv_pruefberichte = [
+      { id: "pb1", geraet_id: "g1", pruefdatum: daysAgo(400), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
+    ];
+
+    const items = await getPruefberichteExportRows("f1", { zeitraum: "irgendwas-ungueltiges" });
+
+    expect(items.map((i) => i.id)).toEqual(["pb1"]);
+  });
+
+  it("enriches every row with the Gerät's Artikel-Info label, even across many distinct Geräte", async () => {
+    tableData.dv_standorte = [{ id: STANDORT_A, name: "Hauptlager", firma_id: "f1" }];
+    tableData.dv_geraete = Array.from({ length: 250 }, (_, i) => ({
+      id: `g${i}`,
+      name: `Gerät ${i}`,
+      artikel_id: null,
+      standort_id: STANDORT_A,
+    }));
+    tableData.dv_pruefberichte = Array.from({ length: 250 }, (_, i) => ({
+      id: `pb${i}`,
+      geraet_id: `g${i}`,
+      pruefdatum: daysAgo(i),
+      ergebnis: "Freigabe",
+      bemerkungen: null,
+      pruefer: null,
+      deleted_at: null,
+    }));
+
+    const items = await getPruefberichteExportRows("f1", {});
+
+    expect(items.length).toBe(250);
+    expect(items.find((i) => i.geraetId === "g0")?.geraetLabel).toBe("Gerät 0");
+    expect(items.find((i) => i.geraetId === "g249")?.geraetLabel).toBe("Gerät 249");
   });
 });

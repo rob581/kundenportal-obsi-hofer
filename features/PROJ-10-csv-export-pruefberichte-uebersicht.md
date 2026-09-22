@@ -119,6 +119,19 @@ Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibli
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` (127 Tests, unverändert) und `npm run build` laufen fehlerfrei durch.
 - Noch offen (für `/backend`): der eigentliche Route Handler, `getPruefberichteExportRows` (ungepaginiert, mit für alle Treffer gebatchter Geräte-/Artikel-Anreicherung), robuste `zeitraumCutoff`-Behandlung (behebt PROJ-9 BUG-1), und `buildPruefberichteExportCsv`.
 
+## Implementation Notes (Backend)
+
+- **PROJ-9 BUG-1 behoben:** `zeitraumCutoff` (`src/lib/pruefberichte/queries.ts`) validiert jetzt mit `Number.isFinite(tage) && tage > 0`, bevor ein Cutoff-Datum berechnet wird — ein ungültiger/nicht-numerischer/negativer Wert wird wie "alle" (kein Filter) behandelt statt eine `RangeError` zu werfen. Nimmt weiterhin bewusst einen rohen `string` entgegen, nicht den engeren `Zeitraum`-Typ, da der Export-Endpoint den Parameter direkt aus der URL liest, ohne die Validierung von `pruefberichte/page.tsx` zu durchlaufen.
+- **Refactor zur Wiederverwendung:** Die bisher in `getPruefberichteFuerFirma` (PROJ-9) enthaltene Logik wurde in zwei geteilte Hilfsfunktionen aufgeteilt:
+  - `fetchAllePruefberichteFuerFirma(firmaId, zeitraum)` — Firma→Geräte-Auflösung, gechunkte `dv_pruefberichte`-Abfrage, Sortierung; liefert **alle** Treffer, keine Paginierung
+  - `anreichernMitGeraetLabel(rows)` — Geräte-/Artikel-Anreicherung für die "Gerät"-Spalte, jetzt selbst über die Geräte-IDs gechunkt (wichtiger Unterschied zu vorher: PROJ-9 nahm an, dass nie mehr als eine Seite/25 Zeilen angereichert werden müssen — für den Export gilt das nicht mehr)
+  - `getPruefberichteFuerFirma` ruft beide auf und paginiert dazwischen (unverändertes Verhalten, per bestehenden Tests bestätigt); `getPruefberichteExportRows` (neu, PROJ-10) ruft beide ohne Paginierung auf
+- Neues Modul `src/lib/pruefberichte/export-csv.ts`: `buildPruefberichteExportCsv` mit einem festen Fünf-Spalten-Set (Gerät, Datum, Ergebnis, Bemerkungen, Prüfer), nutzt `escapeCsvCell` aus `src/lib/geraete/export-csv.ts` (PROJ-8) wieder — keine eigene Escaping-Logik dupliziert.
+- Neuer Route Handler `src/app/api/pruefberichte/export/route.ts` (`GET`): identisches Muster wie PROJ-8s Export-Route (Session-/Zugriffsprüfung selbst, `getCurrentFirmaId()`, `Content-Disposition: attachment`, 500 bei Fehler statt Crash).
+- Kein neuer API-Endpoint für Zod-Validierung nötig — `zeitraum` ist ein einzelner optionaler String, dieselbe Behandlung wie bei PROJ-8/PROJ-9.
+- 18 neue Tests: 7 in `pruefberichte/queries.test.ts` (leere Firma, unpaginiert, Firma-Isolation, Zeitraum-Filter, ungültiger Zeitraum als "alle" behandelt — für Export und für die bestehende `getPruefberichteFuerFirma`, gebatchte Anreicherung über 250 Geräte), 5 in `export-csv.test.ts` (BOM, feste Spaltenreihenfolge, Zeilen-Mapping, leere Zellen, Formel-Escaping), 6 in `route.test.ts` (Auth-Redirects, erfolgreicher Download inkl. BOM-Bytes, Parameter-Weitergabe inkl. `undefined`, 500 bei Fehler) — insgesamt 145 Tests grün.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
+
 ## QA Test Results
 _To be added by /qa_
 
