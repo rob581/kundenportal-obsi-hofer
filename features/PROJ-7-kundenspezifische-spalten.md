@@ -1,6 +1,6 @@
 # PROJ-7: Kundenspezifische Spalten in der Geräte-Übersicht
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-21
 **Last Updated:** 2026-09-22
 
@@ -210,4 +210,7 @@ Eine Lücke wurde in dieser QA-Runde geschlossen: `resolveZusatzspalten` (zentra
 - **Recommendation:** Status auf "Approved" setzen. Vor dem eigentlichen Live-Nutzen durch Kunden müssen die beiden Migrationen (`0005`, `0006`) sowie mindestens ein `portal_firma_einstellungen`-Eintrag in der echten Datenbank vorhanden sein (laut Nutzer bereits erledigt) und der Dataverse-Sync muss `kunden_id` erfolgreich befüllen (abhängig vom separat verfolgten PROJ-1-Zugangsdaten-Problem, nicht Teil dieses Features).
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-22 (jeder Commit ab `a5985d0` deployt automatisch via Vercel bei Push auf `main`; die letzten PROJ-7-bezogenen Commits liefen bereits vor diesem `/deploy`-Schritt live)
+- **Verifiziert:** Nutzer hat während der Frontend-/Backend-/Refinement-Phase live gegen Production getestet — Migrationen `0005`–`0007` im Supabase SQL Editor ausgeführt, `portal_firma_einstellungen`-Eintrag über die Referenz-Query gesetzt, Zusatzspalten (inkl. KundenID) in der Übersicht und auf der Detailseite bestätigt, Suche über KundenID und der "Zu prüfen"-Kachel-Link bestätigt ("perfekt", mehrfach). Deployment-Log frei von Warnungen (`allowScripts` für `sharp`/`unrs-resolver` behoben).
+- **Bekannte, separat verfolgte Restabhängigkeit:** Der Dataverse-Sync (PROJ-1) muss zuverlässig laufen, damit `kunden_id` für alle Geräte befüllt wird — manueller Cron-Trigger hat funktioniert, der erste automatische Lauf (03:00 Uhr) steht zum Zeitpunkt dieses Deploys noch aus (Nutzer beobachtet das separat).

@@ -21,7 +21,7 @@
 | PROJ-4 | Prüfberichte-Liste | Deployed | [Spec](../features/PROJ-4-pruefberichte-liste.md) | 2026-09-15 |
 | PROJ-5 | Dashboard | Deployed | [Spec](../features/PROJ-5-dashboard.md) | 2026-09-15 |
 | PROJ-6 | Passkey-Login | Deployed | [Spec](../features/PROJ-6-passkey-login.md) | 2026-09-21 |
-| PROJ-7 | Kundenspezifische Spalten in der Geräte-Übersicht | Approved | [Spec](../features/PROJ-7-kundenspezifische-spalten.md) | 2026-09-21 |
+| PROJ-7 | Kundenspezifische Spalten in der Geräte-Übersicht | Deployed | [Spec](../features/PROJ-7-kundenspezifische-spalten.md) | 2026-09-21 |
 
 <!-- Add features above this line -->
 
