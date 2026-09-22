@@ -115,6 +115,18 @@ Keine neuen — nutzt weiterhin die bestehende Supabase-Anbindung und die bereit
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` (74 Tests, unverändert) und `npm run build` laufen fehlerfrei durch (ein vorbestehender, unabhängiger `tsc`-Fehler in `passkey-list.test.tsx` bleibt unverändert). Manuelle Live-Verifikation mit echtem Login steht noch aus (Nutzer-Review), da sich der Login-Flow wie bei den anderen Features nicht automatisiert durchspielen lässt.
 - Noch offen (für `/backend`): echte Supabase-Tabelle `portal_firma_einstellungen` + Abfrage, PROJ-1-Sync-Erweiterung für `bmvcc_KundenID` inkl. Migration.
 
+## Implementation Notes (Backend)
+
+- Neue Migration `supabase/migrations/0005_geraete_kunden_id.sql`: fügt `kunden_id text` zu `dv_geraete` hinzu (rein additiv, gleiches Muster wie `0003`/`0004`).
+- Neue Migration `supabase/migrations/0006_portal_firma_einstellungen.sql`: neue Tabelle `portal_firma_einstellungen` (`firma_id text primary key`, `zusatzspalten text[]`, `updated_at`), bewusst ohne Fremdschlüssel zu `dv_firmen` (gleiche "loose reference"-Begründung wie Migration `0002`) und komplett unabhängig von den `dv_*`-Sync-Tabellen. RLS aktiviert, **keine** Policies für `anon`/`authenticated` — exakt dieselbe Deny-all-Konvention wie bei allen `dv_*`-Tabellen (nur der Service-Role-Key liest/schreibt, serverseitig). Die Tabelle wird ausschliesslich manuell durch OBSI Hofer direkt in Supabase gepflegt, kein Schreibpfad im Code.
+- `bmvcc_KundenID` (Dataverse-LogicalName: `bmvcc_kundenid`, alles klein wie bei allen anderen Feldern, siehe Hinweis in `jobs.ts`) neu in den `geraete`-Sync-Job aufgenommen (`select` + `map` in `src/lib/sync/jobs.ts`) und im Zod-Schema (`src/lib/sync/entities.ts`) ergänzt — gleicher Mechanismus wie jedes andere Gerätefeld, keine Sonderbehandlung nötig.
+- `src/lib/geraete/queries.ts`: `kunden_id` zu beiden `.select(...)`-Spaltenlisten (`getGeraeteList`, `getGeraetById`) ergänzt; `mapGeraetRow` liefert jetzt den echten Wert (`row.kunden_id`) statt des Frontend-Platzhalters `null`.
+- Mock-Data-Schicht `src/lib/firma-einstellungen/mock-data.ts` durch echte Abfrage `src/lib/firma-einstellungen/queries.ts` ersetzt (`getFirmaEinstellungen`, gleiche async Signatur) — liest `portal_firma_einstellungen` per `firma_id`, Firma ohne Eintrag liefert `{ zusatzspalten: [] }` (kein Fehler). Aufrufende Seite (`uebersicht/page.tsx`) musste nur den Import-Pfad ändern.
+- Kein neuer API-Endpoint — Server Component liest weiterhin direkt über `getSupabaseAdmin()`, konsistent mit PROJ-3/4/5.
+- 4 neue Tests: 2 in `src/lib/firma-einstellungen/queries.test.ts` (Firma mit/ohne Konfigurationseintrag), 2 zusätzliche Assertions in `src/lib/geraete/queries.test.ts` (`kundenId`-Mapping in `getGeraeteList` und `getGeraetById`) — insgesamt 78 Tests grün.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch (der vorbestehende, unabhängige `tsc`-Fehler in `passkey-list.test.tsx` bleibt unverändert).
+- **Wichtig, noch offen:** Die beiden neuen Migrationen sind als SQL-Dateien im Repo bereit, aber noch **nicht** gegen die echte Supabase-Instanz ausgeführt — das übernimmt der Nutzer manuell über den Supabase SQL Editor (gleiches Vorgehen wie bei den bisherigen Migrationen). Erst danach befüllt der nächste nächtliche Sync-Lauf (03:00 Uhr) `kunden_id` für alle Geräte; die Zusatzspalten-Konfiguration pro Firma muss der Nutzer ebenfalls manuell in `portal_firma_einstellungen` eintragen, damit Kunden tatsächlich Zusatzspalten sehen.
+
 ## QA Test Results
 _To be added by /qa_
 

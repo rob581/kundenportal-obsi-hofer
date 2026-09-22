@@ -65,6 +65,7 @@ const geraetSchema = z.object({
   zubehoer: z.string().nullable().optional(),
   dokumentation: z.string().nullable().optional(),
   bemerkungen: z.string().nullable().optional(),
+  kunden_id: z.string().nullable().optional(),
 });
 
 const pruefberichtSchema = z.object({

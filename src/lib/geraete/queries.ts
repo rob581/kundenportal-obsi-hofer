@@ -43,6 +43,7 @@ type GeraetRow = {
   pruefer: string | null;
   zubehoer: string | null;
   bemerkungen: string | null;
+  kunden_id: string | null;
 };
 
 type ArtikelInfo = {
@@ -73,9 +74,7 @@ function mapGeraetRow(row: GeraetRow, standortName: string | null, artikel: Arti
     artikelNorm: artikel?.norm ?? null,
     artikelTyp: artikel?.artikeltyp ?? null,
     artikelDimension: artikel?.dimension ?? null,
-    // Noch nicht Teil von GeraetRow/der Supabase-Abfrage — siehe PROJ-7,
-    // wird erst mit der PROJ-1-Sync-Erweiterung für bmvcc_KundenID befüllt.
-    kundenId: null,
+    kundenId: row.kunden_id,
   };
 }
 
@@ -151,7 +150,7 @@ export async function getGeraeteList(firmaId: string, query: GeraeteQuery): Prom
   let geraeteQuery = supabase
     .from("dv_geraete")
     .select(
-      "id, name, seriennummer, barcode, status, letzte_pruefung, ablegereife, herstelljahr, standort_id, artikel_id, lagerort, pruefer, zubehoer, bemerkungen",
+      "id, name, seriennummer, barcode, status, letzte_pruefung, ablegereife, herstelljahr, standort_id, artikel_id, lagerort, pruefer, zubehoer, bemerkungen, kunden_id",
       { count: "exact" }
     )
     .in("standort_id", standortIds);
@@ -204,7 +203,7 @@ export async function getGeraetById(id: string, firmaId: string): Promise<Geraet
   const { data: geraet, error } = await supabase
     .from("dv_geraete")
     .select(
-      "id, name, seriennummer, barcode, status, letzte_pruefung, ablegereife, herstelljahr, standort_id, artikel_id, lagerort, pruefer, zubehoer, bemerkungen"
+      "id, name, seriennummer, barcode, status, letzte_pruefung, ablegereife, herstelljahr, standort_id, artikel_id, lagerort, pruefer, zubehoer, bemerkungen, kunden_id"
     )
     .eq("id", id)
     .maybeSingle();

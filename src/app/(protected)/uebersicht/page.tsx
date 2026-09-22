@@ -4,7 +4,7 @@ import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getGeraeteList } from "@/lib/geraete/queries";
 import { formatArtikelInfo } from "@/lib/geraete/artikel-info";
 import { resolveZusatzspalten } from "@/lib/geraete/zusatzspalten";
-import { getFirmaEinstellungen } from "@/lib/firma-einstellungen/mock-data";
+import { getFirmaEinstellungen } from "@/lib/firma-einstellungen/queries";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
 import { GeraeteFilterBar } from "@/components/geraete-filter-bar";

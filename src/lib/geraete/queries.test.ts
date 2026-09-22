@@ -104,6 +104,7 @@ function seedZweiFirmen() {
       pruefer: null,
       zubehoer: null,
       bemerkungen: null,
+      kunden_id: "KD-2026-001",
     },
     {
       id: "g2",
@@ -120,6 +121,7 @@ function seedZweiFirmen() {
       pruefer: null,
       zubehoer: null,
       bemerkungen: null,
+      kunden_id: null,
     },
     {
       id: "g3",
@@ -136,6 +138,7 @@ function seedZweiFirmen() {
       pruefer: null,
       zubehoer: null,
       bemerkungen: null,
+      kunden_id: null,
     },
     {
       id: "g4",
@@ -152,6 +155,7 @@ function seedZweiFirmen() {
       pruefer: null,
       zubehoer: null,
       bemerkungen: null,
+      kunden_id: null,
     },
   ];
   tableData.dv_artikel = [{ id: "a1", bezeichnung: "Feuerlöscher 6kg ABC", hersteller: "GLORIA", norm: "EN 3" }];
@@ -252,6 +256,7 @@ describe("getGeraeteList", () => {
       pruefer: null,
       zubehoer: null,
       bemerkungen: null,
+      kunden_id: null,
     }));
 
     const page1 = await getGeraeteList("f1", { seite: 1 });
@@ -281,6 +286,15 @@ describe("getGeraeteList", () => {
     // g2 has no artikel_id at all — no Lookup should be attempted, fields stay null.
     expect(g2?.artikelBezeichnung).toBeNull();
   });
+
+  it("maps kunden_id to kundenId (PROJ-7 Zusatzspalte)", async () => {
+    seedZweiFirmen();
+
+    const result = await getGeraeteList("f1", {});
+
+    expect(result.items.find((g) => g.id === "g1")?.kundenId).toBe("KD-2026-001");
+    expect(result.items.find((g) => g.id === "g2")?.kundenId).toBeNull();
+  });
 });
 
 describe("getGeraetById", () => {
@@ -294,6 +308,7 @@ describe("getGeraetById", () => {
       standortName: "Hauptlager Zürich",
       artikelBezeichnung: "Feuerlöscher 6kg ABC",
       herstelljahr: "2019",
+      kundenId: "KD-2026-001",
     });
   });
 
@@ -330,6 +345,7 @@ describe("getGeraetById", () => {
         pruefer: null,
         zubehoer: null,
         bemerkungen: null,
+        kunden_id: null,
       },
     ];
 

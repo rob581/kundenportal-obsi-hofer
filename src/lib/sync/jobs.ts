@@ -118,6 +118,7 @@ export const SYNC_JOBS: SyncJob[] = [
       "bmvcc_zubehoer",
       "bmvcc_dokumentation",
       "bmvcc_notitzen",
+      "bmvcc_kundenid",
     ],
     map: (r) => ({
       id: r.bmvcc_equipmentrecordid as string,
@@ -135,6 +136,9 @@ export const SYNC_JOBS: SyncJob[] = [
       zubehoer: r.bmvcc_zubehoer ?? null,
       dokumentation: r.bmvcc_dokumentation ?? null,
       bemerkungen: r.bmvcc_notitzen ?? null,
+      // Kunden-eigene Gerätebezeichnung (siehe PROJ-7) — bewusst nicht für
+      // die Firma-Zuordnung verwendet, siehe PROJ-1 Decision Log.
+      kunden_id: r.bmvcc_kundenid ?? null,
     }),
   },
   {
