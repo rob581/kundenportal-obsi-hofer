@@ -15,7 +15,7 @@
 - Als OBSI Hofer GmbH möchte ich, dass Kunden ausschliesslich Prüfberichte ihrer eigenen Geräte sehen können, damit keine fremden Daten offengelegt werden.
 
 ## Out of Scope
-- PDF-Download der Prüfberichte — zurückgestellt, bis der PDF-Speicherort in Dataverse geklärt ist (offene Frage aus PROJ-1: `IsDocumentManagementEnabled = 0`, kein Datei-/Bild-Feld am Entity, vermutlich Dataverse Notes/Attachments, aber unverifiziert); wird nachgezogen, sobald geklärt (per `/refine PROJ-4` oder als eigenes Feature)
+- PDF-Download der Prüfberichte — ursprünglich zurückgestellt bis zur Klärung des PDF-Speicherorts in Dataverse; **endgültig nicht mehr geplant** (Nutzerentscheidung 2026-09-22), da PROJ-8/PROJ-10 (CSV-Export der Geräte-/Prüfberichte-Übersicht) denselben Bedarf bereits abdecken — siehe Decision Log
 - Globale/firmenweite Prüfberichte-Liste über alle Geräte hinweg — bewusst nur pro Gerät (siehe Decision Log); kann später ergänzt werden
 - Eigene Detailseite pro Prüfbericht — die vier Felder passen kompakt als Tabelle direkt auf die Geräte-Detailseite
 - Filtern/Suchen innerhalb der Prüfberichte-Liste eines Geräts — bei durchschnittlich 2–3 Berichten pro Gerät nicht nötig für MVP
@@ -46,7 +46,7 @@
 
 ## Open Questions
 - [x] Exakter Dataverse-Feldname für das Bemerkungsfeld an `bmvcc_Pruefbericht` → `bmvcc_remark` (vom Nutzer bestätigt, 2026-09-17)
-- [ ] PDF-Speicherort weiterhin ungeklärt (aus PROJ-1 übernommen) — betrifft nur eine spätere PDF-Download-Erweiterung dieses oder eines neuen Features, nicht diese Version
+- [x] PDF-Speicherort weiterhin ungeklärt (aus PROJ-1 übernommen) → gegenstandslos (2026-09-22): PDF-Download wird nicht mehr verfolgt, siehe Decision Log
 
 ## Decision Log
 
@@ -54,6 +54,7 @@
 | Decision | Rationale | Date |
 |----------|-----------|------|
 | PDF-Download vorerst komplett aus dem Scope genommen | PDF-Speicherort in Dataverse ist noch nicht verifiziert (offene Frage aus PROJ-1); Prüfberichte-Metadaten (Datum/Ergebnis/Bemerkungen/Prüfer) liefern bereits eigenständigen Kundennutzen ohne PDF | 2026-09-17 |
+| **PDF-Download endgültig gestrichen, nicht nur zurückgestellt** | Der CSV-Export der Geräte-/Prüfberichte-Übersicht (PROJ-8/PROJ-10) deckt den ursprünglichen Bedarf ("Daten zum Weiterverarbeiten mitnehmen") bereits ab — der ungeklärte PDF-Speicherort in Dataverse muss damit nicht mehr geklärt werden, PDF-Download ist kein offener Punkt mehr | 2026-09-22 |
 | Prüfberichte werden pro Gerät angezeigt, nicht als globale firmenweite Liste | Passt zum natürlichen Kunden-Workflow ("ich schaue mir dieses eine Gerät an") und zum bereits in PROJ-3 vorgesehenen Anknüpfungspunkt | 2026-09-17 |
 | Archivierte Prüfberichte werden normal angezeigt, nicht ausgeblendet | "Archiviert" bedeutet abgeschlossen/historisch, nicht ungültig; für sicherheitsrelevante Geräte ist die vollständige Prüfhistorie relevant | 2026-09-17 |
 | Direkt als neuer Abschnitt auf der bestehenden Geräte-Detailseite, keine eigene Unterseite | Kompakte Datenmenge (Ø 2–3 Berichte/Gerät), kein zusätzlicher Klick nötig | 2026-09-17 |

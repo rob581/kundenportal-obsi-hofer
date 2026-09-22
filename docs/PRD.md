@@ -1,7 +1,7 @@
 # Product Requirements Document
 
 ## Vision
-Self-Service-Kundenportal für die OBSI Hofer GmbH, über das Kunden jederzeit den aktuellen Status ihrer sicherheitsrelevanten Geräte sowie die zugehörigen Prüfberichte einsehen und als PDF herunterladen können – als Ersatz für die heutige manuelle Aufbereitung in Excel und den Versand per E-Mail.
+Self-Service-Kundenportal für die OBSI Hofer GmbH, über das Kunden jederzeit den aktuellen Status ihrer sicherheitsrelevanten Geräte sowie die zugehörigen Prüfberichte einsehen und als CSV exportieren können – als Ersatz für die heutige manuelle Aufbereitung in Excel und den Versand per E-Mail.
 
 ## Target Users
 Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte ihrer Geräte einsehen wollen, ohne dafür bei OBSI Hofer nachfragen zu müssen. Zugang wird manuell freigeschaltet (keine Selbstregistrierung), da die Zuordnung über den bestehenden Dataverse-Account/Kontakt erfolgt.
@@ -13,7 +13,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 | P0 (MVP) | Dataverse-Sync-Service | Planned |
 | P0 (MVP) | Kunden-Login (Supabase Auth) | Deployed |
 | P0 (MVP) | Geräte-Übersicht (eigene Geräte, Status) | Planned |
-| P0 (MVP) | Prüfberichte-Liste (PDF-Download folgt separat) | Planned |
+| P0 (MVP) | Prüfberichte-Liste | Planned |
 | P0 (MVP) | Dashboard (Geräte pro Status, Total Prüfberichte, letzte Prüfung) | Planned |
 | P1 | Passkey-Login (zusätzlich zu E-Mail+Code) | Deployed |
 | P2 | Kundenspezifische Spalten in der Geräte-Übersicht | Deployed |
@@ -25,7 +25,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 - Reduktion der internen Zeit für manuelle Excel-Aufbereitung/Versand von Prüfberichten
 - Kundenzufriedenheit (z.B. Feedback/Umfrage nach Launch)
 - Aktive Nutzung: Anteil Kunden mit mind. 1 Login
-- Anzahl PDF-Downloads pro Monat
+- Anzahl CSV-Exports pro Monat
 
 ## Constraints
 - Dataverse ist Source of Truth für alle Daten (Kunden, Geräte, Prüfberichte, Artikel) inkl. Relationen
@@ -33,7 +33,6 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 - Auth: Supabase Auth (E-Mail-Einmal-Code; Passkey/WebAuthn als spätere Option möglich) — Wechsel von ursprünglich Microsoft Entra External ID, siehe PROJ-2 Decision Log (2026-09-21). Kein besonderer Grund für die ursprüngliche Festlegung erinnerlich; aufgehoben, solange das Portal noch keine Produktivnutzer hat
 - Kunden-Zuordnung: Login-E-Mail ↔ Dataverse-Kontakt/Account
 - Portal ist read-only – keine Schreibrechte für Kunden, kein Zurückschreiben nach Dataverse
-- Offen: genauer PDF-Speicherort in Dataverse (Notes/Attachments vs. SharePoint) – bei der PROJ-4-Spezifikation bewusst zurückgestellt (PROJ-4 deckt vorerst nur die Prüfberichte-Metadaten ohne PDF ab); muss geklärt sein, bevor der PDF-Download als eigene Erweiterung umgesetzt wird
 - Team: 1 Person (Nutzer selbst, hat Dataverse-Admin-Zugriff)
 - Design: definiert in `docs/design-system.md` (freie Palette, nüchtern & vertrauenswürdig, Primärfarbe klares Stahlblau); auf allen bereits gebauten Seiten via `globals.css` angewendet
 

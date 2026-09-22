@@ -47,7 +47,7 @@
 
 ## Open Questions
 - [x] Wie soll die Sync-Verarbeitung mit "verwaisten" Referenzen umgehen (Prüfbericht trifft vor zugehörigem Gerät ein, oder übergeordneter Datensatz wird hart gelöscht während Kinder-Datensätze noch existieren)? → Gelöst durch lockere (nicht strikt erzwungene) Fremdschlüssel in der Sync-Datenbank, siehe Tech Design (2026-09-16)
-- [ ] Genauer PDF-Speicherort für Prüfberichte (Notes/Attachments vs. sonstiges) — `bmvcc_Pruefbericht` hat `IsDocumentManagementEnabled = 0` (kein SharePoint), es existiert kein Datei-/Bild-Feld unter den Attributen → sehr wahrscheinlich Dataverse Notes/Attachments (Annotationen), aber vom Nutzer noch in Dataverse zu verifizieren. Relevant für PROJ-4.
+- [x] Genauer PDF-Speicherort für Prüfberichte (Notes/Attachments vs. sonstiges) — `bmvcc_Pruefbericht` hat `IsDocumentManagementEnabled = 0` (kein SharePoint), es existiert kein Datei-/Bild-Feld unter den Attributen → gegenstandslos (2026-09-22): PDF-Download wird nicht mehr verfolgt, der CSV-Export (PROJ-8/PROJ-10) deckt den Bedarf bereits ab, siehe PROJ-4 Decision Log
 - [x] Wie genau wird der Admin bei einem fehlgeschlagenen Cron-Lauf benachrichtigt? → E-Mail (Nutzerentscheidung), Dienst-Auswahl bei `/backend` (2026-09-16)
 - [x] Wie wird verhindert, dass eine unvollständige Dataverse-Antwort fälschlich zu Massen-Löschungen führt? → Sicherheitsschwelle: ab mehr als 20% "verschwundenen" Zeilen pro Entität wird nicht gelöscht, nur gewarnt (2026-09-16)
 - [x] Wie wird die Laufzeit bei ~30'000 Datensätzen innerhalb der Vercel-Funktionslimits gehalten? → Batches statt Einzelzeilen beim Supabase-Schreiben; genaue Batch-Grösse bei `/backend` final festgelegt (2026-09-16)
