@@ -96,7 +96,8 @@ describe("buildErfolgsmessungReport", () => {
 
     expect(report).toContain("1/2 Firmen (50%)");
     expect(report).toContain("Eingeloggt: Firma A");
-    expect(report).toContain("Noch nicht eingeloggt: Firma B");
+    expect(report).not.toContain("Firma B");
+    expect(report).not.toContain("Noch nicht eingeloggt");
     expect(report).toContain("2026-09 – geraete: 1");
   });
 

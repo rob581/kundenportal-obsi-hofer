@@ -56,7 +56,6 @@ function formatLoginQuoteSection(rows: LoginStatusRow[]): string[] {
   }
 
   const mitLogin = rows.filter((r) => r.hatLogin);
-  const ohneLogin = rows.filter((r) => !r.hatLogin);
   const quoteProzent = Math.round((mitLogin.length / rows.length) * 1000) / 10;
 
   return [
@@ -64,7 +63,6 @@ function formatLoginQuoteSection(rows: LoginStatusRow[]): string[] {
     `${mitLogin.length}/${rows.length} Firmen (${quoteProzent}%)`,
     "",
     `Eingeloggt: ${mitLogin.map((f) => f.firmaName).join(", ") || "–"}`,
-    `Noch nicht eingeloggt: ${ohneLogin.map((f) => f.firmaName).join(", ") || "–"}`,
   ];
 }
 
