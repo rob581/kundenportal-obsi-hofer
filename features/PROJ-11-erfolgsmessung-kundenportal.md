@@ -1,8 +1,8 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Approved
+## Status: Architected
 **Created:** 2026-09-23
-**Last Updated:** 2026-09-23
+**Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — Datenbasis `dv_kontakte`/`dv_relationen`/`dv_firmen`
@@ -14,11 +14,14 @@
 - Als Betreiber des Kundenportals (OBSI Hofer GmbH) möchte ich sehen, welcher Anteil meiner Kunden sich mindestens einmal eingeloggt hat, damit ich den Erfolg der Portal-Einführung messen kann.
 - Als Betreiber möchte ich sehen, wie viele CSV-Exports pro Monat stattfinden, damit ich die aktive Nutzung der Reporting-Funktion beurteilen kann.
 - Als Betreiber möchte ich diese Zahlen per einfacher SQL-Abfrage abrufen können, ohne dass dafür eine eigene Oberfläche gebaut/gewartet werden muss (siehe PRD Non-Goal "Kein Admin-Backend für interne Mitarbeiter").
+- Als Betreiber möchte ich diesen Report zusätzlich einmal wöchentlich automatisch per E-Mail an mich selbst zugeschickt bekommen, damit ich nicht aktiv daran denken muss, ihn manuell abzurufen (Nachtrag 2026-09-23).
+- Als Betreiber möchte ich im Report sehen, *welche* Kunden sich eingeloggt haben (nicht nur die aggregierte Quote), damit ich gezielt bei den Firmen nachfassen kann, die das Portal noch nicht nutzen (siehe Marketingkonzept Phase 4 "Nachfassen") (Nachtrag 2026-09-23).
 
 ## Out of Scope
-- Admin-Backend/UI für die Kennzahlen — bewusst nicht gebaut, siehe PRD Non-Goal "Kein Admin-Backend für interne Mitarbeiter"; Zahlen werden ausschliesslich per SQL im Supabase SQL Editor abgerufen
+- Admin-Backend/UI für die Kennzahlen — bewusst nicht gebaut, siehe PRD Non-Goal "Kein Admin-Backend für interne Mitarbeiter"; Zahlen werden per SQL im Supabase SQL Editor oder im wöchentlichen E-Mail-Report abgerufen, nie über eine eigene Oberfläche
 - Tracking pro einzelnem Kontakt/E-Mail — nur firmenweit aggregiert (siehe Product Decisions)
-- Automatisierte Reports/E-Mail-Digest der Kennzahlen — kein Notification-System, siehe PRD Non-Goal "keine automatischen Benachrichtigungen"
+- ~~Automatisierte Reports/E-Mail-Digest der Kennzahlen~~ — **Nachtrag 2026-09-23: doch umgesetzt**, siehe neue Acceptance Criteria AC-9 bis AC-13 und Decision Log. Das PRD-Non-Goal "keine automatischen Benachrichtigungen" bezieht sich auf Benachrichtigungen *an Kunden* (Beispiel dort: "E-Mail bei neuem Prüfbericht") — eine interne Betreiber-Mail an OBSI Hofer selbst fällt nicht darunter, gleiche Kategorie wie die bereits bestehende PROJ-1-Sync-Erfolgs-Mail
+- Automatische Benachrichtigungen an Kunden jeglicher Art — bleibt klar ausgeschlossen (PRD Non-Goal), betrifft aber nicht den in diesem Refinement ergänzten internen Report
 - "Reduktion der internen Zeit für manuelle Excel-Aufbereitung" (Success Metric aus der PRD) — nicht software-messbar, bleibt Selbstbeobachtung
 - "Kurze Feedback-Frage nach 4 Wochen an die Pilotkunden" (aus dem Marketingkonzept) — manuelle Kundenansprache, kein Software-Feature
 - Rückwirkender Backfill von Export-Daten vor Einführung dieses Features — Zähler startet bei 0 ab Deployment
@@ -37,20 +40,35 @@
 - [ ] Angenommen es existiert eine SQL-Abfrage/View für Exports pro Monat, wenn sie ausgeführt wird, dann liefert sie die Anzahl Exporte gruppiert nach Monat und `entity`-Typ
 - [ ] Angenommen ein anonymer oder normal authentifizierter Client (nicht Service-Role) versucht, `export_log` zu lesen oder zu schreiben, wenn die Anfrage ankommt, dann wird sie durch RLS abgelehnt (keine Policies definiert)
 
+**Nachtrag 2026-09-23 — wöchentlicher E-Mail-Report:**
+
+- [ ] Angenommen es ist Montag 06:00 Uhr (UTC), wenn der Cron-Job auslöst, dann wird eine E-Mail mit dem Erfolgsmessungs-Report an die konfigurierte Betreiber-Adresse verschickt
+- [ ] Angenommen der Report wird erzeugt, wenn er die Login-Auswertung enthält, dann listet er jede Firma mit mindestens einem aktiven Kontakt einzeln mit Namen und Login-Status auf (nicht nur die aggregierte Quote), plus die aggregierte Quote als Zusammenfassung
+- [ ] Angenommen der Report wird erzeugt, wenn er die Export-Auswertung enthält, dann zeigt er die Anzahl Exports pro Monat, aufgeschlüsselt nach `entity`-Typ (identisch zur manuellen SQL-Abfrage aus `supabase/queries/erfolgsmessung.sql`)
+- [ ] Angenommen der Cron-Endpoint wird ohne oder mit falschem `CRON_SECRET` aufgerufen, wenn die Anfrage ankommt, dann wird sie mit 401 abgelehnt und kein Report erzeugt (identisches Muster zu `/api/cron/sync-dataverse`)
+- [ ] Angenommen die Report-Erzeugung schlägt fehl (z.B. DB-Fehler), wenn der Cron-Job das bemerkt, dann wird stattdessen eine Fehler-Mail verschickt (identisches Muster zum bestehenden Sync-Cron), keine unbehandelte Exception
+- [ ] Angenommen es existieren aktuell keine Firmen mit aktivem Kontakt, wenn der Report erzeugt wird, dann zeigt er das als "keine Kunden mit Zugang" an, statt mit einem Fehler abzubrechen
+
 ## Edge Cases
 - Firma ohne aktiven Kontakt (nie Zugang vergeben) → zählt nicht in der Login-Quoten-Basis
 - Firma mit mehreren Kontakten, nur einer hat sich je eingeloggt → Firma zählt als "mind. 1 Login" (Aggregation auf Firma-Ebene)
 - Kontakt wird nachträglich deaktiviert → Login-Quoten-Basis ist ein Snapshot der *aktuell* aktiven Kontakte zum Abfragezeitpunkt, nicht historisch
 - Sehr viele Exporte in kurzer Zeit (Skript/Bot) → kein zusätzliches Rate-Limiting in diesem Feature, Sicherheit läuft weiterhin über den bestehenden Auth-Check der Export-Routen
 - Export-Route wird ohne gültige Session aufgerufen → wird bereits vor Erreichen der Logging-Logik mit 401/Redirect abgefangen (bestehendes Verhalten aus PROJ-8/PROJ-10), kein Log-Eintrag
+- Report-Erzeugung: keine Exports im aktuellen/in einem Monat → zeigt `0` statt die Zeile wegzulassen oder abzustürzen
+- Report-Erzeugung: `RESEND_API_KEY`/`ALERT_EMAIL_TO` nicht gesetzt → identisches Fail-open-Verhalten wie beim bestehenden Sync-Cron (nur `console.error`, kein Absturz)
+- Mit wachsender Nutzungsdauer wächst die Exports-pro-Monat-Tabelle im Report unbegrenzt (jeden Monat eine neue Zeile) — für die absehbare Zukunft kein Problem, siehe Open Questions
 
 ## Technical Requirements (optional)
 - Security: `export_log` hat RLS aktiviert, aber bewusst keine Policies — Schreiben ausschliesslich über den Service-Role-Client (umgeht RLS), Lesen nur direkt im Supabase SQL Editor durch den Projektinhaber
 - Performance: Der Logging-Insert darf die Export-Antwortzeit nicht spürbar verlängern und darf den Download bei einem eigenen Fehler nicht verhindern (best-effort, siehe Acceptance Criteria)
+- Security (Nachtrag): die neue Datenbank-Funktion für die Login-Auswertung ist per `revoke`/`grant` ausschliesslich für die Service-Role ausführbar, genau wie RLS für Tabellen — kein anonymer/authentifizierter Client kann sie aufrufen, selbst wenn sie über PostgREST als RPC-Endpoint gelistet wird
+- Security (Nachtrag): der neue Cron-Endpoint nutzt denselben `CRON_SECRET`-Schutz wie `/api/cron/sync-dataverse`
 
 ## Open Questions
 - [ ] Soll bei künftigem Wachstum von `export_log` eine Aufbewahrungsfrist/Archivierung eingeführt werden? Aktuell keine — bei Bedarf in `/refine PROJ-11` nachziehen
 - [ ] Soll die Login-Quoten-Basis rückwirkend historisiert werden (z.B. "Quote zum Ende jedes Monats"), oder reicht ein reiner Ist-Zustand-Snapshot? Aktuell nur Ist-Zustand vorgesehen
+- [ ] Soll die Exports-pro-Monat-Tabelle im wöchentlichen Report irgendwann auf die letzten N Monate begrenzt werden, damit die Mail nicht unbegrenzt wächst? Aktuell keine Begrenzung, bei Bedarf später nachziehen (Nachtrag 2026-09-23)
 
 ## Decision Log
 
@@ -65,6 +83,9 @@
 | Logging-Fehler dürfen den Export selbst nicht blockieren (best-effort, fire-and-forget) | Kennzahlen-Erfassung ist ein Nice-to-have und darf die Kernfunktion (CSV-Download) niemals gefährden | 2026-09-23 |
 | Kein Backfill historischer Export-Daten vor Feature-Einführung | Zähler beginnt bei 0 ab Deployment; rückwirkende Rekonstruktion aus bestehenden Daten nicht möglich | 2026-09-23 |
 | "Reduktion interner Zeit" und "Feedback-Frage an Pilotkunden" bleiben Out of Scope | Beides ist nicht softwareseitig messbar bzw. eine manuelle Massnahme aus dem Marketingkonzept, kein Feature-Bestandteil | 2026-09-23 |
+| Wöchentlicher E-Mail-Report an den Betreiber wird doch umgesetzt (ursprünglich Out of Scope) | PRD Non-Goal "keine automatischen Benachrichtigungen" bezieht sich auf Benachrichtigungen an Kunden, nicht auf eine interne Betreiber-Mail — gleiche Kategorie wie die bereits bestehende PROJ-1-Sync-Erfolgs-Mail | 2026-09-23 |
+| Report listet jede Firma einzeln mit Login-Status auf, nicht nur die aggregierte Quote | Nutzer möchte gezielt nachfassen können, welche Kunden das Portal noch nicht nutzen (Marketingkonzept Phase 4) | 2026-09-23 |
+| Report wird wöchentlich Montag 06:00 Uhr (UTC) verschickt | Zahlen vom Wochenende sind eingerechnet, bevor der Betreiber in die Woche startet; direkt nach dem nächtlichen 03:00-Uhr-Sync-Cron, ohne mit ihm zu kollidieren | 2026-09-23 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
@@ -75,6 +96,10 @@
 | Keine eigene Oberfläche für die Kennzahlen, nur fertige Datenbank-Abfragen | Passt zur PRD-Vorgabe "kein internes Admin-Backend"; für ein 1-Personen-Team lohnt sich Bau/Wartung eines eigenen Auswertungs-Bildschirms nicht | 2026-09-23 |
 | Erfassung des Export-Ereignisses darf den eigentlichen Download nie verhindern (best-effort) | CSV-Export ist die Kernfunktion; die Zählung ist ein "nice to know" und darf sie nie gefährden | 2026-09-23 |
 | Keine neuen Pakete/Abhängigkeiten | Nutzt ausschliesslich die bestehende Datenbank und die bestehenden Export-Routen (PROJ-8, PROJ-10) | 2026-09-23 |
+| Login-Auswertung als Datenbank-Funktion (`security definer`, Execute-Recht nur für `service_role`) statt View | Der App-seitige Supabase-Client spricht nur mit PostgREST, das `auth.users` nicht direkt erreicht — eine Funktion kann serverseitig trotzdem darauf zugreifen und liefert nur die berechneten Zeilen zurück (Firma + Login-Status), keine rohen `auth.users`-Daten. Execute-Rechte für `anon`/`authenticated` werden entzogen, exakt das gleiche Durchsetzungsprinzip wie RLS bei Tabellen | 2026-09-23 |
+| Exports-pro-Monat weiterhin ohne eigene Datenbank-Funktion, Gruppierung im Anwendungscode | `export_log` ist über den bestehenden Service-Role-Client direkt lesbar (kein `auth`-Zugriff nötig); ein zweites DB-Objekt wäre unnötige zusätzliche Angriffsfläche für eine triviale Gruppierung | 2026-09-23 |
+| `sendSyncAlertEmail` wird zu einer generischen `sendOpsEmail` verallgemeinert (reine Umbenennung/Verschiebung, kein Verhaltensunterschied) | Wird jetzt von zwei Cron-Jobs genutzt (Sync + wöchentlicher Report), der sync-spezifische Name wäre irreführend geworden | 2026-09-23 |
+| Neuer Cron-Eintrag in `vercel.json` (`0 6 * * 1`), eigener Endpoint `/api/cron/erfolgsmessung-report`, gleicher `CRON_SECRET`-Schutz wie der bestehende Sync-Cron | Konsistent mit dem einzigen bereits etablierten Cron-Muster im Projekt, kein neues Sicherheitskonzept nötig | 2026-09-23 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
@@ -94,6 +119,16 @@ Siehe Technical Decisions oben.
 
 ### D) Abhängigkeiten
 Keine neuen Pakete — nutzt die bestehende Datenbank und die bestehenden Export-Routen (PROJ-8, PROJ-10).
+
+### Nachtrag 2026-09-23: Wöchentlicher E-Mail-Report
+
+**Komponentenstruktur:** weiterhin keine UI. Neu ist ein zeitgesteuerter Hintergrund-Job (Cron), der einmal wöchentlich läuft und eine E-Mail verschickt — genau wie der bereits bestehende nächtliche Sync-Job.
+
+**Datenmodell:** keine neue dauerhafte Speicherung. Der Report liest bei jedem Lauf frisch aus den bereits vorhandenen Daten (Zugangsdaten + Login-Zeitpunkte + `export_log`) und verschickt das Ergebnis direkt als E-Mail-Text, ohne es selbst zu speichern.
+
+**Tech-Entscheidung (Begründung):** Ein Teil der Berechnung (wer hat sich eingeloggt) braucht Zugriff auf Informationen, die normalerweise nur im Supabase SQL Editor erreichbar sind, nicht über den normalen Programm-Zugriffsweg. Dafür wird eine kleine, eng zugeschnittene Datenbank-Funktion angelegt, die ausschliesslich vom Server aus aufgerufen werden kann — für niemand sonst erreichbar, exakt nach demselben Sicherheitsprinzip wie der bestehende Datenzugriffsschutz im Projekt.
+
+Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 
 ## Implementation Notes (Backend)
 
