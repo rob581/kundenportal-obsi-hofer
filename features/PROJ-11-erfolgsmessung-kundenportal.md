@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
@@ -138,6 +138,17 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - Keine neuen Views/Functions in der Datenbank angelegt (bewusste Abweichung von der ursprünglichen Architektur-Idee einer SQL-View): ein neues Objekt im `public`-Schema könnte über die PostgREST-API erreichbar werden, insbesondere die Login-Quote-Abfrage, die `auth.users` joint. Stattdessen liegen beide Abfragen als reine SQL-Textdatei unter `supabase/queries/erfolgsmessung.sql`, zum manuellen Kopieren in den SQL Editor.
 - Kein neuer API-Endpoint, keine neue Env-Variable — nutzt ausschliesslich den bereits vorhandenen `getSupabaseAdmin()`-Client.
 - 10 neue Tests: 3 in `log-export.test.ts` (Insert mit korrekten Werten, Supabase-Fehler wird abgefangen, geworfene Exception wird abgefangen — jeweils ohne dass die Funktion selbst wirft), je 2 in den beiden Export-Route-Tests (Log-Aufruf mit korrekter `firma_id`/`entity` bei Erfolg, kein Log-Aufruf bei einem 500er) — insgesamt 150 Tests grün.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
+
+**Nachtrag 2026-09-23 — wöchentlicher E-Mail-Report:**
+
+- Neue Migration `supabase/migrations/0009_erfolgsmessung_login_status.sql`: Funktion `erfolgsmessung_login_status()` (`security definer`, `set search_path = public, auth`), liefert pro Firma mit mind. einem aktiven Kontakt Name + Login-Status. Execute-Recht per `revoke`/`grant` ausschliesslich für `service_role` — identisches Durchsetzungsprinzip wie RLS bei Tabellen (siehe `export_log`). **Muss ebenfalls vom Nutzer im Supabase SQL Editor ausgeführt werden.**
+- `sendSyncAlertEmail` (bisher `src/lib/sync/notify.ts`, PROJ-1) verallgemeinert zu `sendOpsEmail` in `src/lib/notify/send-email.ts` — reine Umbenennung/Verschiebung (identisches Verhalten), da jetzt von zwei Cron-Jobs genutzt. `sync-dataverse/route.ts` und dessen Test entsprechend angepasst, alte Datei gelöscht (keine Re-Export-Kompatibilitätsschicht, da nur zwei interne Aufrufstellen).
+- Neues Modul `src/lib/erfolgsmessung/report.ts`: `getLoginStatus()` ruft die neue DB-Funktion per `.rpc(...)` auf und mappt auf camelCase; `getExportsProMonat()` liest `export_log` roh über den bestehenden Service-Role-Client und gruppiert nach Monat/`entity` in JS (kein zweites DB-Objekt für eine triviale Gruppierung); `buildErfolgsmessungReport()` formatiert beides zu einem Plain-Text-E-Mail-Body (Firmen einzeln mit Login-Status aufgelistet, nicht nur die Quote — Nutzerwunsch).
+- Neuer Route Handler `src/app/api/cron/erfolgsmessung-report/route.ts` (`GET`): identisches Auth-/Fehler-Muster wie `/api/cron/sync-dataverse` (inkl. der dortigen QA-BUG-1-Fix-Lektion: Auth-Check im selben `try/catch`), erzeugt den Report und verschickt ihn per `sendOpsEmail`; bei jedem Fehler geht stattdessen eine Fehler-Mail raus, kein unbehandelter Absturz.
+- Neuer Cron-Eintrag in `vercel.json`: `0 6 * * 1` (montags 06:00 UTC), direkt nach dem bestehenden nächtlichen Sync-Cron.
+- Keine neue Env-Variable — nutzt ausschliesslich `CRON_SECRET`, `RESEND_API_KEY`, `ALERT_EMAIL_TO` (alle bereits für PROJ-1 dokumentiert).
+- 12 neue Tests: 7 in `report.test.ts` (Mapping, Gruppierung inkl. leerem Ergebnis, Fehlerfälle, formatierter Report inkl. Leer-Zustand), 4 in `erfolgsmessung-report/route.test.ts` (401 ohne/mit falschem Secret, Erfolg, Fehler inkl. fehlendes `CRON_SECRET`) sowie die angepassten `sync-dataverse/route.test.ts`-Mocks — insgesamt 162 Tests grün.
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
 ## QA Test Results

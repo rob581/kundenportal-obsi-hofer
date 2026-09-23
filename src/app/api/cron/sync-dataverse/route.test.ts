@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const runDataverseSyncMock = vi.fn();
-const sendSyncAlertEmailMock = vi.fn().mockResolvedValue(undefined);
+const sendOpsEmailMock = vi.fn().mockResolvedValue(undefined);
 
 vi.mock("@/lib/sync/run-sync", () => ({ runDataverseSync: () => runDataverseSyncMock() }));
-vi.mock("@/lib/sync/notify", () => ({ sendSyncAlertEmail: (subject: string, body: string) => sendSyncAlertEmailMock(subject, body) }));
+vi.mock("@/lib/notify/send-email", () => ({ sendOpsEmail: (subject: string, body: string) => sendOpsEmailMock(subject, body) }));
 
 import { GET } from "./route";
 
@@ -18,7 +18,7 @@ beforeEach(() => {
   process.env.CRON_SECRET = "test-cron-secret";
   delete process.env.CRON_NOTIFY_ON_SUCCESS;
   runDataverseSyncMock.mockReset();
-  sendSyncAlertEmailMock.mockClear();
+  sendOpsEmailMock.mockClear();
 });
 
 describe("GET /api/cron/sync-dataverse", () => {
@@ -43,7 +43,7 @@ describe("GET /api/cron/sync-dataverse", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.entities[0].slug).toBe("firmen");
-    expect(sendSyncAlertEmailMock).not.toHaveBeenCalled();
+    expect(sendOpsEmailMock).not.toHaveBeenCalled();
   });
 
   it("sends an alert email and returns 200 when a threshold warning occurs", async () => {
@@ -55,7 +55,7 @@ describe("GET /api/cron/sync-dataverse", () => {
 
     const res = await GET(makeRequest("test-cron-secret"));
     expect(res.status).toBe(200);
-    expect(sendSyncAlertEmailMock).toHaveBeenCalledTimes(1);
+    expect(sendOpsEmailMock).toHaveBeenCalledTimes(1);
   });
 
   it("sends an alert email and returns 200 (partial success) when one entity errored", async () => {
@@ -67,7 +67,7 @@ describe("GET /api/cron/sync-dataverse", () => {
 
     const res = await GET(makeRequest("test-cron-secret"));
     expect(res.status).toBe(200);
-    expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
+    expect(sendOpsEmailMock).toHaveBeenCalledWith(
       "Dataverse-Sync: Probleme beim täglichen Lauf",
       expect.stringContaining("artikel")
     );
@@ -78,7 +78,7 @@ describe("GET /api/cron/sync-dataverse", () => {
 
     const res = await GET(makeRequest("test-cron-secret"));
     expect(res.status).toBe(500);
-    expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
+    expect(sendOpsEmailMock).toHaveBeenCalledWith(
       "Dataverse-Sync fehlgeschlagen",
       expect.stringContaining("Dataverse unreachable")
     );
@@ -98,7 +98,7 @@ describe("GET /api/cron/sync-dataverse", () => {
     const res = await GET(makeRequest("test-cron-secret"));
 
     expect(res.status).toBe(200);
-    expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
+    expect(sendOpsEmailMock).toHaveBeenCalledWith(
       "Dataverse-Sync: erfolgreich",
       expect.stringContaining("2 hinzugefügt, 297 aktualisiert")
     );
@@ -114,7 +114,7 @@ describe("GET /api/cron/sync-dataverse", () => {
     const res = await GET(makeRequest("anything"));
 
     expect(res.status).toBe(500);
-    expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
+    expect(sendOpsEmailMock).toHaveBeenCalledWith(
       "Dataverse-Sync fehlgeschlagen",
       expect.stringContaining("Missing CRON_SECRET")
     );

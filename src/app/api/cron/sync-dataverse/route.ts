@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { sendSyncAlertEmail } from "@/lib/sync/notify";
+import { sendOpsEmail } from "@/lib/notify/send-email";
 import { runDataverseSync } from "@/lib/sync/run-sync";
 
 // Batched upserts over ~30k records comfortably fit in a few minutes;
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 
     const allIssues = [...result.warnings, ...result.errors];
     if (allIssues.length > 0) {
-      await sendSyncAlertEmail(
+      await sendOpsEmail(
         "Dataverse-Sync: Probleme beim täglichen Lauf",
         allIssues.join("\n")
       );
@@ -39,14 +39,14 @@ export async function GET(request: Request) {
       const summary = result.entities
         .map((e) => `"${e.slug}": ${e.fetched} geladen, ${e.added} hinzugefügt, ${e.updated} aktualisiert, ${e.deleted} gelöscht${e.skippedDueToThreshold ? " (Löschung übersprungen)" : ""}`)
         .join("\n");
-      await sendSyncAlertEmail("Dataverse-Sync: erfolgreich", summary || "Keine Entities konfiguriert.");
+      await sendOpsEmail("Dataverse-Sync: erfolgreich", summary || "Keine Entities konfiguriert.");
     }
 
     return NextResponse.json(result);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("Dataverse sync failed:", message);
-    await sendSyncAlertEmail("Dataverse-Sync fehlgeschlagen", message);
+    await sendOpsEmail("Dataverse-Sync fehlgeschlagen", message);
     return NextResponse.json({ error: "Sync failed", message }, { status: 500 });
   }
 }
