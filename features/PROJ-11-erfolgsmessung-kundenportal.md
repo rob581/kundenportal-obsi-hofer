@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
@@ -304,6 +304,64 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - **Security:** Pass — `security definer` korrekt mit `search_path` abgesichert, Execute-Rechte korrekt eingeschränkt, keine rohen `auth.users`-Daten im Ergebnis
 - **Production Ready:** YES
 - **Recommendation:** Status auf "Approved" setzen und deployen. Nach dem Deploy einmal manuell den Cron-Endpoint aufrufen und die echte E-Mail gegenprüfen, bevor der erste automatische Montags-Lauf ansteht. BUG-2 (`.limit()` ergänzen) und das weiterhin offene BUG-1 bei Gelegenheit mitnehmen.
+
+---
+
+## QA Test Results — Nachtrag: Login-Zählung pro Firma (2026-09-23)
+
+**Tested:** 2026-09-23
+**App URL:** http://localhost:3000 (E2E-Regression) / N/A für die Zähl-Logik selbst (kein UI)
+**Tester:** QA Engineer (AI)
+
+> Der Passkey-Teil (echte WebAuthn-Zeremonie) lässt sich wie bei PROJ-6 nicht automatisiert testen — gleiche Einschränkung, siehe `tests/PROJ-6-passkey-login.spec.ts`. Automatisiert geprüft: die neue Zähl-Logik selbst (Vitest), beide Login-Wege bis zum Aufruf von `logLoginEvent` (Vitest, gemockt), sowie eine volle Regression der bestehenden Playwright-Suite (alle 38 E2E-Tests, inkl. PROJ-2/PROJ-6 Login-Flows) — keine Beeinträchtigung durch die Änderungen an `verifyLoginCode`/`login-form.tsx`.
+
+### Acceptance Criteria Status
+
+#### E-Mail+Code-Login schreibt einen `login_log`-Eintrag pro verknüpfter Firma
+- [x] `actions.test.ts` ("redirects to /dashboard when the code is valid and the contact has access") — `logLoginEvent` mit `["f1"]` aufgerufen
+
+#### Passkey-Login schreibt ebenfalls einen Eintrag (über den neuen Endpoint)
+- [x] `log-login/route.test.ts` ("logs the login event for all of the contact's Firmen on success")
+- [ ] Client-seitiger Aufruf aus `login-form.tsx` selbst nicht automatisiert testbar (siehe Hinweis oben) — beim nächsten echten Passkey-Login-Test durch den Nutzer bitte den neuen `login_log`-Eintrag im SQL Editor gegenprüfen
+
+#### Fehlgeschlagene Anmeldung schreibt keinen Eintrag
+- [x] `actions.test.ts` ("returns an error for an invalid code..." und "redirects to /kein-zugang...") — `logLoginEventMock` jeweils nicht aufgerufen
+- [x] `log-login/route.test.ts` (401 ohne Session, 403 ohne Zugriff) — `logLoginEventMock` jeweils nicht aufgerufen
+
+#### Ein fehlschlagender `login_log`-Insert blockiert die Anmeldung nicht
+- [x] `log-login.test.ts` bestätigt, dass `logLoginEvent` bei einem Supabase-Fehler **und** bei einer geworfenen Exception niemals wirft — identisches, bereits bewährtes Muster wie `logExportEvent`
+
+#### `POST /api/auth/log-login` ohne gültige Session wird abgelehnt
+- [x] `log-login/route.test.ts` (401)
+
+#### Wöchentlicher Report enthält die neue Login-Zählung, inkl. Leer-Zustand
+- [x] `report.test.ts` ("lists Firmen by login status, login counts, and the exports breakdown" und "shows an explicit empty state...")
+
+### Security Audit Results
+- [x] `POST /api/auth/log-login` liest keinerlei Client-Eingabe (kein Request-Body, keine Query-Parameter) — `firmaIds` stammen ausschliesslich aus der serverseitig aufgelösten Session; kein Spoofing eines fremden Firma-Eintrags möglich
+- [x] Auth-Check (401/403) identisch zum bereits geprüften Muster der Export-Routen (PROJ-8)
+- [x] `login_log` hat RLS aktiviert, keine Policies — identisches Muster zu `export_log`, nur Service-Role schreibt
+- [x] Regressionstest bestätigt: bestehende Login-Sicherheit (Redirects ohne Session, WebAuthn-Erkennung) unverändert
+- [ ] **BUG-3 gefunden (Low, siehe unten):** `POST /api/auth/log-login` prüft nur eine gültige Session, nicht dass gerade wirklich ein Passkey-Login stattgefunden hat
+
+### Bugs Found
+
+#### BUG-3: `POST /api/auth/log-login` kann von jeder eingeloggten Session beliebig oft aufgerufen werden
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Als eingeloggter Kunde (egal ob per E-Mail+Code oder Passkey) den Endpoint direkt per `fetch`/`curl` mit der eigenen Session mehrfach aufrufen
+  2. Erwartet: Nur ein echter, gerade stattgefundener Login-Vorgang sollte gezählt werden
+  3. Tatsächlich: Der Endpoint prüft nur "ist die Session gültig", nicht "ist gerade wirklich eine Passkey-Anmeldung abgeschlossen worden" — ein Kunde könnte die eigene Firma künstlich "aktiver" aussehen lassen
+- **Kontext:** Rein interne Vanity-Kennzahl ohne Zugriffs-/Sicherheitsrelevanz (kein Einfluss auf Berechtigungen, keine anderen Kunden betroffen) — exakt dasselbe bereits akzeptierte Risiko wie bei `export_log` (siehe dortige Edge Cases: "Sehr viele Exporte in kurzer Zeit (Skript/Bot) → kein zusätzliches Rate-Limiting")
+- **Priority:** Nice to have — falls die Zahl später wichtiger wird (z.B. für Abrechnung), Rate-Limiting/Dedup nachziehen; aktuell kein Deployment-Blocker
+
+### Summary
+- **Acceptance Criteria:** 6/7 vollständig automatisiert bestätigt, 1 (Passkey-Client-Aufruf) nur manuell verifizierbar (wie bei PROJ-6)
+- **Bugs Found:** 1 total (0 critical, 0 high, 0 medium, 1 low) — zusätzlich weiterhin BUG-1 (Medium) und BUG-2 (Low) aus vorherigen QA-Durchgängen offen, beide unverändert und nicht durch diesen Nachtrag verursacht
+- **Security:** Pass — kein Spoofing möglich, einzige Einschränkung ist die bewusst akzeptierte fehlende Rate-Begrenzung (BUG-3, gleiche Kategorie wie bereits akzeptiert bei `export_log`)
+- **Regression:** Pass — volle Vitest-Suite (173 Tests) und volle Playwright-Suite (38 Tests, alle Browser) grün
+- **Production Ready:** YES
+- **Recommendation:** Status auf "Approved" setzen und deployen. Nach dem nächsten echten Passkey-Login einmal den `login_log`-Eintrag im SQL Editor gegenprüfen. BUG-1/BUG-2/BUG-3 gesammelt bei einer der nächsten Gelegenheiten mitnehmen, keiner davon blockiert das Deployment.
 
 ## Deployment
 - **Production URL:** https://obsi-hoferkundenportal.vercel.app
