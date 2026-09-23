@@ -70,7 +70,7 @@ describe("buildGeraeteExportCsv", () => {
     const csv = buildGeraeteExportCsv([], []);
     const header = csv.replace("﻿", "").split("\r\n")[0];
     expect(header).toBe(
-      "Gerät;Gerätename;Status;Lagerort;Letzte Prüfung;Standort;Ablegereife;Prüfer;Herstelljahr;Hersteller;Norm"
+      "Gerätename;Gerät;Status;Lagerort;Letzte Prüfung;Standort;Ablegereife;Prüfer;Herstelljahr;Hersteller;Norm"
     );
   });
 
@@ -86,7 +86,7 @@ describe("buildGeraeteExportCsv", () => {
     const [, row] = csv.replace("﻿", "").split("\r\n");
 
     expect(row).toBe(
-      "Feuerlöscher 6kg ABC EN 3 Typ A 10mm GLORIA;Testgerät;Freigabe;Regal 3;2026-01-15;Hauptlager Zürich;2030-01-15;M. Muster;2019;GLORIA;EN 3"
+      "Testgerät;Feuerlöscher 6kg ABC EN 3 Typ A 10mm GLORIA;Freigabe;Regal 3;2026-01-15;Hauptlager Zürich;2030-01-15;M. Muster;2019;GLORIA;EN 3"
     );
   });
 

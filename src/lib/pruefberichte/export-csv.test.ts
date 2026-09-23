@@ -29,14 +29,14 @@ describe("buildPruefberichteExportCsv", () => {
   it("has exactly the six fixed columns, no Zusatzspalten-Konzept", () => {
     const csv = buildPruefberichteExportCsv([]);
     const header = csv.replace("﻿", "").split("\r\n")[0];
-    expect(header).toBe("Gerät;Gerätename;Datum;Ergebnis;Bemerkungen;Prüfer");
+    expect(header).toBe("Gerätename;Gerät;Datum;Ergebnis;Bemerkungen;Prüfer");
   });
 
   it("renders one row per Prüfbericht with semicolon-separated values", () => {
     const csv = buildPruefberichteExportCsv([makeBericht()]);
     const [, row] = csv.replace("﻿", "").split("\r\n");
 
-    expect(row).toBe("Feuerlöscher 6kg ABC;FL-EG-003;2026-01-15;Freigabe;Alles ok;M. Keller");
+    expect(row).toBe("FL-EG-003;Feuerlöscher 6kg ABC;2026-01-15;Freigabe;Alles ok;M. Keller");
   });
 
   it("leaves cells empty (not '—') for missing values", () => {

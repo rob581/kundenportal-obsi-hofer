@@ -132,7 +132,7 @@ Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibli
 - 18 neue Tests: 7 in `pruefberichte/queries.test.ts` (leere Firma, unpaginiert, Firma-Isolation, Zeitraum-Filter, ungültiger Zeitraum als "alle" behandelt — für Export und für die bestehende `getPruefberichteFuerFirma`, gebatchte Anreicherung über 250 Geräte), 5 in `export-csv.test.ts` (BOM, feste Spaltenreihenfolge, Zeilen-Mapping, leere Zellen, Formel-Escaping), 6 in `route.test.ts` (Auth-Redirects, erfolgreicher Download inkl. BOM-Bytes, Parameter-Weitergabe inkl. `undefined`, 500 bei Fehler) — insgesamt 145 Tests grün.
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
-**Nachträgliche additive Ergänzung (2026-09-23, Nutzerwunsch):** `PruefberichtMitGeraet` um `geraetName` erweitert (rohes `dv_geraete.name`, unabhängig vom kombinierten `geraetLabel`), in `anreichernMitGeraetLabel` mitbefüllt und als neue Spalte "Gerätename" (nach "Gerät") in `buildPruefberichteExportCsv` ergänzt — identisch zur selben Ergänzung im PROJ-8-Export. Betrifft nur den CSV-Export, nicht die Prüfberichte-Übersichtsseite. Rein additiv.
+**Nachträgliche additive Ergänzung (2026-09-23, Nutzerwunsch):** `PruefberichtMitGeraet` um `geraetName` erweitert (rohes `dv_geraete.name`, unabhängig vom kombinierten `geraetLabel`), in `anreichernMitGeraetLabel` mitbefüllt und als neue, **erste** Spalte "Gerätename" (vor "Gerät") in `buildPruefberichteExportCsv` ergänzt — identisch zur selben Ergänzung im PROJ-8-Export. Betrifft nur den CSV-Export, nicht die Prüfberichte-Übersichtsseite. Rein additiv.
 
 ## QA Test Results
 
