@@ -17,6 +17,11 @@ vi.mock("@/lib/auth/access", () => ({
   getPortalAccess: (email: string) => getPortalAccessMock(email),
 }));
 
+const logLoginEventMock = vi.fn();
+vi.mock("@/lib/login-log/log-login", () => ({
+  logLoginEvent: (firmaIds: string[]) => logLoginEventMock(firmaIds),
+}));
+
 const redirectMock = vi.fn((path: string) => {
   throw new Error(`NEXT_REDIRECT:${path}`);
 });
@@ -30,6 +35,7 @@ beforeEach(() => {
   signInWithOtpMock.mockReset();
   verifyOtpMock.mockReset();
   getPortalAccessMock.mockReset();
+  logLoginEventMock.mockReset();
   redirectMock.mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -61,6 +67,7 @@ describe("verifyLoginCode", () => {
 
     expect(result?.error).toBe("Der Code ist ungültig oder abgelaufen.");
     expect(redirectMock).not.toHaveBeenCalled();
+    expect(logLoginEventMock).not.toHaveBeenCalled();
   });
 
   it("redirects to /dashboard when the code is valid and the contact has access", async () => {
@@ -70,6 +77,7 @@ describe("verifyLoginCode", () => {
     await expect(verifyLoginCode("test@example.com", "123456")).rejects.toThrow("NEXT_REDIRECT:/dashboard");
 
     expect(redirectMock).toHaveBeenCalledWith("/dashboard");
+    expect(logLoginEventMock).toHaveBeenCalledWith(["f1"]);
   });
 
   it("redirects to /kein-zugang when the code is valid but there is no portal access", async () => {
@@ -79,5 +87,6 @@ describe("verifyLoginCode", () => {
     await expect(verifyLoginCode("test@example.com", "123456")).rejects.toThrow("NEXT_REDIRECT:/kein-zugang");
 
     expect(redirectMock).toHaveBeenCalledWith("/kein-zugang");
+    expect(logLoginEventMock).not.toHaveBeenCalled();
   });
 });

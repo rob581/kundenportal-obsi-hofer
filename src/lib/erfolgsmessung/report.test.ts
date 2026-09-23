@@ -1,18 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const rpcMock = vi.fn();
-const selectMock = vi.fn();
-const fromMock = vi.fn(() => ({ select: selectMock }));
+const loginLogSelectMock = vi.fn();
+const exportLogSelectMock = vi.fn();
+const fromMock = vi.fn((table: string) => {
+  if (table === "login_log") return { select: loginLogSelectMock };
+  if (table === "export_log") return { select: exportLogSelectMock };
+  throw new Error(`Unerwartete Tabelle in Test: ${table}`);
+});
 const getSupabaseAdminMock = vi.fn(() => ({ rpc: rpcMock, from: fromMock }));
 
 vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => getSupabaseAdminMock() }));
 
-import { getLoginStatus, getExportsProMonat, buildErfolgsmessungReport } from "./report";
+const getFirmenNamenMock = vi.fn();
+vi.mock("@/lib/auth/access", () => ({ getFirmenNamen: (ids: string[]) => getFirmenNamenMock(ids) }));
+
+import { getLoginStatus, getLoginsProFirma, getExportsProMonat, buildErfolgsmessungReport } from "./report";
 
 beforeEach(() => {
   rpcMock.mockReset();
-  selectMock.mockReset();
+  loginLogSelectMock.mockReset();
+  exportLogSelectMock.mockReset();
   fromMock.mockClear();
+  getFirmenNamenMock.mockReset();
+  // Sinnvoller Default für Tests, die login_log absichtlich leer lassen.
+  getFirmenNamenMock.mockResolvedValue([]);
 });
 
 describe("getLoginStatus", () => {
@@ -41,9 +53,54 @@ describe("getLoginStatus", () => {
   });
 });
 
+describe("getLoginsProFirma", () => {
+  it("counts login_log rows per firma_id and resolves names", async () => {
+    loginLogSelectMock.mockResolvedValue({
+      data: [{ firma_id: "f1" }, { firma_id: "f1" }, { firma_id: "f2" }],
+      error: null,
+    });
+    getFirmenNamenMock.mockResolvedValue([
+      { id: "f1", name: "Firma A" },
+      { id: "f2", name: "Firma B" },
+    ]);
+
+    const result = await getLoginsProFirma();
+
+    expect(fromMock).toHaveBeenCalledWith("login_log");
+    expect(result).toEqual([
+      { firmaId: "f1", firmaName: "Firma A", anzahl: 2 },
+      { firmaId: "f2", firmaName: "Firma B", anzahl: 1 },
+    ]);
+  });
+
+  it("returns an empty array when there are no logins tracked yet", async () => {
+    loginLogSelectMock.mockResolvedValue({ data: [], error: null });
+
+    const result = await getLoginsProFirma();
+
+    expect(result).toEqual([]);
+    expect(getFirmenNamenMock).toHaveBeenCalledWith([]);
+  });
+
+  it("falls back to a placeholder name when a firma has no resolvable name", async () => {
+    loginLogSelectMock.mockResolvedValue({ data: [{ firma_id: "f1" }], error: null });
+    getFirmenNamenMock.mockResolvedValue([]);
+
+    const result = await getLoginsProFirma();
+
+    expect(result).toEqual([{ firmaId: "f1", firmaName: "(ohne Namen)", anzahl: 1 }]);
+  });
+
+  it("throws with a descriptive message when the query fails", async () => {
+    loginLogSelectMock.mockResolvedValue({ data: null, error: { message: "table missing" } });
+
+    await expect(getLoginsProFirma()).rejects.toThrow("Login-Log-Abfrage fehlgeschlagen");
+  });
+});
+
 describe("getExportsProMonat", () => {
   it("groups export_log rows by month and entity", async () => {
-    selectMock.mockResolvedValue({
+    exportLogSelectMock.mockResolvedValue({
       data: [
         { entity: "geraete", created_at: "2026-09-01T10:00:00Z" },
         { entity: "geraete", created_at: "2026-09-15T10:00:00Z" },
@@ -64,7 +121,7 @@ describe("getExportsProMonat", () => {
   });
 
   it("returns an empty array when there are no exports yet", async () => {
-    selectMock.mockResolvedValue({ data: [], error: null });
+    exportLogSelectMock.mockResolvedValue({ data: [], error: null });
 
     const result = await getExportsProMonat();
 
@@ -72,14 +129,14 @@ describe("getExportsProMonat", () => {
   });
 
   it("throws with a descriptive message when the query fails", async () => {
-    selectMock.mockResolvedValue({ data: null, error: { message: "table missing" } });
+    exportLogSelectMock.mockResolvedValue({ data: null, error: { message: "table missing" } });
 
     await expect(getExportsProMonat()).rejects.toThrow("Export-Log-Abfrage fehlgeschlagen");
   });
 });
 
 describe("buildErfolgsmessungReport", () => {
-  it("lists Firmen by login status and the exports breakdown", async () => {
+  it("lists Firmen by login status, login counts, and the exports breakdown", async () => {
     rpcMock.mockResolvedValue({
       data: [
         { firma_id: "f1", firma_name: "Firma A", hat_login: true },
@@ -87,7 +144,12 @@ describe("buildErfolgsmessungReport", () => {
       ],
       error: null,
     });
-    selectMock.mockResolvedValue({
+    loginLogSelectMock.mockResolvedValue({
+      data: [{ firma_id: "f1" }, { firma_id: "f1" }],
+      error: null,
+    });
+    getFirmenNamenMock.mockResolvedValue([{ id: "f1", name: "Firma A" }]);
+    exportLogSelectMock.mockResolvedValue({
       data: [{ entity: "geraete", created_at: "2026-09-01T10:00:00Z" }],
       error: null,
     });
@@ -96,18 +158,20 @@ describe("buildErfolgsmessungReport", () => {
 
     expect(report).toContain("1/2 Firmen (50%)");
     expect(report).toContain("Eingeloggt: Firma A");
-    expect(report).not.toContain("Firma B");
     expect(report).not.toContain("Noch nicht eingeloggt");
+    expect(report).toContain("Firma A: 2");
     expect(report).toContain("2026-09 – geraete: 1");
   });
 
-  it("shows an explicit empty state instead of an empty list when there are no Kunden", async () => {
+  it("shows an explicit empty state instead of an empty list when there is no data yet", async () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
-    selectMock.mockResolvedValue({ data: [], error: null });
+    loginLogSelectMock.mockResolvedValue({ data: [], error: null });
+    exportLogSelectMock.mockResolvedValue({ data: [], error: null });
 
     const report = await buildErfolgsmessungReport();
 
     expect(report).toContain("Keine Kunden mit Zugang.");
+    expect(report).toContain("Noch keine erfassten Logins seit Einführung dieser Zählung.");
     expect(report).toContain("Bisher keine Exports.");
   });
 });

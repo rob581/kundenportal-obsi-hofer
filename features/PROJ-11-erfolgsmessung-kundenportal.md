@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Deployed
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
@@ -16,10 +16,12 @@
 - Als Betreiber möchte ich diese Zahlen per einfacher SQL-Abfrage abrufen können, ohne dass dafür eine eigene Oberfläche gebaut/gewartet werden muss (siehe PRD Non-Goal "Kein Admin-Backend für interne Mitarbeiter").
 - Als Betreiber möchte ich diesen Report zusätzlich einmal wöchentlich automatisch per E-Mail an mich selbst zugeschickt bekommen, damit ich nicht aktiv daran denken muss, ihn manuell abzurufen (Nachtrag 2026-09-23).
 - Als Betreiber möchte ich im Report sehen, *welche* Kunden sich eingeloggt haben (nicht nur die aggregierte Quote), damit ich gezielt bei den Firmen nachfassen kann, die das Portal noch nicht nutzen (siehe Marketingkonzept Phase 4 "Nachfassen") (Nachtrag 2026-09-23).
+- Als Betreiber möchte ich zusätzlich sehen, *wie oft* sich jede Firma eingeloggt hat (nicht nur ja/nein), um die Nutzungsintensität einschätzen zu können (Nachtrag 2026-09-23, zweiter Refinement-Durchgang).
 
 ## Out of Scope
 - Admin-Backend/UI für die Kennzahlen — bewusst nicht gebaut, siehe PRD Non-Goal "Kein Admin-Backend für interne Mitarbeiter"; Zahlen werden per SQL im Supabase SQL Editor oder im wöchentlichen E-Mail-Report abgerufen, nie über eine eigene Oberfläche
 - Tracking pro einzelnem Kontakt/E-Mail — nur firmenweit aggregiert (siehe Product Decisions)
+- Rückwirkende Login-Zahlen vor Einführung der Zählung — bewusst kein Backfill, auch nicht über Supabase's internes Audit-Log (`auth.audit_log_entries`), auf ausdrücklichen Nutzerwunsch ("benötige keine vergangenen Daten") nicht weiter untersucht (Nachtrag 2026-09-23)
 - ~~Automatisierte Reports/E-Mail-Digest der Kennzahlen~~ — **Nachtrag 2026-09-23: doch umgesetzt**, siehe neue Acceptance Criteria AC-9 bis AC-13 und Decision Log. Das PRD-Non-Goal "keine automatischen Benachrichtigungen" bezieht sich auf Benachrichtigungen *an Kunden* (Beispiel dort: "E-Mail bei neuem Prüfbericht") — eine interne Betreiber-Mail an OBSI Hofer selbst fällt nicht darunter, gleiche Kategorie wie die bereits bestehende PROJ-1-Sync-Erfolgs-Mail
 - Automatische Benachrichtigungen an Kunden jeglicher Art — bleibt klar ausgeschlossen (PRD Non-Goal), betrifft aber nicht den in diesem Refinement ergänzten internen Report
 - "Reduktion der internen Zeit für manuelle Excel-Aufbereitung" (Success Metric aus der PRD) — nicht software-messbar, bleibt Selbstbeobachtung
@@ -49,6 +51,16 @@
 - [ ] Angenommen die Report-Erzeugung schlägt fehl (z.B. DB-Fehler), wenn der Cron-Job das bemerkt, dann wird stattdessen eine Fehler-Mail verschickt (identisches Muster zum bestehenden Sync-Cron), keine unbehandelte Exception
 - [ ] Angenommen es existieren aktuell keine Firmen mit aktivem Kontakt, wenn der Report erzeugt wird, dann zeigt er das als "keine Kunden mit Zugang" an, statt mit einem Fehler abzubrechen
 
+**Nachtrag 2026-09-23 (zweiter Refinement-Durchgang) — Login-Zählung pro Firma:**
+
+- [ ] Angenommen ein Kunde meldet sich per E-Mail+Code erfolgreich an, wenn der Code verifiziert wurde und Zugriff besteht, dann wird für jede mit dem Kontakt verknüpfte Firma ein Eintrag in `login_log` geschrieben
+- [ ] Angenommen ein Kunde meldet sich per Passkey erfolgreich an, wenn die WebAuthn-Prüfung erfolgreich war, dann wird ebenfalls ein `login_log`-Eintrag für jede verknüpfte Firma geschrieben (über den neuen Endpoint `POST /api/auth/log-login`, da der Passkey-Login keinen eigenen Server Action hat)
+- [ ] Angenommen die Anmeldung schlägt fehl (falscher Code, kein Zugriff, abgebrochene Passkey-Zeremonie), wenn das passiert, dann wird kein `login_log`-Eintrag geschrieben
+- [ ] Angenommen der `login_log`-Insert schlägt fehl, wenn das während einer Anmeldung passiert, dann wird die Anmeldung/Weiterleitung trotzdem normal abgeschlossen (Logging blockiert nie die Kernfunktion, gleiches Prinzip wie bei `export_log`)
+- [ ] Angenommen `POST /api/auth/log-login` wird ohne gültige Session aufgerufen, wenn die Anfrage ankommt, dann wird sie mit 401 abgelehnt, ohne Login-Log-Eintrag
+- [ ] Angenommen der wöchentliche Report wird erzeugt, wenn er die Login-Zählung enthält, dann listet er jede Firma mit mindestens einem erfassten Login samt Anzahl auf, absteigend sortiert
+- [ ] Angenommen es liegen noch keine erfassten Logins vor (z.B. direkt nach dem Deployment), wenn der Report erzeugt wird, dann zeigt er dafür einen expliziten Leer-Zustand statt eine leere Liste
+
 ## Edge Cases
 - Firma ohne aktiven Kontakt (nie Zugang vergeben) → zählt nicht in der Login-Quoten-Basis
 - Firma mit mehreren Kontakten, nur einer hat sich je eingeloggt → Firma zählt als "mind. 1 Login" (Aggregation auf Firma-Ebene)
@@ -58,12 +70,16 @@
 - Report-Erzeugung: keine Exports im aktuellen/in einem Monat → zeigt `0` statt die Zeile wegzulassen oder abzustürzen
 - Report-Erzeugung: `RESEND_API_KEY`/`ALERT_EMAIL_TO` nicht gesetzt → identisches Fail-open-Verhalten wie beim bestehenden Sync-Cron (nur `console.error`, kein Absturz)
 - Mit wachsender Nutzungsdauer wächst die Exports-pro-Monat-Tabelle im Report unbegrenzt (jeden Monat eine neue Zeile) — für die absehbare Zukunft kein Problem, siehe Open Questions
+- Ein Kontakt mit mehreren verknüpften Firmen loggt sich ein → zählt als ein Login für *jede* verknüpfte Firma, nicht nur für die später ausgewählte (identische Semantik zur bestehenden Login-Quote)
+- `login_log`-Insert schlägt fehl (z.B. Tabelle fehlt, weil Migration 0010 noch nicht ausgeführt wurde) → Anmeldung funktioniert trotzdem normal, nur ohne Zählung (best-effort, wie bei `export_log`)
+- Passkey-Anmeldung wird vom Nutzer abgebrochen (WebAuthn-Dialog geschlossen) → `signInWithPasskey()` liefert einen Fehler, `POST /api/auth/log-login` wird gar nicht erst aufgerufen
 
 ## Technical Requirements (optional)
 - Security: `export_log` hat RLS aktiviert, aber bewusst keine Policies — Schreiben ausschliesslich über den Service-Role-Client (umgeht RLS), Lesen nur direkt im Supabase SQL Editor durch den Projektinhaber
 - Performance: Der Logging-Insert darf die Export-Antwortzeit nicht spürbar verlängern und darf den Download bei einem eigenen Fehler nicht verhindern (best-effort, siehe Acceptance Criteria)
 - Security (Nachtrag): die neue Datenbank-Funktion für die Login-Auswertung ist per `revoke`/`grant` ausschliesslich für die Service-Role ausführbar, genau wie RLS für Tabellen — kein anonymer/authentifizierter Client kann sie aufrufen, selbst wenn sie über PostgREST als RPC-Endpoint gelistet wird
 - Security (Nachtrag): der neue Cron-Endpoint nutzt denselben `CRON_SECRET`-Schutz wie `/api/cron/sync-dataverse`
+- Security (Nachtrag 2, Login-Zählung): `POST /api/auth/log-login` ist der **erste schreibende, kundenseitig erreichbare Endpoint** des Projekts (PROJ-8/PROJ-10 sind rein lesend) — schreibt aber ausschliesslich einen Log-Eintrag zur eigenen, serverseitig aufgelösten `firmaIds`-Liste, keine vom Client übergebenen Werte fliessen in die Datenbank ein, daher keine Injection-/Spoofing-Fläche
 
 ## Open Questions
 - [ ] Soll bei künftigem Wachstum von `export_log` eine Aufbewahrungsfrist/Archivierung eingeführt werden? Aktuell keine — bei Bedarf in `/refine PROJ-11` nachziehen
@@ -86,6 +102,11 @@
 | Wöchentlicher E-Mail-Report an den Betreiber wird doch umgesetzt (ursprünglich Out of Scope) | PRD Non-Goal "keine automatischen Benachrichtigungen" bezieht sich auf Benachrichtigungen an Kunden, nicht auf eine interne Betreiber-Mail — gleiche Kategorie wie die bereits bestehende PROJ-1-Sync-Erfolgs-Mail | 2026-09-23 |
 | Report listet jede Firma einzeln mit Login-Status auf, nicht nur die aggregierte Quote | Nutzer möchte gezielt nachfassen können, welche Kunden das Portal noch nicht nutzen (Marketingkonzept Phase 4) | 2026-09-23 |
 | Report wird wöchentlich Montag 06:00 Uhr (UTC) verschickt | Zahlen vom Wochenende sind eingerechnet, bevor der Betreiber in die Woche startet; direkt nach dem nächtlichen 03:00-Uhr-Sync-Cron, ohne mit ihm zu kollidieren | 2026-09-23 |
+| "Noch nicht eingeloggt"-Zeile nachträglich wieder aus dem Report entfernt | Nutzerwunsch nach dem ersten echten Test-E-Mail-Versand: nur die "Eingeloggt"-Liste war gewünscht | 2026-09-23 |
+| Neue `login_log`-Tabelle für eine echte Login-**Zählung** pro Firma, zusätzlich zur bestehenden Login-Quote (ja/nein) | Supabase speichert in `auth.users` nur den letzten Login-Zeitpunkt, keinen Zähler — für "wie oft hat sich Firma X eingeloggt" reicht das nicht | 2026-09-23 |
+| Kein Backfill für `login_log`, auch nicht aus Supabase's `auth.audit_log_entries` | Ausdrücklicher Nutzerwunsch ("benötige keine vergangenen Daten") — spart die Untersuchung eines internen, nicht offiziell dokumentierten Supabase-Systems | 2026-09-23 |
+| Login-Zählung hakt sich in beide bestehenden Login-Wege ein: `verifyLoginCode` (Server Action, E-Mail+Code) direkt serverseitig, Passkey-Login über einen neuen Endpoint `POST /api/auth/log-login` (da dieser Weg komplett clientseitig läuft und keinen eigenen Server Action hat) | Beide Anmeldewege müssen gleichermassen gezählt werden, sonst wäre die Zahl systematisch unvollständig | 2026-09-23 |
+| Login zählt für **jede** mit dem Kontakt verknüpfte Firma, nicht nur für die später ausgewählte | Konsistent mit der bestehenden Login-Quote-Semantik, die ebenfalls firmenweit unabhängig von der Firmenauswahl auswertet | 2026-09-23 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
@@ -149,6 +170,18 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - Neuer Cron-Eintrag in `vercel.json`: `0 6 * * 1` (montags 06:00 UTC), direkt nach dem bestehenden nächtlichen Sync-Cron.
 - Keine neue Env-Variable — nutzt ausschliesslich `CRON_SECRET`, `RESEND_API_KEY`, `ALERT_EMAIL_TO` (alle bereits für PROJ-1 dokumentiert).
 - 12 neue Tests: 7 in `report.test.ts` (Mapping, Gruppierung inkl. leerem Ergebnis, Fehlerfälle, formatierter Report inkl. Leer-Zustand), 4 in `erfolgsmessung-report/route.test.ts` (401 ohne/mit falschem Secret, Erfolg, Fehler inkl. fehlendes `CRON_SECRET`) sowie die angepassten `sync-dataverse/route.test.ts`-Mocks — insgesamt 162 Tests grün.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
+
+**Nachtrag 2026-09-23 (zweiter Refinement-Durchgang) — Login-Zählung pro Firma:**
+
+- Neue Migration `supabase/migrations/0010_login_log.sql`: Tabelle `login_log` (`id bigint identity`, `firma_id text`, `created_at timestamptz default now()`), Indizes auf `created_at`/`firma_id`, RLS aktiviert ohne Policies — identisches Muster zu `export_log`. **Muss ebenfalls vom Nutzer im Supabase SQL Editor ausgeführt werden.**
+- Neues Modul `src/lib/login-log/log-login.ts`: `logLoginEvent(firmaIds: string[])` — schreibt einen Eintrag pro Firma-ID in einem einzigen Batch-Insert, identisches best-effort-Verhalten wie `logExportEvent` (fängt jeden Fehler ab, wirft nie). No-op bei leerer `firmaIds`-Liste.
+- **E-Mail+Code-Login** (`src/app/login/actions.ts`, `verifyLoginCode`): ruft `logLoginEvent(access.firmaIds)` nach erfolgreicher Zugriffsprüfung auf, vor dem Redirect.
+- **Passkey-Login** (`src/components/login-form.tsx`, `handlePasskeyLogin`): läuft komplett clientseitig über `supabase.auth.signInWithPasskey()`, hat keinen eigenen Server Action — deshalb neuer Route Handler `POST /api/auth/log-login` (`src/app/api/auth/log-login/route.ts`), der Session/Zugriff selbst prüft (identisches Muster zu den Export-Routen, liegt ausserhalb von `(protected)/layout.tsx`) und dann `logLoginEvent` aufruft. Der Client ruft ihn per `fetch(..., { method: "POST" })` nach erfolgreichem `signInWithPasskey()` auf, Fehler werden bewusst ignoriert (best-effort, blockiert nie die Weiterleitung). **Dies ist der erste schreibende, kundenseitig erreichbare Endpoint des Projekts** — schreibt aber ausschliesslich serverseitig aufgelöste `firmaIds`, keine Client-Eingabe fliesst in die Datenbank ein.
+- `src/lib/erfolgsmessung/report.ts` um `getLoginsProFirma()` erweitert: liest `login_log` roh, zählt in JS pro `firma_id`, löst Namen über die bereits bestehende `getFirmenNamen()` aus `src/lib/auth/access.ts` auf (keine Duplikation). `buildErfolgsmessungReport()` um einen neuen Abschnitt "=== Logins pro Firma ===" ergänzt (absteigend nach Anzahl sortiert), inkl. explizitem Leer-Zustand.
+- Kein Playwright-Test für den Passkey-Teil möglich (gleiche Einschränkung wie PROJ-6: eine echte WebAuthn-Zeremonie lässt sich in Playwright ohne virtuellen Authenticator nicht automatisieren) — die eigentliche `fetch`-Aufruf-Logik ist stattdessen über den Route-Handler-Test abgedeckt, der volle End-to-End-Pfad muss manuell mit einem echten Gerät verifiziert werden.
+- Kein neuer API-Endpoint für Zod-Validierung nötig — `POST /api/auth/log-login` nimmt keinen Body entgegen, alle Werte kommen aus der Session.
+- 11 neue/geänderte Tests: 4 in `log-login.test.ts` (Batch-Insert, No-op bei leerem Array, Supabase-Fehler abgefangen, Exception abgefangen), 3 in `log-login/route.test.ts` (401, 403, Erfolg mit korrekten `firmaIds`), 2 zusätzliche Assertions in `actions.test.ts` (Log-Aufruf bei Erfolg, kein Aufruf bei Fehler/kein Zugriff), 5 neue/angepasste in `report.test.ts` (`getLoginsProFirma` inkl. Namensauflösung, leerem Ergebnis, fehlendem Namen, Fehlerfall; Report-Text-Erweiterung) — insgesamt 173 Tests grün.
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
 ## QA Test Results

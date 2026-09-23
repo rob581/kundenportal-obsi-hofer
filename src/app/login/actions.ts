@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getPortalAccess } from "@/lib/auth/access";
+import { logLoginEvent } from "@/lib/login-log/log-login";
 
 export async function requestLoginCode(email: string): Promise<{ error: string | null }> {
   const supabase = await createSupabaseServerClient();
@@ -28,5 +29,8 @@ export async function verifyLoginCode(email: string, code: string): Promise<{ er
   }
 
   const access = await getPortalAccess(email);
+  if (access) {
+    await logLoginEvent(access.firmaIds);
+  }
   redirect(access ? "/dashboard" : "/kein-zugang");
 }

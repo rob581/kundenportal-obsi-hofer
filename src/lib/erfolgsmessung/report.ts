@@ -1,9 +1,16 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getFirmenNamen } from "@/lib/auth/access";
 
 export type LoginStatusRow = {
   firmaId: string;
   firmaName: string;
   hatLogin: boolean;
+};
+
+export type LoginCountRow = {
+  firmaId: string;
+  firmaName: string;
+  anzahl: number;
 };
 
 export type ExportsProMonatRow = {
@@ -25,6 +32,27 @@ export async function getLoginStatus(): Promise<LoginStatusRow[]> {
     firmaName: row.firma_name ?? "(ohne Namen)",
     hatLogin: row.hat_login,
   }));
+}
+
+// login_log (Migration 0010) zählt Logins erst ab Einführung dieses Features
+// (kein Backfill, Nutzerwunsch) — ergänzt die auth.users-basierte Login-Quote
+// oben um einen echten Zähler pro Firma. Namen werden über die bestehende
+// getFirmenNamen() aus src/lib/auth/access.ts aufgelöst (keine Duplikation).
+export async function getLoginsProFirma(): Promise<LoginCountRow[]> {
+  const { data, error } = await getSupabaseAdmin().from("login_log").select("firma_id");
+  if (error) throw new Error(`Login-Log-Abfrage fehlgeschlagen: ${error.message}`);
+
+  const counts = new Map<string, number>();
+  for (const row of (data ?? []) as { firma_id: string }[]) {
+    counts.set(row.firma_id, (counts.get(row.firma_id) ?? 0) + 1);
+  }
+
+  const firmen = await getFirmenNamen([...counts.keys()]);
+  const nameMap = new Map(firmen.map((f) => [f.id, f.name]));
+
+  return [...counts.entries()]
+    .map(([firmaId, anzahl]) => ({ firmaId, firmaName: nameMap.get(firmaId) ?? "(ohne Namen)", anzahl }))
+    .sort((a, b) => b.anzahl - a.anzahl || a.firmaName.localeCompare(b.firmaName));
 }
 
 // export_log (Migration 0008) hat keine auth-Abhängigkeit, daher direkt über
@@ -66,6 +94,14 @@ function formatLoginQuoteSection(rows: LoginStatusRow[]): string[] {
   ];
 }
 
+function formatLoginsProFirmaSection(rows: LoginCountRow[]): string[] {
+  if (rows.length === 0) {
+    return ["=== Logins pro Firma ===", "Noch keine erfassten Logins seit Einführung dieser Zählung."];
+  }
+
+  return ["=== Logins pro Firma ===", ...rows.map((r) => `${r.firmaName}: ${r.anzahl}`)];
+}
+
 function formatExportsSection(rows: ExportsProMonatRow[]): string[] {
   if (rows.length === 0) {
     return ["=== CSV-Exports pro Monat ===", "Bisher keine Exports."];
@@ -75,7 +111,17 @@ function formatExportsSection(rows: ExportsProMonatRow[]): string[] {
 }
 
 export async function buildErfolgsmessungReport(): Promise<string> {
-  const [loginStatus, exportsProMonat] = await Promise.all([getLoginStatus(), getExportsProMonat()]);
+  const [loginStatus, loginsProFirma, exportsProMonat] = await Promise.all([
+    getLoginStatus(),
+    getLoginsProFirma(),
+    getExportsProMonat(),
+  ]);
 
-  return [...formatLoginQuoteSection(loginStatus), "", ...formatExportsSection(exportsProMonat)].join("\n");
+  return [
+    ...formatLoginQuoteSection(loginStatus),
+    "",
+    ...formatLoginsProFirmaSection(loginsProFirma),
+    "",
+    ...formatExportsSection(exportsProMonat),
+  ].join("\n");
 }

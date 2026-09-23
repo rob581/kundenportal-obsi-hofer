@@ -56,6 +56,15 @@ export function LoginForm() {
       return;
     }
 
+    // Best-effort Login-Zählung (PROJ-11-Nachtrag) — ein Fehler hier darf die
+    // eigentliche Anmeldung/Weiterleitung nie verhindern, deshalb bewusst
+    // ohne Fehlerbehandlung, die den Nutzer betrifft.
+    try {
+      await fetch("/api/auth/log-login", { method: "POST" });
+    } catch {
+      // bewusst ignoriert, siehe oben
+    }
+
     // Volle Navigation statt Client-Router: (protected)/layout.tsx prüft die
     // Sitzung serverseitig (getPortalAccess -> ggf. Kein Zugang) und
     // /dashboard leitet bei mehreren Firmen selbst zur Firmen-Auswahl um
