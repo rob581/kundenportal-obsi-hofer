@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -70,12 +70,30 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Export-Ereignisse als eigener Datenbank-Eintrag statt aus Server-Logs ablesen | Server-Logs sind auf der aktuellen Hosting-Stufe nur ca. 30 Minuten einsehbar und nicht strukturiert auswertbar; ein DB-Eintrag bleibt dauerhaft und ist jederzeit abfragbar | 2026-09-23 |
+| Login-Quote wird aus bereits vorhandenen Daten (Zugangsdaten + vom Login-System ohnehin gespeichertem letzten Login) abgeleitet, nicht separat mitgezählt | Vermeidet doppelte Datenhaltung und eine zusätzliche Fehlerquelle | 2026-09-23 |
+| Keine eigene Oberfläche für die Kennzahlen, nur fertige Datenbank-Abfragen | Passt zur PRD-Vorgabe "kein internes Admin-Backend"; für ein 1-Personen-Team lohnt sich Bau/Wartung eines eigenen Auswertungs-Bildschirms nicht | 2026-09-23 |
+| Erfassung des Export-Ereignisses darf den eigentlichen Download nie verhindern (best-effort) | CSV-Export ist die Kernfunktion; die Zählung ist ein "nice to know" und darf sie nie gefährden | 2026-09-23 |
+| Keine neuen Pakete/Abhängigkeiten | Nutzt ausschliesslich die bestehende Datenbank und die bestehenden Export-Routen (PROJ-8, PROJ-10) | 2026-09-23 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### A) Komponentenstruktur
+Keine — bewusst kein neues UI-Element, weder kunden- noch intern-seitig. Die Umsetzung ist für alle Nutzer des Portals unsichtbar.
+
+### B) Datenmodell (in einfachen Worten)
+**Neu gespeichert:** ein "Export-Ereignis" pro erfolgreichem CSV-Download — welche Firma, welche Export-Art (Geräte- oder Prüfberichte-Übersicht), wann. Keine Namen, keine E-Mail-Adressen, keine Dateiinhalte.
+
+**Nicht neu gespeichert:** die Login-Quote wird bei Bedarf aus bereits vorhandenen Informationen zusammengerechnet (wer Zugang hat + wann zuletzt eingeloggt, Letzteres speichert das Login-System ohnehin automatisch) — dafür wird lediglich eine fertige Abfrage bereitgestellt, kein zusätzlicher dauerhafter Speicher.
+
+### C) Tech-Entscheidungen
+Siehe Technical Decisions oben.
+
+### D) Abhängigkeiten
+Keine neuen Pakete — nutzt die bestehende Datenbank und die bestehenden Export-Routen (PROJ-8, PROJ-10).
 
 ## QA Test Results
 _To be added by /qa_
