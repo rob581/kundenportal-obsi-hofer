@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
@@ -371,3 +371,9 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - **Tag:** `v1.7.0-PROJ-11`
 
 **Nachträglich geändert (2026-09-23, Nutzerwunsch nach dem ersten manuellen Test-Cron-Lauf):** Zeile "Noch nicht eingeloggt: ..." aus dem Report-Text entfernt (`formatLoginQuoteSection` in `src/lib/erfolgsmessung/report.ts`) — der Nutzer wollte nur sehen, welche Kunden sich bereits eingeloggt haben, nicht zusätzlich die Gegenliste. Aggregierte Quote und die "Eingeloggt: ..."-Zeile bleiben unverändert. `report.test.ts` entsprechend angepasst, alle 162 Tests weiterhin grün.
+
+**Nachtrag 2026-09-23 (zweiter Refinement-Durchgang) — Login-Zählung pro Firma:**
+- **Deployed:** 2026-09-23 (automatisch via Vercel bei Push auf `main`, alle Commits liefen bereits vor diesem `/deploy`-Schritt live)
+- **Migration:** `supabase/migrations/0010_login_log.sql` — vom Nutzer im Supabase SQL Editor ausgeführt (bestätigt)
+- **Verifiziert:** `npm run build`/`npm run lint` lokal fehlerfrei; volle Vitest-Suite (173 Tests) und volle Playwright-Suite (38 Tests, alle Browser) grün vor dem Deploy, keine neuen Env-Variablen. Live-Verifikation des neuen `login_log`-Eintrags nach einem echten Passkey-Login steht beim Nutzer noch aus (siehe QA-Empfehlung)
+- **Tag:** `v1.7.1-PROJ-11`
