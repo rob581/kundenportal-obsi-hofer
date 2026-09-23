@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
@@ -211,6 +211,66 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - **Security:** Pass — keine kritischen Funde, bewusster Verzicht auf DB-Views verhindert die naheliegendste Falle (unbeabsichtigte API-Exposition von `auth.users`-Daten)
 - **Production Ready:** YES
 - **Recommendation:** Status auf "Approved" setzen und deployen. BUG-1 (defensiver `try/catch` direkt um `logExportEvent` in beiden Routen) bei nächster Gelegenheit mitnehmen, kein Deployment-Blocker.
+
+---
+
+## QA Test Results — Nachtrag: Wöchentlicher E-Mail-Report (2026-09-23)
+
+**Tested:** 2026-09-23
+**App URL:** N/A — kein UI, siehe Tech Design
+**Tester:** QA Engineer (AI)
+
+> Migration 0009 wurde laut Nutzer bereits im Supabase SQL Editor ausgeführt. Ein echter Cron-Lauf gegen die Produktions-/Entwicklungsdatenbank wurde von hier aus trotzdem nicht ausgelöst — das würde reale Kundendaten (`auth.users`) verarbeiten und eine echte E-Mail verschicken. Verifiziert wurde stattdessen per Vitest (mit gemockter DB/E-Mail) und Code-Review der SQL-Funktion gegen das reale Schema. **Empfehlung:** einmal manuell `curl -H "Authorization: Bearer $CRON_SECRET" https://<domain>/api/cron/erfolgsmessung-report` gegen die echte Umgebung aufrufen und die tatsächlich ankommende E-Mail gegenprüfen, bevor der erste automatische Montags-Lauf ansteht.
+
+### Acceptance Criteria Status
+
+#### Wöchentliche Mail wird verschickt
+- [x] `erfolgsmessung-report/route.test.ts` ("sends the report by email and returns 200 on success")
+- [x] Cron-Zeitpunkt (`vercel.json`: `"0 6 * * 1"`) per Code-Review geprüft — entspricht Montag 06:00 UTC
+
+#### Report listet Firmen einzeln mit Login-Status, plus aggregierte Quote
+- [x] `report.test.ts` ("lists Firmen by login status and the exports breakdown") — prüft sowohl die Quote (`1/2 Firmen (50%)`) als auch die Einzelaufstellung ("Eingeloggt: Firma A" / "Noch nicht eingeloggt: Firma B")
+
+#### Report zeigt Exports pro Monat nach `entity`
+- [x] `report.test.ts` ("groups export_log rows by month and entity") — korrekte Gruppierung, korrekte Sortierung (neuester Monat zuerst)
+
+#### Cron-Endpoint durch `CRON_SECRET` geschützt
+- [x] `erfolgsmessung-report/route.test.ts` (401 ohne Secret, 401 mit falschem Secret) — identisches Muster zu `/api/cron/sync-dataverse`
+
+#### Fehler bei der Report-Erzeugung löst Fehler-Mail statt Absturz aus
+- [x] `erfolgsmessung-report/route.test.ts` ("sends an alert email and returns 500...") sowie der Fall eines fehlenden `CRON_SECRET` (identische Lektion wie die dortige QA-BUG-1-Fix aus PROJ-1)
+
+#### Keine Kunden mit Zugang → sauberer Leer-Zustand statt Fehler
+- [x] `report.test.ts` ("shows an explicit empty state instead of an empty list when there are no Kunden")
+
+#### Datenbank-Funktion ist gegen den echten Zugriffsweg abgesichert
+- [x] Code-Review: `revoke all ... from public, anon, authenticated` + `grant execute ... to service_role` — gleiches Durchsetzungsprinzip wie RLS, unabhängig davon, ob PostgREST die Funktion als RPC-Endpoint auflistet
+- [x] `set search_path = public, auth` gesetzt — verhindert die bekannte Search-Path-Injection-Schwachstelle bei `security definer`-Funktionen
+- [ ] Nicht live gegen die echte Datenbank verifiziert (siehe Hinweis oben) — bitte einmal echt aufrufen und prüfen, dass ein normaler (nicht Service-Role-)Aufruf tatsächlich abgelehnt wird
+
+### Security Audit Results
+- [x] `security definer` korrekt mit explizitem `search_path` kombiniert (sonst reale Rechteausweitungs-Schwachstelle)
+- [x] Execute-Recht ausschliesslich für `service_role`, entzogen für `public`/`anon`/`authenticated`
+- [x] Funktion gibt nur aggregierte/berechnete Werte zurück (Firma-Name + Bool), keine rohen `auth.users`-Zeilen (keine E-Mail-Adressen, keine sonstigen Kontodaten) — selbst bei einem hypothetischen Fehlkonfigurations-Fall wäre der Datenverlust minimal
+- [x] `sendOpsEmail`-Umbenennung ist verhaltensneutral (per Regressionstests von `sync-dataverse` bestätigt) — kein neues Risiko durch die Umbenennung selbst
+- [ ] **BUG-2 gefunden (Low, siehe unten):** `getExportsProMonat()` liest `export_log` ohne `.limit()`
+
+### Bugs Found
+
+#### BUG-2: `getExportsProMonat()` liest die komplette `export_log`-Tabelle ohne Begrenzung
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. `src/lib/erfolgsmessung/report.ts` ansehen: `getSupabaseAdmin().from("export_log").select("entity, created_at")` hat kein `.limit(...)`
+  2. Verstösst gegen die Backend-Regel "Use `.limit()` on all list queries" (`.claude/rules/backend.md`)
+- **Kontext:** Aktuell unkritisch — `export_log` ist neu und wächst langsam (ein Eintrag pro CSV-Export). Bereits als Open Question in der Spec vermerkt ("Soll die Exports-pro-Monat-Tabelle auf die letzten N Monate begrenzt werden?"), aber noch nicht umgesetzt
+- **Priority:** Nice to have — vor spürbarem Wachstum der Tabelle nachziehen (z.B. nur die letzten 24 Monate laden), kein Grund für einen Deployment-Aufschub
+
+### Summary
+- **Acceptance Criteria:** 6/7 vollständig automatisiert bestätigt, 1 (Absicherung der DB-Funktion) nur per Code-Review — bitte einmal live gegenprüfen (siehe Hinweis oben)
+- **Bugs Found:** 1 total (0 critical, 0 high, 0 medium, 1 low) — zusätzlich weiterhin BUG-1 aus dem vorherigen QA-Durchgang offen (Medium, unverändert, nicht durch diesen Nachtrag verursacht)
+- **Security:** Pass — `security definer` korrekt mit `search_path` abgesichert, Execute-Rechte korrekt eingeschränkt, keine rohen `auth.users`-Daten im Ergebnis
+- **Production Ready:** YES
+- **Recommendation:** Status auf "Approved" setzen und deployen. Nach dem Deploy einmal manuell den Cron-Endpoint aufrufen und die echte E-Mail gegenprüfen, bevor der erste automatische Montags-Lauf ansteht. BUG-2 (`.limit()` ergänzen) und das weiterhin offene BUG-1 bei Gelegenheit mitnehmen.
 
 ## Deployment
 _To be added by /deploy_
