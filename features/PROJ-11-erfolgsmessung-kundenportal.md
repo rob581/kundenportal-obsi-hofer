@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -94,6 +94,16 @@ Siehe Technical Decisions oben.
 
 ### D) Abhängigkeiten
 Keine neuen Pakete — nutzt die bestehende Datenbank und die bestehenden Export-Routen (PROJ-8, PROJ-10).
+
+## Implementation Notes (Backend)
+
+- Neue Migration `supabase/migrations/0008_export_log.sql`: Tabelle `export_log` (`id bigint identity`, `firma_id text`, `entity text` mit Check-Constraint `'geraete' | 'pruefberichte'`, `created_at timestamptz default now()`), Indizes auf `created_at` und `firma_id`. RLS aktiviert, bewusst ohne jegliche Policy — identisches Muster zu `portal_firma_einstellungen` (Migration 0006): nur der Service-Role-Client (Server, umgeht RLS) schreibt, gelesen wird nur manuell im SQL Editor. **Muss vom Nutzer im Supabase SQL Editor ausgeführt werden** (gleiches Vorgehen wie alle bisherigen Migrationen in diesem Projekt).
+- Neues Modul `src/lib/export-log/log-export.ts`: `logExportEvent(firmaId, entity)` — schreibt einen Eintrag über den bestehenden Service-Role-Client (`getSupabaseAdmin`). Fängt jeden Fehler (Supabase-Fehler wie auch geworfene Exceptions, z.B. fehlende Env-Vars) selbst ab und loggt ihn nur nach `console.error` — die Funktion wirft nie, entsprechend der Product Decision "Logging darf den Export nie blockieren".
+- Beide bestehenden Export-Routen (`src/app/api/uebersicht/export/route.ts`, `src/app/api/pruefberichte/export/route.ts`) rufen `logExportEvent` direkt vor dem Zurückgeben der erfolgreichen CSV-Response auf — nicht im `catch`-Block, damit bei einem Fehler *vor* der CSV-Erzeugung kein Eintrag entsteht (siehe Acceptance Criteria).
+- Keine neuen Views/Functions in der Datenbank angelegt (bewusste Abweichung von der ursprünglichen Architektur-Idee einer SQL-View): ein neues Objekt im `public`-Schema könnte über die PostgREST-API erreichbar werden, insbesondere die Login-Quote-Abfrage, die `auth.users` joint. Stattdessen liegen beide Abfragen als reine SQL-Textdatei unter `supabase/queries/erfolgsmessung.sql`, zum manuellen Kopieren in den SQL Editor.
+- Kein neuer API-Endpoint, keine neue Env-Variable — nutzt ausschliesslich den bereits vorhandenen `getSupabaseAdmin()`-Client.
+- 10 neue Tests: 3 in `log-export.test.ts` (Insert mit korrekten Werten, Supabase-Fehler wird abgefangen, geworfene Exception wird abgefangen — jeweils ohne dass die Funktion selbst wirft), je 2 in den beiden Export-Route-Tests (Log-Aufruf mit korrekter `firma_id`/`entity` bei Erfolg, kein Log-Aufruf bei einem 500er) — insgesamt 150 Tests grün.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
 ## QA Test Results
 _To be added by /qa_

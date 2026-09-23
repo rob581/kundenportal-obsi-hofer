@@ -4,12 +4,16 @@ const getCurrentUserEmailMock = vi.fn();
 const getPortalAccessMock = vi.fn();
 const getCurrentFirmaIdMock = vi.fn();
 const getPruefberichteExportRowsMock = vi.fn();
+const logExportEventMock = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUserEmail: () => getCurrentUserEmailMock() }));
 vi.mock("@/lib/auth/access", () => ({ getPortalAccess: (email: string) => getPortalAccessMock(email) }));
 vi.mock("@/lib/auth/current-firma", () => ({ getCurrentFirmaId: () => getCurrentFirmaIdMock() }));
 vi.mock("@/lib/pruefberichte/queries", () => ({
   getPruefberichteExportRows: (firmaId: string, filters: unknown) => getPruefberichteExportRowsMock(firmaId, filters),
+}));
+vi.mock("@/lib/export-log/log-export", () => ({
+  logExportEvent: (firmaId: string, entity: string) => logExportEventMock(firmaId, entity),
 }));
 
 // Gleiches Test-Muster wie src/app/api/uebersicht/export/route.test.ts.
@@ -29,6 +33,7 @@ beforeEach(() => {
   getPortalAccessMock.mockReset();
   getCurrentFirmaIdMock.mockReset();
   getPruefberichteExportRowsMock.mockReset();
+  logExportEventMock.mockReset();
   redirectMock.mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -64,6 +69,17 @@ describe("GET /api/pruefberichte/export", () => {
     expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
   });
 
+  it("logs the export event (PROJ-11) on success", async () => {
+    getCurrentUserEmailMock.mockResolvedValue("test@example.com");
+    getPortalAccessMock.mockResolvedValue({ contactId: "k1", firmaIds: ["f1"] });
+    getCurrentFirmaIdMock.mockResolvedValue("f1");
+    getPruefberichteExportRowsMock.mockResolvedValue([]);
+
+    await GET(makeRequest());
+
+    expect(logExportEventMock).toHaveBeenCalledWith("f1", "pruefberichte");
+  });
+
   it("passes the zeitraum query param through to getPruefberichteExportRows", async () => {
     getCurrentUserEmailMock.mockResolvedValue("test@example.com");
     getPortalAccessMock.mockResolvedValue({ contactId: "k1", firmaIds: ["f1"] });
@@ -95,5 +111,6 @@ describe("GET /api/pruefberichte/export", () => {
     const res = await GET(makeRequest());
 
     expect(res.status).toBe(500);
+    expect(logExportEventMock).not.toHaveBeenCalled();
   });
 });

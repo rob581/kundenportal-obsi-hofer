@@ -4,6 +4,7 @@ import { getPortalAccess } from "@/lib/auth/access";
 import { getCurrentFirmaId } from "@/lib/auth/current-firma";
 import { getPruefberichteExportRows } from "@/lib/pruefberichte/queries";
 import { buildPruefberichteExportCsv } from "@/lib/pruefberichte/export-csv";
+import { logExportEvent } from "@/lib/export-log/log-export";
 
 // Liegt ausserhalb der automatischen Schutzschicht von (protected)/layout.tsx
 // (die gilt nur für Seiten) — prüft Session/Zugriff deshalb selbst, exakt wie
@@ -25,6 +26,8 @@ export async function GET(request: Request) {
     const items = await getPruefberichteExportRows(firmaId, { zeitraum });
     const csv = buildPruefberichteExportCsv(items);
     const datum = new Date().toISOString().slice(0, 10);
+
+    await logExportEvent(firmaId, "pruefberichte");
 
     return new Response(csv, {
       headers: {

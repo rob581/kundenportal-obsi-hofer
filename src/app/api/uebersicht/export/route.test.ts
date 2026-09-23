@@ -5,6 +5,7 @@ const getPortalAccessMock = vi.fn();
 const getCurrentFirmaIdMock = vi.fn();
 const getGeraeteExportRowsMock = vi.fn();
 const getFirmaEinstellungenMock = vi.fn();
+const logExportEventMock = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUserEmail: () => getCurrentUserEmailMock() }));
 vi.mock("@/lib/auth/access", () => ({ getPortalAccess: (email: string) => getPortalAccessMock(email) }));
@@ -14,6 +15,9 @@ vi.mock("@/lib/geraete/queries", () => ({
 }));
 vi.mock("@/lib/firma-einstellungen/queries", () => ({
   getFirmaEinstellungen: (firmaId: string) => getFirmaEinstellungenMock(firmaId),
+}));
+vi.mock("@/lib/export-log/log-export", () => ({
+  logExportEvent: (firmaId: string, entity: string) => logExportEventMock(firmaId, entity),
 }));
 
 // Gleiches Test-Muster wie src/app/login/actions.test.ts: redirect() wird
@@ -35,6 +39,7 @@ beforeEach(() => {
   getCurrentFirmaIdMock.mockReset();
   getGeraeteExportRowsMock.mockReset();
   getFirmaEinstellungenMock.mockReset();
+  logExportEventMock.mockReset();
   redirectMock.mockClear();
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
@@ -73,6 +78,18 @@ describe("GET /api/uebersicht/export", () => {
     expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]);
   });
 
+  it("logs the export event (PROJ-11) on success", async () => {
+    getCurrentUserEmailMock.mockResolvedValue("test@example.com");
+    getPortalAccessMock.mockResolvedValue({ contactId: "k1", firmaIds: ["f1"] });
+    getCurrentFirmaIdMock.mockResolvedValue("f1");
+    getFirmaEinstellungenMock.mockResolvedValue({ zusatzspalten: [] });
+    getGeraeteExportRowsMock.mockResolvedValue([]);
+
+    await GET(makeRequest());
+
+    expect(logExportEventMock).toHaveBeenCalledWith("f1", "geraete");
+  });
+
   it("passes status/suche/zuPruefen query params through to getGeraeteExportRows", async () => {
     getCurrentUserEmailMock.mockResolvedValue("test@example.com");
     getPortalAccessMock.mockResolvedValue({ contactId: "k1", firmaIds: ["f1"] });
@@ -100,6 +117,7 @@ describe("GET /api/uebersicht/export", () => {
     const res = await GET(makeRequest());
 
     expect(res.status).toBe(500);
+    expect(logExportEventMock).not.toHaveBeenCalled();
   });
 
   it("still exports (without Zusatzspalten) when getFirmaEinstellungen fails (fail-open, wie /uebersicht)", async () => {

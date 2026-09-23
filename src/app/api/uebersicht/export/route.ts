@@ -6,6 +6,7 @@ import { getGeraeteExportRows } from "@/lib/geraete/queries";
 import { resolveZusatzspalten } from "@/lib/geraete/zusatzspalten";
 import { getFirmaEinstellungen } from "@/lib/firma-einstellungen/queries";
 import { buildGeraeteExportCsv } from "@/lib/geraete/export-csv";
+import { logExportEvent } from "@/lib/export-log/log-export";
 
 // Liegt ausserhalb der automatischen Schutzschicht von (protected)/layout.tsx
 // (die gilt nur für Seiten) — prüft Session/Zugriff deshalb selbst, exakt wie
@@ -42,6 +43,8 @@ export async function GET(request: Request) {
     const items = await getGeraeteExportRows(firmaId, { status, suche, zuPruefen, sucheKundenId });
     const csv = buildGeraeteExportCsv(items, zusatzspalten);
     const datum = new Date().toISOString().slice(0, 10);
+
+    await logExportEvent(firmaId, "geraete");
 
     return new Response(csv, {
       headers: {
