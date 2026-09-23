@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Deployed
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
@@ -85,6 +85,7 @@
 - [ ] Soll bei künftigem Wachstum von `export_log` eine Aufbewahrungsfrist/Archivierung eingeführt werden? Aktuell keine — bei Bedarf in `/refine PROJ-11` nachziehen
 - [ ] Soll die Login-Quoten-Basis rückwirkend historisiert werden (z.B. "Quote zum Ende jedes Monats"), oder reicht ein reiner Ist-Zustand-Snapshot? Aktuell nur Ist-Zustand vorgesehen
 - [ ] Soll die Exports-pro-Monat-Tabelle im wöchentlichen Report irgendwann auf die letzten N Monate begrenzt werden, damit die Mail nicht unbegrenzt wächst? Aktuell keine Begrenzung, bei Bedarf später nachziehen (Nachtrag 2026-09-23)
+- [ ] **Offener Bug (Nachtrag 2026-09-23, dritter Durchgang):** `erfolgsmessung_login_status()` zeigt für mind. eine Firma (StWZ Energie AG) `hat_login = false`, obwohl `login_log` einen echten Login für diese Firma erfasst hat. Diagnose-Abfragen (Kontakt-E-Mail, Join-Ergebnis, Funktions-Output) beim Nutzer angefordert — Root Cause noch offen, Fix folgt in einem separaten Backend-Durchgang
 
 ## Decision Log
 
@@ -182,6 +183,13 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - Kein Playwright-Test für den Passkey-Teil möglich (gleiche Einschränkung wie PROJ-6: eine echte WebAuthn-Zeremonie lässt sich in Playwright ohne virtuellen Authenticator nicht automatisieren) — die eigentliche `fetch`-Aufruf-Logik ist stattdessen über den Route-Handler-Test abgedeckt, der volle End-to-End-Pfad muss manuell mit einem echten Gerät verifiziert werden.
 - Kein neuer API-Endpoint für Zod-Validierung nötig — `POST /api/auth/log-login` nimmt keinen Body entgegen, alle Werte kommen aus der Session.
 - 11 neue/geänderte Tests: 4 in `log-login.test.ts` (Batch-Insert, No-op bei leerem Array, Supabase-Fehler abgefangen, Exception abgefangen), 3 in `log-login/route.test.ts` (401, 403, Erfolg mit korrekten `firmaIds`), 2 zusätzliche Assertions in `actions.test.ts` (Log-Aufruf bei Erfolg, kein Aufruf bei Fehler/kein Zugriff), 5 neue/angepasste in `report.test.ts` (`getLoginsProFirma` inkl. Namensauflösung, leerem Ergebnis, fehlendem Namen, Fehlerfall; Report-Text-Erweiterung) — insgesamt 173 Tests grün.
+- `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
+
+**Nachtrag 2026-09-23 (dritter Refinement-Durchgang) — CSV-Exports pro Firma + offener Login-Quote-Bug:**
+
+- Nutzerfeedback nach dem ersten echten Wochenreport: (1) Login-Quote und "Eingeloggt"-Liste sind für mind. eine Firma (StWZ Energie AG) nachweislich falsch — `login_log` hatte einen Login erfasst, `erfolgsmessung_login_status()` (auth.users-Join) zeigte `hat_login = false`. **Root Cause noch nicht gefunden** (Diagnose-Abfragen beim Nutzer angefordert, siehe Open Questions) — im Gegensatz zum ersten 0/274-Vorfall ist eine reine Testreihenfolge diesmal ausgeschlossen, da beide Abfragen innerhalb desselben `Promise.all(...)`-Laufs praktisch gleichzeitig ausgeführt werden. (2) Nutzerwunsch: CSV-Exports zusätzlich pro Firma anzeigen, nicht nur pro Monat.
+- `src/lib/erfolgsmessung/report.ts` refaktoriert: gemeinsame `countByFirma()`-Hilfsfunktion extrahiert (vorher in `getLoginsProFirma` dupliziert), `LoginCountRow` zu generischem `FirmaCountRow` umbenannt, da jetzt auch für Exports genutzt. Neue `fetchExportLogRows()` liest `export_log` einmal mit `firma_id, entity, created_at` — sowohl `getExportsProMonat()` als auch die neue `getExportsProFirma()` werten dieselben Rohdaten aus (kein zusätzlicher DB-Roundtrip für die neue Sicht). Report um neuen Abschnitt "=== CSV-Exports pro Firma ===" ergänzt (gleiches Format/Sortierung wie "Logins pro Firma").
+- 6 neue/angepasste Tests in `report.test.ts` (`getExportsProFirma` inkl. leerem Ergebnis, `buildErfolgsmessungReport`-Erweiterung) — insgesamt 175 Tests grün.
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
 ## QA Test Results

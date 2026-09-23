@@ -15,7 +15,13 @@ vi.mock("@/lib/supabase-admin", () => ({ getSupabaseAdmin: () => getSupabaseAdmi
 const getFirmenNamenMock = vi.fn();
 vi.mock("@/lib/auth/access", () => ({ getFirmenNamen: (ids: string[]) => getFirmenNamenMock(ids) }));
 
-import { getLoginStatus, getLoginsProFirma, getExportsProMonat, buildErfolgsmessungReport } from "./report";
+import {
+  getLoginStatus,
+  getLoginsProFirma,
+  getExportsProMonat,
+  getExportsProFirma,
+  buildErfolgsmessungReport,
+} from "./report";
 
 beforeEach(() => {
   rpcMock.mockReset();
@@ -102,10 +108,10 @@ describe("getExportsProMonat", () => {
   it("groups export_log rows by month and entity", async () => {
     exportLogSelectMock.mockResolvedValue({
       data: [
-        { entity: "geraete", created_at: "2026-09-01T10:00:00Z" },
-        { entity: "geraete", created_at: "2026-09-15T10:00:00Z" },
-        { entity: "pruefberichte", created_at: "2026-09-02T10:00:00Z" },
-        { entity: "geraete", created_at: "2026-08-20T10:00:00Z" },
+        { firma_id: "f1", entity: "geraete", created_at: "2026-09-01T10:00:00Z" },
+        { firma_id: "f1", entity: "geraete", created_at: "2026-09-15T10:00:00Z" },
+        { firma_id: "f2", entity: "pruefberichte", created_at: "2026-09-02T10:00:00Z" },
+        { firma_id: "f1", entity: "geraete", created_at: "2026-08-20T10:00:00Z" },
       ],
       error: null,
     });
@@ -135,6 +141,38 @@ describe("getExportsProMonat", () => {
   });
 });
 
+describe("getExportsProFirma", () => {
+  it("counts export_log rows per firma_id and resolves names", async () => {
+    exportLogSelectMock.mockResolvedValue({
+      data: [
+        { firma_id: "f1", entity: "geraete", created_at: "2026-09-01T10:00:00Z" },
+        { firma_id: "f1", entity: "pruefberichte", created_at: "2026-09-02T10:00:00Z" },
+        { firma_id: "f2", entity: "geraete", created_at: "2026-09-03T10:00:00Z" },
+      ],
+      error: null,
+    });
+    getFirmenNamenMock.mockResolvedValue([
+      { id: "f1", name: "Firma A" },
+      { id: "f2", name: "Firma B" },
+    ]);
+
+    const result = await getExportsProFirma();
+
+    expect(result).toEqual([
+      { firmaId: "f1", firmaName: "Firma A", anzahl: 2 },
+      { firmaId: "f2", firmaName: "Firma B", anzahl: 1 },
+    ]);
+  });
+
+  it("returns an empty array when there are no exports yet", async () => {
+    exportLogSelectMock.mockResolvedValue({ data: [], error: null });
+
+    const result = await getExportsProFirma();
+
+    expect(result).toEqual([]);
+  });
+});
+
 describe("buildErfolgsmessungReport", () => {
   it("lists Firmen by login status, login counts, and the exports breakdown", async () => {
     rpcMock.mockResolvedValue({
@@ -148,9 +186,12 @@ describe("buildErfolgsmessungReport", () => {
       data: [{ firma_id: "f1" }, { firma_id: "f1" }],
       error: null,
     });
-    getFirmenNamenMock.mockResolvedValue([{ id: "f1", name: "Firma A" }]);
+    getFirmenNamenMock.mockResolvedValue([
+      { id: "f1", name: "Firma A" },
+      { id: "f2", name: "Firma B" },
+    ]);
     exportLogSelectMock.mockResolvedValue({
-      data: [{ entity: "geraete", created_at: "2026-09-01T10:00:00Z" }],
+      data: [{ firma_id: "f2", entity: "geraete", created_at: "2026-09-01T10:00:00Z" }],
       error: null,
     });
 
@@ -159,8 +200,11 @@ describe("buildErfolgsmessungReport", () => {
     expect(report).toContain("1/2 Firmen (50%)");
     expect(report).toContain("Eingeloggt: Firma A");
     expect(report).not.toContain("Noch nicht eingeloggt");
+    expect(report).toContain("=== Logins pro Firma ===");
     expect(report).toContain("Firma A: 2");
     expect(report).toContain("2026-09 – geraete: 1");
+    expect(report).toContain("=== CSV-Exports pro Firma ===");
+    expect(report).toContain("Firma B: 1");
   });
 
   it("shows an explicit empty state instead of an empty list when there is no data yet", async () => {
@@ -172,6 +216,7 @@ describe("buildErfolgsmessungReport", () => {
 
     expect(report).toContain("Keine Kunden mit Zugang.");
     expect(report).toContain("Noch keine erfassten Logins seit Einführung dieser Zählung.");
-    expect(report).toContain("Bisher keine Exports.");
+    // Beide Sektionen ("pro Monat" und "pro Firma") nutzen denselben Leer-Text.
+    expect(report.match(/Bisher keine Exports\./g)).toHaveLength(2);
   });
 });
