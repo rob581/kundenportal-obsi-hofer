@@ -20,6 +20,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 | P1 | CSV-Export der Geräte-Übersicht | Deployed |
 | P1 | Prüfberichte-Übersicht | Deployed |
 | P1 | CSV-Export der Prüfberichte-Übersicht | Deployed |
+| P2 | Erfolgsmessung Kundenportal (intern, nur SQL) | Planned |
 
 ## Success Metrics
 - Reduktion der internen Zeit für manuelle Excel-Aufbereitung/Versand von Prüfberichten
