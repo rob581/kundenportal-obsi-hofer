@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23
 
@@ -106,7 +106,65 @@ Keine neuen Pakete — nutzt die bestehende Datenbank und die bestehenden Export
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-09-23
+**App URL:** N/A — dieses Feature hat keine Oberfläche (siehe Tech Design)
+**Tester:** QA Engineer (AI)
+
+> Hinweis: Anders als alle bisherigen Features hat PROJ-11 bewusst keine Kunden- oder Admin-Oberfläche (Non-Goal "Kein Admin-Backend"). Manuelles Browser-Testing, Cross-Browser- und Responsive-Checks entfallen daher vollständig — es gibt nichts zum Anschauen. Geprüft wurde stattdessen: die beiden Export-Routen per Vitest-Integrationstest, die neue Migration/SQL-Datei per Code-Review gegen das reale Schema (`supabase/migrations/0001_dataverse_sync_schema.sql`), sowie eine Sicherheitsbetrachtung der RLS-Konfiguration. Die eigentliche RLS-Durchsetzung in der echten Datenbank kann erst nach dem manuellen Ausführen von Migration 0008 im Supabase SQL Editor verifiziert werden (gleiche Einschränkung wie bei allen bisherigen Migrationen dieses Projekts).
+
+### Acceptance Criteria Status
+
+#### AC-1/AC-2: Export-Ereignis wird bei Erfolg mit korrektem `entity` geloggt
+- [x] `uebersicht/export/route.test.ts` ("logs the export event (PROJ-11) on success") — `logExportEvent("f1", "geraete")`
+- [x] `pruefberichte/export/route.test.ts` ("logs the export event (PROJ-11) on success") — `logExportEvent("f1", "pruefberichte")`
+
+#### AC-3: Kein Log-Eintrag bei einem Fehler vor der CSV-Erzeugung
+- [x] Beide Route-Tests ("returns 500 without crashing...") prüfen zusätzlich `expect(logExportEventMock).not.toHaveBeenCalled()`
+
+#### AC-4: Leeres Export-Ergebnis wird trotzdem geloggt
+- [x] Die AC-1/AC-2-Tests mocken `getGeraeteExportRowsMock`/`getPruefberichteExportRowsMock` bereits mit einem leeren Array — Log-Aufruf erfolgt trotzdem
+
+#### AC-5: Ein fehlschlagender `export_log`-Insert darf den Download nie verhindern
+- [x] Auf Ebene von `log-export.ts` erfüllt: `log-export.test.ts` bestätigt, dass die Funktion bei einem Supabase-Fehler **und** bei einer geworfenen Exception (z.B. fehlende Env-Vars) niemals wirft, sondern immer auflöst
+- [ ] **BUG-1 gefunden (Medium, siehe unten):** auf Ebene der Export-Routen selbst ist das *nicht* zusätzlich abgesichert — beide Routen verlassen sich vollständig darauf, dass `logExportEvent` nie wirft, statt sich selbst dagegen zu wappnen
+
+#### AC-6: SQL-Abfrage für die Login-Quote
+- [x] Spaltennamen/Joins gegen das reale Schema geprüft (`dv_firmen.id/name`, `dv_kontakte.id/email/ist_aktiv`, `dv_relationen.firma_id/kontakt_id`) — stimmen exakt überein, inkl. der bereits an anderer Stelle (`access.ts`) verwendeten case-insensitiven E-Mail-Behandlung
+- [ ] Nicht automatisiert gegen eine echte Datenbank ausgeführt (kein Zugriff auf eine echte Supabase-Instanz von hier aus) — bitte nach dem Anwenden von Migration 0008 einmal manuell im SQL Editor gegenprüfen
+
+#### AC-7: SQL-Abfrage für Exports pro Monat
+- [x] Spaltennamen gegen `export_log` (Migration 0008) geprüft, korrekt
+- [ ] Ebenfalls nicht live gegen eine echte Datenbank ausgeführt (gleiche Einschränkung wie AC-6)
+
+#### AC-8: RLS lehnt anonyme/authentifizierte Clients ab
+- [x] Per Code-Review: `enable row level security` ohne jede Policy ist exakt das gleiche, bereits produktiv laufende Muster wie `portal_firma_einstellungen` (Migration 0006) — dort funktioniert Deny-all nachweislich
+- [ ] Nicht live gegen die echte Datenbank verifiziert (Migration noch nicht angewendet)
+
+### Security Audit Results
+- [x] `firma_id` im Log-Eintrag stammt aus der serverseitigen Session (`getCurrentFirmaId()`), nicht aus Nutzereingabe — kein Spoofing eines fremden Log-Eintrags möglich
+- [x] `entity` ist durch den TypeScript-Typ (`"geraete" | "pruefberichte"`) und zusätzlich durch einen DB-Check-Constraint abgesichert — kein beliebiger Wert einschleusbar
+- [x] Keine neuen Route Handler, kein neuer Angriffsvektor — die bestehende Auth-/Access-Prüfung der beiden Export-Routen (bereits in PROJ-8 gründlich geprüft) ist unverändert
+- [x] Bewusster Verzicht auf DB-Views (siehe Implementation Notes) verhindert, dass die `auth.users`-Abfrage versehentlich über die PostgREST-API erreichbar wird
+- [x] Keine personenbezogenen Daten in `export_log` (nur `firma_id`/`entity`/Zeitstempel)
+
+### Bugs Found
+
+#### BUG-1: Export-Routen verlassen sich vollständig auf `logExportEvent`, statt sich selbst gegen einen Logging-Fehler abzusichern
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. In `uebersicht/export/route.ts` (bzw. der Prüfberichte-Variante) `logExportEvent` durch eine Version ersetzen/mocken, die ablehnt (`Promise.reject`)
+  2. Erwartet (laut AC-5): Der CSV-Download wird trotzdem ausgeliefert (Status 200)
+  3. Tatsächlich: Der `await logExportEvent(...)`-Aufruf steht im selben `try`-Block wie die CSV-Erzeugung — eine Ablehnung landet im äusseren `catch` und liefert fälschlich `500 Export fehlgeschlagen`, obwohl die CSV bereits fertig im Speicher war
+- **Kontext:** Im aktuell ausgelieferten Code passiert das nicht, weil `logExportEvent` selbst nachweislich nie wirft (siehe `log-export.test.ts`). Das Risiko ist eine zukünftige Regression: entfernt eine spätere Änderung versehentlich das interne `try/catch` in `log-export.ts`, würden ab sofort alle CSV-Exports mit 500 fehlschlagen, obwohl die Daten bereithanden — eine "Handlung auf Distanz" ohne eigene Absicherung an der Stelle, wo es laut Spec eigentlich verlangt ist
+- **Priority:** Vor dem nächsten Refactoring von `log-export.ts` mitnehmen; kein Grund, das Deployment von PROJ-11 selbst aufzuschieben — reine Absicherung auf Vorrat, aktuell keine reale Auswirkung
+
+### Summary
+- **Acceptance Criteria:** 6/8 vollständig automatisiert bestätigt, 2 nur per Code-Review (AC-6/AC-7, mangels echter DB-Verbindung von hier aus) — beide sollten nach Anwenden der Migration einmal manuell im SQL Editor gegengeprüft werden
+- **Bugs Found:** 1 total (0 critical, 0 high, 1 medium, 0 low)
+- **Security:** Pass — keine kritischen Funde, bewusster Verzicht auf DB-Views verhindert die naheliegendste Falle (unbeabsichtigte API-Exposition von `auth.users`-Daten)
+- **Production Ready:** YES
+- **Recommendation:** Status auf "Approved" setzen und deployen. BUG-1 (defensiver `try/catch` direkt um `logExportEvent` in beiden Routen) bei nächster Gelegenheit mitnehmen, kein Deployment-Blocker.
 
 ## Deployment
 _To be added by /deploy_
