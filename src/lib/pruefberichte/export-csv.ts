@@ -8,6 +8,7 @@ type Spalte = { label: string; getValue: (bericht: PruefberichtMitGeraet) => str
 // daher ein einziges, festes Spalten-Set (siehe PROJ-10 Decision Log).
 const SPALTEN: Spalte[] = [
   { label: "Gerät", getValue: (b) => b.geraetLabel },
+  { label: "Gerätename", getValue: (b) => b.geraetName },
   { label: "Datum", getValue: (b) => b.pruefdatum },
   { label: "Ergebnis", getValue: (b) => b.ergebnis },
   { label: "Bemerkungen", getValue: (b) => b.bemerkungen },

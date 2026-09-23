@@ -7,6 +7,7 @@ type Spalte = { label: string; getValue: (geraet: Geraet) => string | null };
 // Teil des PROJ-7-Zusatzspalten-Pools sind) — siehe PROJ-8 Spec Decision Log.
 const ALWAYS_COLUMNS: Spalte[] = [
   { label: "Gerät", getValue: (g) => formatArtikelInfo(g) },
+  { label: "Gerätename", getValue: (g) => g.name },
   { label: "Status", getValue: (g) => g.status },
   { label: "Lagerort", getValue: (g) => g.lagerort },
   { label: "Letzte Prüfung", getValue: (g) => g.letztePruefung },

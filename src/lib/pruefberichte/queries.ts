@@ -158,6 +158,7 @@ async function anreichernMitGeraetLabel(rows: PruefberichtFirmaRow[]): Promise<P
       return [row.id, label];
     })
   );
+  const geraetNameMap = new Map(geraeteDetailRows.map((row) => [row.id, row.name]));
 
   return rows.map((row) => ({
     id: row.id,
@@ -167,6 +168,7 @@ async function anreichernMitGeraetLabel(rows: PruefberichtFirmaRow[]): Promise<P
     pruefer: row.pruefer,
     geraetId: row.geraet_id ?? "",
     geraetLabel: row.geraet_id ? geraetLabelMap.get(row.geraet_id) ?? "(ohne Angaben)" : "(ohne Angaben)",
+    geraetName: row.geraet_id ? geraetNameMap.get(row.geraet_id) ?? null : null,
   }));
 }
 

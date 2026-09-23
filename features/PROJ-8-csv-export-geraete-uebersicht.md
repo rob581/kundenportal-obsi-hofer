@@ -141,6 +141,8 @@ Keine neuen — nutzt die bestehende Supabase-Anbindung, keine externe CSV-Bibli
 - 25 neue Tests: 15 in `export-csv.test.ts` (Escaping, Quoting, Formel-Schutz, BOM, Spaltenreihenfolge, leere Zellen statt "—"), 4 zusätzliche in `queries.test.ts` (`getGeraeteExportRows`: leeres Ergebnis, unpaginiert, Filter, gebatchter Artikel-Lookup mit 250 IDs), 6 in `route.test.ts` (Auth-Redirects, erfolgreicher Download inkl. Header/BOM-Bytes, Parameter-Weitergabe, 500 bei Fehler, Fail-open ohne Zusatzspalten) — insgesamt 117 Tests grün.
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
 
+**Nachträgliche additive Ergänzung (2026-09-23, Nutzerwunsch):** `ALWAYS_COLUMNS` um die Spalte "Gerätename" ergänzt (direkt nach "Gerät", vor "Status") — zeigt das rohe Dataverse-Feld `dv_geraete.name`, unabhängig vom kombinierten Artikel-Info-Label in der "Gerät"-Spalte (siehe `formatArtikelInfo`, das dieses Feld nur als Fallback nutzt, wenn keine Artikel-Angaben vorhanden sind). Betrifft nur den CSV-Export, nicht die Geräte-Übersicht/Detailseite selbst. Rein additiv.
+
 ## QA Test Results
 
 **Tested:** 2026-09-22

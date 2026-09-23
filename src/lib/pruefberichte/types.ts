@@ -12,6 +12,9 @@ export type Pruefbericht = {
 export type PruefberichtMitGeraet = Pruefbericht & {
   geraetId: string;
   geraetLabel: string;
+  // Rohes Dataverse-Feld "name" (Gerätename), separat vom kombinierten
+  // Artikel-Label — für den CSV-Export (siehe PROJ-10 Nachtrag).
+  geraetName: string | null;
 };
 
 // "alle" = kein Zeitraum-Filter (Standard, siehe PROJ-9 Spec).

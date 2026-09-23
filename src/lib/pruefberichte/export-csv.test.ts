@@ -11,6 +11,7 @@ function makeBericht(overrides: Partial<PruefberichtMitGeraet> = {}): Pruefberic
     pruefer: "M. Keller",
     geraetId: "g1",
     geraetLabel: "Feuerlöscher 6kg ABC",
+    geraetName: "FL-EG-003",
     ...overrides,
   };
 }
@@ -25,17 +26,17 @@ describe("buildPruefberichteExportCsv", () => {
     expect(csv.startsWith("﻿")).toBe(true);
   });
 
-  it("has exactly the five fixed columns, no Zusatzspalten-Konzept", () => {
+  it("has exactly the six fixed columns, no Zusatzspalten-Konzept", () => {
     const csv = buildPruefberichteExportCsv([]);
     const header = csv.replace("﻿", "").split("\r\n")[0];
-    expect(header).toBe("Gerät;Datum;Ergebnis;Bemerkungen;Prüfer");
+    expect(header).toBe("Gerät;Gerätename;Datum;Ergebnis;Bemerkungen;Prüfer");
   });
 
   it("renders one row per Prüfbericht with semicolon-separated values", () => {
     const csv = buildPruefberichteExportCsv([makeBericht()]);
     const [, row] = csv.replace("﻿", "").split("\r\n");
 
-    expect(row).toBe("Feuerlöscher 6kg ABC;2026-01-15;Freigabe;Alles ok;M. Keller");
+    expect(row).toBe("Feuerlöscher 6kg ABC;FL-EG-003;2026-01-15;Freigabe;Alles ok;M. Keller");
   });
 
   it("leaves cells empty (not '—') for missing values", () => {
@@ -44,8 +45,8 @@ describe("buildPruefberichteExportCsv", () => {
     const [, row] = csv.replace("﻿", "").split("\r\n");
     const cells = row.split(";");
 
-    expect(cells[3]).toBe(""); // Bemerkungen
-    expect(cells[4]).toBe(""); // Prüfer
+    expect(cells[4]).toBe(""); // Bemerkungen
+    expect(cells[5]).toBe(""); // Prüfer
   });
 
   it("escapes a formula-like Bemerkung to prevent CSV injection", () => {

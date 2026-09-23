@@ -260,6 +260,9 @@ describe("getPruefberichteFuerFirma", () => {
     expect(result.items.find((i) => i.id === "pb1")?.geraetLabel).toBe("Feuerlöscher 6kg ABC");
     expect(result.items.find((i) => i.id === "pb2")?.geraetLabel).toBe("Rauchmelder Typ X");
     expect(result.items.find((i) => i.id === "pb1")?.geraetId).toBe("g1");
+    // g1 hat keinen eigenen Namen (name: null) — g2 schon, unabhängig vom Label.
+    expect(result.items.find((i) => i.id === "pb1")?.geraetName).toBeNull();
+    expect(result.items.find((i) => i.id === "pb2")?.geraetName).toBe("Rauchmelder Typ X");
   });
 
   it("gibt Bemerkungen und Prüfer unverändert weiter", async () => {
