@@ -64,6 +64,8 @@ describe("runDataverseSync", () => {
     expect(tables["dv_firmen"].has("f1")).toBe(true);
     const firmenSummary = result.entities.find((e) => e.slug === "firmen");
     expect(firmenSummary?.fetched).toBe(1);
+    expect(firmenSummary?.added).toBe(1);
+    expect(firmenSummary?.updated).toBe(0);
   });
 
   it("hard-deletes rows that disappeared from Dataverse for a non-soft-delete entity", async () => {
@@ -88,6 +90,8 @@ describe("runDataverseSync", () => {
     expect(tables["dv_firmen"].has("old-0")).toBe(false);
     const firmenSummary = result.entities.find((e) => e.slug === "firmen");
     expect(firmenSummary?.deleted).toBe(1);
+    expect(firmenSummary?.added).toBe(0);
+    expect(firmenSummary?.updated).toBe(9);
   });
 
   it("soft-deletes Pruefberichte instead of removing them", async () => {

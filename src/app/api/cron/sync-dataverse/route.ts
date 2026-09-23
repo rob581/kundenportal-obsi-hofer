@@ -37,7 +37,7 @@ export async function GET(request: Request) {
       // nachvollziehen. Einfach CRON_NOTIFY_ON_SUCCESS wieder entfernen,
       // sobald die Überwachungsphase vorbei ist.
       const summary = result.entities
-        .map((e) => `"${e.slug}": ${e.fetched} geladen, ${e.deleted} gelöscht${e.skippedDueToThreshold ? " (Löschung übersprungen)" : ""}`)
+        .map((e) => `"${e.slug}": ${e.fetched} geladen, ${e.added} hinzugefügt, ${e.updated} aktualisiert, ${e.deleted} gelöscht${e.skippedDueToThreshold ? " (Löschung übersprungen)" : ""}`)
         .join("\n");
       await sendSyncAlertEmail("Dataverse-Sync: erfolgreich", summary || "Keine Entities konfiguriert.");
     }

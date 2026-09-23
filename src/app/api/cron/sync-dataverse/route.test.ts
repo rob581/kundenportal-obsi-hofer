@@ -90,7 +90,7 @@ describe("GET /api/cron/sync-dataverse", () => {
   it("sends a summary email on a clean run only when CRON_NOTIFY_ON_SUCCESS is set", async () => {
     process.env.CRON_NOTIFY_ON_SUCCESS = "true";
     runDataverseSyncMock.mockResolvedValue({
-      entities: [{ slug: "firmen", fetched: 302, deleted: 3, skippedDueToThreshold: false }],
+      entities: [{ slug: "firmen", fetched: 302, added: 2, updated: 297, deleted: 3, skippedDueToThreshold: false }],
       warnings: [],
       errors: [],
     });
@@ -100,7 +100,7 @@ describe("GET /api/cron/sync-dataverse", () => {
     expect(res.status).toBe(200);
     expect(sendSyncAlertEmailMock).toHaveBeenCalledWith(
       "Dataverse-Sync: erfolgreich",
-      expect.stringContaining("firmen")
+      expect.stringContaining("2 hinzugefügt, 297 aktualisiert")
     );
   });
 

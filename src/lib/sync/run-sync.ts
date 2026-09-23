@@ -7,6 +7,8 @@ import { computeMissingIds, exceedsSafetyThreshold } from "@/lib/sync/reconcile"
 export type EntitySyncSummary = {
   slug: string;
   fetched: number;
+  added: number;
+  updated: number;
   deleted: number;
   skippedDueToThreshold: boolean;
 };
@@ -44,9 +46,20 @@ async function syncOneEntity(job: SyncJob): Promise<EntitySyncSummary> {
   await batchUpsert(config.table, mappedRecords);
 
   // 4. Reconcile: anything we had before that didn't come back is gone.
+  const existingIdSet = new Set(existingIds);
   const fetchedIds = new Set(mappedRecords.map((r) => r.id));
   const missingIds = computeMissingIds(existingIds, fetchedIds);
   const skippedDueToThreshold = exceedsSafetyThreshold(existingIds.length, missingIds.length);
+
+  // Added vs. updated is derived purely from set membership (was this id
+  // already known before this run?), not from an actual field-level diff —
+  // cheap since existingIds/fetchedIds are already computed for reconcile.
+  let added = 0;
+  let updated = 0;
+  for (const id of fetchedIds) {
+    if (existingIdSet.has(id)) updated += 1;
+    else added += 1;
+  }
 
   let deleted = 0;
   if (missingIds.length > 0) {
@@ -60,7 +73,7 @@ async function syncOneEntity(job: SyncJob): Promise<EntitySyncSummary> {
     }
   }
 
-  return { slug: job.slug, fetched: mappedRecords.length, deleted, skippedDueToThreshold };
+  return { slug: job.slug, fetched: mappedRecords.length, added, updated, deleted, skippedDueToThreshold };
 }
 
 export async function runDataverseSync(): Promise<SyncRunResult> {

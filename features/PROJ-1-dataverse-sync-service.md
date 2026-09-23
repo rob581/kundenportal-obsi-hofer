@@ -1,8 +1,8 @@
 # PROJ-1: Dataverse-Sync-Service
 
-## Status: Planned
+## Status: Deployed
 **Created:** 2026-09-15
-**Last Updated:** 2026-09-16
+**Last Updated:** 2026-09-23
 
 ## Dependencies
 - None
@@ -199,6 +199,8 @@ Siehe Decision Log → Technical Decisions oben.
 **Nachträgliche additive Ergänzung (2026-09-18, für PROJ-3-Refinement):** `dv_artikel` um die Spalte `dimension` erweitert (Migration `supabase/migrations/0004_artikel_dimension.sql`, vom Nutzer im Supabase SQL Editor ausgeführt), gemappt aus dem Dataverse-Feld `bmvcc_dimensions`. `artikelSchema` (`src/lib/sync/entities.ts`) und der Artikel-Job (`src/lib/sync/jobs.ts`) entsprechend ergänzt. Rein additiv (siehe PROJ-3 Implementation Notes).
 
 **Nachträgliche additive Ergänzung (2026-09-22, für PROJ-7):** `dv_geraete` um die Spalte `kunden_id` erweitert (Migration `supabase/migrations/0005_geraete_kunden_id.sql`), gemappt aus dem bisher bewusst ignorierten Dataverse-Feld `bmvcc_kundenid` (Dataverse-LogicalName, siehe Hinweis oben zu Gross-/Kleinschreibung). `geraetSchema` und der Geräte-Job entsprechend ergänzt. Rein additiv, keine bestehenden PROJ-1-Verhaltensweisen betroffen — siehe PROJ-7 Implementation Notes für den Anwendungsfall (Zusatzspalte in der Geräte-Übersicht).
+
+**Nachträgliche additive Ergänzung (2026-09-23, Nutzerwunsch):** Erfolgs-Mail-Report (`CRON_NOTIFY_ON_SUCCESS`) zeigt pro Entity zusätzlich "X hinzugefügt" und "Y aktualisiert" neben "geladen"/"gelöscht". Berechnung rein über Mengen-Vergleich der IDs (bereits vor dem Reconcile-Schritt vorhanden: `existingIds` vs. `fetchedIds`), kein echter Feld-Diff — "aktualisiert" heisst also "war bereits bekannt und wurde erneut geladen", nicht zwingend "Inhalt hat sich geändert". Ein echter Feld-Diff wäre bei ca. 25'000 Prüfberichten pro Lauf spürbar teurer gewesen (vollständige alte Datensätze statt nur IDs laden) und wurde bewusst nicht umgesetzt. Geändert: `EntitySyncSummary` (`src/lib/sync/run-sync.ts`) um `added`/`updated` erweitert, Mail-Text in `src/app/api/cron/sync-dataverse/route.ts` angepasst. Rein additiv, keine bestehenden PROJ-1-Verhaltensweisen betroffen.
 
 **BUG gefunden und behoben (2026-09-22):** Seit der Umstellung von NextAuth auf Supabase Auth (PROJ-2, 2026-09-21) leitete `middleware.ts` **jeden** Request ohne gültige Supabase-Session zu `/login` um — der Matcher (`config.matcher`) schloss `/api/**` nicht aus. Betroffen war damit auch der tägliche Vercel-Cron-Aufruf von `/api/cron/sync-dataverse`: Der Request wurde bereits in der Middleware mit einem 307-Redirect abgefangen, bevor die eigene `CRON_SECRET`-Prüfung der Route überhaupt ausgeführt wurde — der Sync lief seit der Umstellung vermutlich **überhaupt nicht mehr**, ohne dass eine Fehler- oder Erfolgsmail verschickt wurde (beide E-Mail-Pfade liegen im Route-Handler, der nie erreicht wurde). Gefunden beim manuellen Testen eines Cron-Trigger-Aufrufs während PROJ-7. **Fix:** Matcher um `api` im Negativ-Lookahead ergänzt (`/((?!api|_next/static|_next/image|favicon.ico|.*\\.svg$).*)"`) — API-Routen prüfen ihre Authentifizierung ohnehin selbst (siehe `sync-dataverse/route.ts`), brauchen also keine Supabase-Session-Prüfung durch diese Middleware. **Bekannte Einschränkung beim lokalen Verifizieren:** Middleware läuft laut der bereits dokumentierten QA-Notiz vom 2026-09-17 in der lokalen Turbopack-Dev-Umgebung unter Windows nicht zuverlässig — der Fix muss auf Vercel (Produktion) verifiziert werden, nicht lokal. **Empfehlung an den Nutzer:** Nach dem Deploy prüfen, ob seit 2026-09-21 tatsächlich keine Sync-Alert-/Erfolgsmails mehr eingegangen sind (Resend-Log), um das Ausmass der Datenveraltung in Supabase abzuschätzen.
 
