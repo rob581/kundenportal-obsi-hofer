@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
@@ -273,4 +273,8 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - **Recommendation:** Status auf "Approved" setzen und deployen. Nach dem Deploy einmal manuell den Cron-Endpoint aufrufen und die echte E-Mail gegenprüfen, bevor der erste automatische Montags-Lauf ansteht. BUG-2 (`.limit()` ergänzen) und das weiterhin offene BUG-1 bei Gelegenheit mitnehmen.
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-09-23 (automatisch via Vercel bei Push auf `main`, alle PROJ-11-Commits liefen bereits vor diesem `/deploy`-Schritt live)
+- **Migrationen:** `supabase/migrations/0008_export_log.sql` und `0009_erfolgsmessung_login_status.sql` — beide vom Nutzer im Supabase SQL Editor ausgeführt (bestätigt)
+- **Verifiziert:** `npm run build`/`npm run lint` lokal fehlerfrei vor jedem Push; keine neuen Env-Variablen (nutzt bestehende `CRON_SECRET`, `RESEND_API_KEY`, `ALERT_EMAIL_TO`). Der neue wöchentliche Cron (`0 6 * * 1`) in `vercel.json` greift ab dem nächsten Montag; empfohlen (siehe QA), vorher einmal manuell `curl -H "Authorization: Bearer $CRON_SECRET" https://obsi-hoferkundenportal.vercel.app/api/cron/erfolgsmessung-report` aufzurufen und die tatsächlich ankommende E-Mail zu prüfen — steht beim Nutzer noch aus
+- **Tag:** `v1.7.0-PROJ-11`

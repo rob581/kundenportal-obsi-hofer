@@ -25,7 +25,7 @@
 | PROJ-8 | CSV-Export der Geräte-Übersicht | Deployed | [Spec](../features/PROJ-8-csv-export-geraete-uebersicht.md) | 2026-09-22 |
 | PROJ-9 | Prüfberichte-Übersicht | Deployed | [Spec](../features/PROJ-9-pruefberichte-uebersicht.md) | 2026-09-22 |
 | PROJ-10 | CSV-Export der Prüfberichte-Übersicht | Deployed | [Spec](../features/PROJ-10-csv-export-pruefberichte-uebersicht.md) | 2026-09-22 |
-| PROJ-11 | Erfolgsmessung Kundenportal | Approved | [Spec](../features/PROJ-11-erfolgsmessung-kundenportal.md) | 2026-09-23 |
+| PROJ-11 | Erfolgsmessung Kundenportal | Deployed | [Spec](../features/PROJ-11-erfolgsmessung-kundenportal.md) | 2026-09-23 |
 
 <!-- Add features above this line -->
 
