@@ -227,6 +227,13 @@ Der Nutzer hat den kompletten Flow manuell im Browser durchgespielt (Login mit `
 
 **Nicht automatisiert testbar (nur manuell durch den Nutzer):** der Erfolgsfall mit echtem, per E-Mail zugestelltem Code — jetzt live verifiziert (siehe oben).
 
+**Produktions-Incident behoben (2026-09-24):** Neue (noch nie eingeloggte) Kontakte erhielten beim ersten Login-Versuch keinen brauchbaren E-Mail-Code mehr — Ursache waren zwei fehlerhafte Supabase-Auth-E-Mail-Vorlagen, die nie gegen die echte Produktivumgebung getestet worden waren (nur gegen den Dev-Server):
+- **"Confirm signup"-Vorlage** (wird bei `signInWithOtp` für komplett neue Kontakte verwendet, `shouldCreateUser: true`) enthielt nur `{{ .ConfirmationURL }}`, keinen `{{ .Token }}` — neue Kunden erhielten nur einen Link, keinen eintippbaren Code, den unsere Login-Seite aber zwingend erwartet
+- **"Magic Link"-Vorlage** (für wiederkehrende Logins) hatte `{{ .Token }}` versehentlich im `href`-Attribut statt `{{ .ConfirmationURL }}` — ergab einen kaputten Link (Navigation zu einer "Seite" namens z.B. "123456") und zeigte den Code nirgends sichtbar an
+- Zusätzlich zeigte die **Site URL** in den Auth-Einstellungen noch auf `http://localhost:3000` statt die Produktions-Domain — selbst ein korrekt aufgebauter Bestätigungslink hätte Kunden auf ihren eigenen, nicht erreichbaren `localhost` geschickt
+
+Beide Vorlagen vom Nutzer im Supabase Dashboard korrigiert: `{{ .Token }}` jetzt sichtbar als Text im E-Mail-Body, kein anklickbarer Link mehr enthalten (bewusste Entscheidung — das Projekt ist auf reine Code-Eingabe ausgelegt, siehe Out of Scope oben "Passkey... eigene, spätere Erweiterung"; eine funktionierende Link-basierte Anmeldung hätte eine neue `/auth/callback`-Route mit `exchangeCodeForSession` erfordert, was den Rahmen dieses Fixes gesprengt hätte). Site URL auf die Produktions-Domain umgestellt. Reine Supabase-Dashboard-Konfiguration, keine Code-Änderung in diesem Repo nötig.
+
 **Nachträglich geändert (2026-09-21, Nutzerwunsch):** Alle Post-Login-Weiterleitungen zeigen jetzt auf `/dashboard` statt `/uebersicht` — Code-Login (`verifyLoginCode`), Passkey-Login (`login-form.tsx`), bereits angemeldete Besucher auf `/login`, `/kein-zugang` (falls nachträglich Zugang besteht) sowie die Firma-Auswahl (`firmen-auswahl/actions.ts` nach Auswahl, `firmen-auswahl/page.tsx` bei nur einer Firma). `getCurrentFirmaId()` (siehe PROJ-5) leitet weiterhin bei fehlender Firma-Auswahl zu `/firmen-auswahl` um, unabhängig davon, welche Seite sie aufgerufen hat. Betroffener Test (`login/actions.test.ts`) angepasst; `npx vitest run` weiterhin 74/74 grün.
 
 ---
