@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: In Progress
+## Status: Deployed
 **Created:** 2026-09-23
 **Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
 
@@ -85,7 +85,7 @@
 - [ ] Soll bei künftigem Wachstum von `export_log` eine Aufbewahrungsfrist/Archivierung eingeführt werden? Aktuell keine — bei Bedarf in `/refine PROJ-11` nachziehen
 - [ ] Soll die Login-Quoten-Basis rückwirkend historisiert werden (z.B. "Quote zum Ende jedes Monats"), oder reicht ein reiner Ist-Zustand-Snapshot? Aktuell nur Ist-Zustand vorgesehen
 - [ ] Soll die Exports-pro-Monat-Tabelle im wöchentlichen Report irgendwann auf die letzten N Monate begrenzt werden, damit die Mail nicht unbegrenzt wächst? Aktuell keine Begrenzung, bei Bedarf später nachziehen (Nachtrag 2026-09-23)
-- [ ] **Offener Bug (Nachtrag 2026-09-23, dritter Durchgang):** `erfolgsmessung_login_status()` zeigt für mind. eine Firma (StWZ Energie AG) `hat_login = false`, obwohl `login_log` einen echten Login für diese Firma erfasst hat. Diagnose-Abfragen (Kontakt-E-Mail, Join-Ergebnis, Funktions-Output) beim Nutzer angefordert — Root Cause noch offen, Fix folgt in einem separaten Backend-Durchgang
+- [x] **Bug (Nachtrag 2026-09-23, dritter Durchgang):** `erfolgsmessung_login_status()` zeigte für mind. eine Firma (StWZ Energie AG) `hat_login = false`, obwohl `login_log` einen echten Login für diese Firma erfasst hatte → **Root Cause war kein PROJ-11-Bug**, sondern ein externes PROJ-2-Problem: zwei fehlerhafte Supabase-Auth-E-Mail-Vorlagen (fehlender `{{ .Token }}` im "Confirm signup"-Template bzw. `{{ .Token }}` fälschlich im `href` des "Magic Link"-Templates) plus eine auf `localhost` zeigende Site URL verhinderten, dass betroffene Kontakte ihre Anmeldung sauber abschliessen konnten — siehe PROJ-2 Implementation Notes, "Produktions-Incident behoben (2026-09-24)". Nach der Dashboard-Korrektur zeigt der reale Wochenreport (2026-09-24) konsistente Daten: dieselben 4 Firmen erscheinen sowohl in der Login-Quote als auch in "Logins pro Firma". Kein Code-Fix in PROJ-11 nötig, nur Nutzer-Verifikation
 
 ## Decision Log
 
@@ -385,3 +385,8 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - **Migration:** `supabase/migrations/0010_login_log.sql` — vom Nutzer im Supabase SQL Editor ausgeführt (bestätigt)
 - **Verifiziert:** `npm run build`/`npm run lint` lokal fehlerfrei; volle Vitest-Suite (173 Tests) und volle Playwright-Suite (38 Tests, alle Browser) grün vor dem Deploy, keine neuen Env-Variablen. Live-Verifikation des neuen `login_log`-Eintrags nach einem echten Passkey-Login steht beim Nutzer noch aus (siehe QA-Empfehlung)
 - **Tag:** `v1.7.1-PROJ-11`
+
+**Nachtrag 2026-09-23 (dritter Refinement-Durchgang) — CSV-Exports pro Firma:**
+- **Deployed:** 2026-09-23 (automatisch via Vercel bei Push auf `main`)
+- **Live verifiziert (2026-09-24):** echter Wochenreport zeigt konsistente Daten über alle vier Sektionen — Login-Quote (4/275), Logins pro Firma, CSV-Exports pro Monat und CSV-Exports pro Firma stimmen erwartungsgemäss überein (siehe Open Questions: der zuvor beobachtete Login-Quote-Bug war ein externes PROJ-2-Problem, nicht PROJ-11, und ist inzwischen behoben)
+- Keine neue Migration, kein neuer Endpoint — reine Report-Text-Erweiterung
