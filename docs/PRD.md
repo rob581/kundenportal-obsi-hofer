@@ -21,6 +21,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 | P1 | Prüfberichte-Übersicht | Deployed |
 | P1 | CSV-Export der Prüfberichte-Übersicht | Deployed |
 | P2 | Erfolgsmessung Kundenportal (intern, SQL + wöchentlicher E-Mail-Report) | Deployed |
+| P1 | Firma-Filter für Dataverse-Sync (Cross-Repo-Abhängigkeit für obsi-hofer-admin) | Planned |
 
 ## Success Metrics
 - Reduktion der internen Zeit für manuelle Excel-Aufbereitung/Versand von Prüfberichten
