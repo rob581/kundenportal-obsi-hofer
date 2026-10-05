@@ -10,15 +10,22 @@ vi.mock("@/lib/sync/run-sync", () => {
       this.name = "FirmaNotFoundError";
     }
   }
+  class InvalidFirmaIdError extends Error {
+    constructor(firmaId: string) {
+      super(`Ungültige firmaId: "${firmaId}" ist keine gültige GUID.`);
+      this.name = "InvalidFirmaIdError";
+    }
+  }
   return {
     runDataverseSync: (firmaId?: string) => runDataverseSyncMock(firmaId),
     FirmaNotFoundError,
+    InvalidFirmaIdError,
   };
 });
 vi.mock("@/lib/notify/send-email", () => ({ sendOpsEmail: (subject: string, body: string) => sendOpsEmailMock(subject, body) }));
 
 import { GET } from "./route";
-import { FirmaNotFoundError } from "@/lib/sync/run-sync";
+import { FirmaNotFoundError, InvalidFirmaIdError } from "@/lib/sync/run-sync";
 
 function makeRequest(secret?: string, firmaId?: string) {
   const url = new URL("http://localhost/api/cron/sync-dataverse");
@@ -159,6 +166,19 @@ describe("GET /api/cron/sync-dataverse", () => {
     expect(res.status).toBe(404);
     const body = await res.json();
     expect(body.error).toContain("unbekannt-123");
+    expect(sendOpsEmailMock).not.toHaveBeenCalled();
+  });
+
+  // QA BUG-1 fix: a malformed/injected firmaId is rejected with 400, not
+  // silently run or treated as an infrastructure failure worth alerting on.
+  it("returns 400 without sending an ops email when the firmaId is not a valid GUID", async () => {
+    runDataverseSyncMock.mockRejectedValue(new InvalidFirmaIdError("1 eq 1 or 1 eq 1"));
+
+    const res = await GET(makeRequest("test-cron-secret", "1 eq 1 or 1 eq 1"));
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("Ungültige firmaId");
     expect(sendOpsEmailMock).not.toHaveBeenCalled();
   });
 });

@@ -48,7 +48,7 @@ vi.mock("@/lib/sync/batch", () => ({
   },
 }));
 
-import { runDataverseSync, FirmaNotFoundError } from "./run-sync";
+import { runDataverseSync, FirmaNotFoundError, InvalidFirmaIdError } from "./run-sync";
 
 beforeEach(() => {
   fetchAllDataverseRecordsMock.mockReset();
@@ -201,24 +201,51 @@ describe("runDataverseSync", () => {
 // importantly — that a sync scoped to one Firma never touches another
 // Firma's data.
 describe("runDataverseSync with firmaId (PROJ-12)", () => {
+  const FIRMA_ID = "11111111-1111-1111-1111-111111111111";
+  const OTHER_FIRMA_ID = "22222222-2222-2222-2222-222222222222";
+  const UNKNOWN_FIRMA_ID = "99999999-9999-9999-9999-999999999999";
+
+  // QA BUG-1 fix: firmaId must be a well-formed GUID before it's ever used
+  // in a Dataverse $filter — otherwise a crafted value like "<guid> or 1 eq
+  // 1" would make every scoping filter match every Firma, defeating the
+  // whole point of this feature (and the 404 guard below it).
+  describe("firmaId validation (QA BUG-1/BUG-2)", () => {
+    it("rejects a non-GUID firmaId without making any Dataverse/Supabase call", async () => {
+      await expect(runDataverseSync("1 eq 1 or 1 eq 1")).rejects.toBeInstanceOf(InvalidFirmaIdError);
+      expect(fetchAllDataverseRecordsMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects an empty firmaId instead of silently falling back to a full sync", async () => {
+      await expect(runDataverseSync("")).rejects.toBeInstanceOf(InvalidFirmaIdError);
+      expect(fetchAllDataverseRecordsMock).not.toHaveBeenCalled();
+    });
+
+    it("still runs the full unscoped sync when firmaId is omitted entirely", async () => {
+      fetchAllDataverseRecordsMock.mockResolvedValue([]);
+      await expect(runDataverseSync(undefined)).resolves.toBeDefined();
+    });
+  });
+
   it("throws FirmaNotFoundError and touches no table when the firmaId doesn't exist in Dataverse", async () => {
     fetchAllDataverseRecordsMock.mockResolvedValue([]); // nothing found for any entity set, including firmen
 
-    await expect(runDataverseSync("missing-firma")).rejects.toBeInstanceOf(FirmaNotFoundError);
+    await expect(runDataverseSync(UNKNOWN_FIRMA_ID)).rejects.toBeInstanceOf(FirmaNotFoundError);
     expect(tables["dv_firmen"]?.size ?? 0).toBe(0);
   });
 
   it("upserts only the matched Firma, leaving other Firmen completely untouched", async () => {
-    resetTable("dv_firmen", [{ id: "f1" }, { id: "f2" }]);
+    resetTable("dv_firmen", [{ id: FIRMA_ID }, { id: OTHER_FIRMA_ID }]);
     fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
-      if (entitySet === "bmvcc_firmas" && filter?.includes("f1")) return [{ bmvcc_firmaid: "f1", bmvcc_name: "Firma A" }];
+      if (entitySet === "bmvcc_firmas" && filter?.includes(FIRMA_ID)) {
+        return [{ bmvcc_firmaid: FIRMA_ID, bmvcc_name: "Firma A" }];
+      }
       return [];
     });
 
-    const result = await runDataverseSync("f1");
+    const result = await runDataverseSync(FIRMA_ID);
 
-    expect(tables["dv_firmen"].has("f1")).toBe(true);
-    expect(tables["dv_firmen"].has("f2")).toBe(true); // untouched — the critical safety requirement
+    expect(tables["dv_firmen"].has(FIRMA_ID)).toBe(true);
+    expect(tables["dv_firmen"].has(OTHER_FIRMA_ID)).toBe(true); // untouched — the critical safety requirement
     const firmenSummary = result.entities.find((e) => e.slug === "firmen");
     expect(firmenSummary).toEqual({ slug: "firmen", fetched: 1, added: 0, updated: 1, deleted: 0, skippedDueToThreshold: false });
   });
@@ -226,13 +253,15 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
   it("chains Standort → Gerät → Prüfbericht and Relation → Kontakt ids through the run, Artikel staying unscoped", async () => {
     resetTable("dv_artikel", []);
     fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
-      if (entitySet === "bmvcc_firmas") return filter?.includes("f1") ? [{ bmvcc_firmaid: "f1" }] : [];
+      if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
       if (entitySet === "bmvcc_organizationlocations") {
-        return filter?.includes("f1") ? [{ bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: "f1" }] : [];
+        return filter?.includes(FIRMA_ID)
+          ? [{ bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: FIRMA_ID }]
+          : [];
       }
       if (entitySet === "bmvcc_relations") {
-        return filter?.includes("f1")
-          ? [{ bmvcc_relationid: "r1", _bmvcc_firma_value: "f1", _bmvcc_person_value: "k1" }]
+        return filter?.includes(FIRMA_ID)
+          ? [{ bmvcc_relationid: "r1", _bmvcc_firma_value: FIRMA_ID, _bmvcc_person_value: "k1" }]
           : [];
       }
       if (entitySet === "bmvcc_artikels") return [{ bmvcc_artikelid: "a1" }];
@@ -253,7 +282,7 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
       }
     );
 
-    const result = await runDataverseSync("f1");
+    const result = await runDataverseSync(FIRMA_ID);
 
     expect(tables["dv_standorte"]?.has("s1")).toBe(true);
     expect(tables["dv_geraete"]?.has("g1")).toBe(true);
@@ -284,19 +313,21 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
   });
 
   it("never touches a Gerät belonging to a different Firma's Standort", async () => {
-    resetTable("dv_standorte", [{ id: "s-other", firma_id: "other-firma" }]);
+    resetTable("dv_standorte", [{ id: "s-other", firma_id: OTHER_FIRMA_ID }]);
     resetTable("dv_geraete", [{ id: "g-other", standort_id: "s-other" }]);
     fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
-      if (entitySet === "bmvcc_firmas") return filter?.includes("f1") ? [{ bmvcc_firmaid: "f1" }] : [];
+      if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
       if (entitySet === "bmvcc_organizationlocations") {
-        return filter?.includes("f1") ? [{ bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: "f1" }] : [];
+        return filter?.includes(FIRMA_ID)
+          ? [{ bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: FIRMA_ID }]
+          : [];
       }
       return [];
     });
-    // Firma f1's Standort s1 has no Geräte at all in Dataverse for this test.
+    // Firma FIRMA_ID's Standort s1 has no Geräte at all in Dataverse for this test.
     fetchAllDataverseRecordsForIdsMock.mockResolvedValue([]);
 
-    await runDataverseSync("f1");
+    await runDataverseSync(FIRMA_ID);
 
     expect(tables["dv_geraete"].has("g-other")).toBe(true);
     expect(tables["dv_geraete"].get("g-other")?.deleted_at ?? null).toBeNull();
@@ -309,9 +340,11 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
       Array.from({ length: 10 }, (_, i) => ({ id: `g-${i}`, standort_id: "s1" }))
     );
     fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
-      if (entitySet === "bmvcc_firmas") return filter?.includes("f1") ? [{ bmvcc_firmaid: "f1" }] : [];
+      if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
       if (entitySet === "bmvcc_organizationlocations") {
-        return filter?.includes("f1") ? [{ bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: "f1" }] : [];
+        return filter?.includes(FIRMA_ID)
+          ? [{ bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: FIRMA_ID }]
+          : [];
       }
       return [];
     });
@@ -326,7 +359,7 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
       return [];
     });
 
-    await runDataverseSync("f1");
+    await runDataverseSync(FIRMA_ID);
 
     expect(tables["dv_geraete"].has("g-0")).toBe(false);
     expect(tables["dv_geraete"].has("g-1")).toBe(true);
@@ -335,13 +368,13 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
   it("isolates a failure in one chained entity so an independent entity (Artikel) still syncs", async () => {
     resetTable("dv_artikel", []);
     fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
-      if (entitySet === "bmvcc_firmas") return filter?.includes("f1") ? [{ bmvcc_firmaid: "f1" }] : [];
+      if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
       if (entitySet === "bmvcc_organizationlocations") throw new Error("Standorte-Abruf fehlgeschlagen");
       if (entitySet === "bmvcc_artikels") return [{ bmvcc_artikelid: "a1" }];
       return [];
     });
 
-    const result = await runDataverseSync("f1");
+    const result = await runDataverseSync(FIRMA_ID);
 
     expect(tables["dv_artikel"]?.has("a1")).toBe(true);
     expect(result.errors.some((e) => e.includes("standorte"))).toBe(true);

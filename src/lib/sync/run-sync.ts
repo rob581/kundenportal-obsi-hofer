@@ -29,6 +29,29 @@ export class FirmaNotFoundError extends Error {
   }
 }
 
+// QA BUG-1 (Critical): firmaId used to be interpolated unchecked into raw
+// OData $filter strings (Firma-Existenzprüfung, Standorte-, Relationen-
+// Filter) — a crafted value like "<guid> or 1 eq 1" would make those
+// filters match every Firma, defeating both the 404 guard and the whole
+// point of scoping the sync to begin with. Validated once, centrally,
+// before any Dataverse call is made. Also closes QA BUG-2 (an empty
+// `firmaId` query parameter used to silently fall back to a full sync —
+// it now fails this same check instead).
+export class InvalidFirmaIdError extends Error {
+  constructor(firmaId: string) {
+    super(`Ungültige firmaId: "${firmaId}" ist keine gültige GUID.`);
+    this.name = "InvalidFirmaIdError";
+  }
+}
+
+const GUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function requireValidFirmaId(firmaId: string): void {
+  if (!GUID_PATTERN.test(firmaId)) {
+    throw new InvalidFirmaIdError(firmaId);
+  }
+}
+
 type MappedRecord = { id: string } & Record<string, unknown>;
 
 // PROJ-12: how a single entity's sync is narrowed to one Firma's data.
@@ -124,7 +147,11 @@ const THRESHOLD_WARNING = (slug: string) =>
   `Löschung übersprungen, bitte Dataverse-Verbindung prüfen.`;
 
 export async function runDataverseSync(firmaId?: string): Promise<SyncRunResult> {
-  if (firmaId) return runFirmaScopedSync(firmaId);
+  // Strikt auf `undefined` geprüft (nicht nur "truthy"): ein leerer String
+  // (`?firmaId=`) soll als ungültiger Wert fehlschlagen, nicht still auf den
+  // Vollsync zurückfallen (QA BUG-2) — die eigentliche Formatprüfung
+  // übernimmt `requireValidFirmaId()` gleich zu Beginn von `runFirmaScopedSync`.
+  if (firmaId !== undefined) return runFirmaScopedSync(firmaId);
 
   const entities: EntitySyncSummary[] = [];
   const warnings: string[] = [];
@@ -153,6 +180,10 @@ export async function runDataverseSync(firmaId?: string): Promise<SyncRunResult>
 // fully synced regardless of scope (Product Decision, small cross-Firma
 // master data).
 async function runFirmaScopedSync(firmaId: string): Promise<SyncRunResult> {
+  // Vor jeder anderen Aktion: firmaId muss eine wohlgeformte GUID sein, bevor
+  // sie irgendwo in einen Dataverse-$filter eingesetzt wird (siehe QA BUG-1).
+  requireValidFirmaId(firmaId);
+
   const entities: EntitySyncSummary[] = [];
   const warnings: string[] = [];
   const errors: string[] = [];

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendOpsEmail } from "@/lib/notify/send-email";
-import { runDataverseSync, FirmaNotFoundError } from "@/lib/sync/run-sync";
+import { runDataverseSync, FirmaNotFoundError, InvalidFirmaIdError } from "@/lib/sync/run-sync";
 
 // Batched upserts over ~30k records comfortably fit in a few minutes;
 // 300s requires a Vercel plan that supports extended function duration
@@ -33,6 +33,9 @@ export async function GET(request: Request) {
     } catch (error) {
       if (error instanceof FirmaNotFoundError) {
         return NextResponse.json({ error: error.message }, { status: 404 });
+      }
+      if (error instanceof InvalidFirmaIdError) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
       }
       throw error;
     }

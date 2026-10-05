@@ -1,8 +1,8 @@
 # PROJ-12: Firma-Filter für Dataverse-Sync
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-25
-**Last Updated:** 2026-09-25
+**Last Updated:** 2026-10-05
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — erweitert den bestehenden Sync-Endpoint
@@ -121,7 +121,7 @@ Umgesetzt wie in der Architektur festgelegt, ohne Datenbankschema-Änderungen (d
 - [x] Firma-gefilterter Sync synchronisiert nur die Teilmenge dieser Firma, `dv_artikel` bleibt vollständig
 - [x] Ohne `firmaId` verhält sich der Endpoint unverändert (bestehende Tests weiterhin grün)
 - [x] Lösch-Erkennung bezieht sich ausschliesslich auf die ID-Teilmenge der Firma (Test: "never touches a Gerät belonging to a different Firma's Standort")
-- [ ] **Unbekannte `firmaId` → 404 statt stillem No-Op** — funktioniert korrekt für einen wohlgeformten, aber nicht existierenden Wert; siehe jedoch BUG-1, durch den dieser Schutz mit einem präparierten Wert umgangen werden kann
+- [x] **Unbekannte `firmaId` → 404 statt stillem No-Op** — funktioniert für einen wohlgeformten, aber nicht existierenden Wert; seit der BUG-1-Behebung zusätzlich gegen präparierte Werte abgesichert (siehe Retest)
 - [x] Automatischer nächtlicher Cron-Trigger aus `vercel.json` entfernt
 - [x] Fehlender/falscher `CRON_SECRET` → 401, unverändert auch mit `firmaId`-Parameter
 
@@ -133,13 +133,14 @@ Umgesetzt wie in der Architektur festgelegt, ohne Datenbankschema-Änderungen (d
 ### Security Audit Results (Red Team / Code Review)
 - [x] Zugriff weiterhin nur mit gültigem `CRON_SECRET` (401 sonst), unverändert durch `firmaId` beeinflusst
 - [x] Supabase-seitige Filterung (`fetchAllIds`-`whereIn`) läuft über Supabase-eigene parametrisierte Queries (`.in()`) — keine Injection-Möglichkeit
-- [ ] **BUG: siehe BUG-1 (Critical)** — `firmaId` wird ungeprüft in drei Dataverse-`$filter`-Ausdrücke eingesetzt (OData-Injection)
-- [ ] BUG: siehe BUG-2 (Low) — leerer `firmaId`-Query-Parameter fällt still auf einen vollständigen Sync zurück statt auf einen Fehler
+- [x] BUG-1 (Critical) behoben — siehe Retest
+- [x] BUG-2 (Low) behoben — siehe Retest
 
 ### Bugs Found
 
 #### BUG-1: `firmaId` wird ungeprüft in Dataverse-`$filter`-Ausdrücke eingesetzt (OData-Injection)
 - **Severity:** Critical
+- **Status:** ✅ Fixed
 - **Steps to Reproduce:**
   1. `firmaId` kommt direkt aus dem Query-String (`new URL(request.url).searchParams.get("firmaId")`) in `route.ts` und wird ohne jede Formatprüfung an `runDataverseSync()` weitergereicht
   2. In `run-sync.ts` wird `firmaId` an drei Stellen roh in einen OData-`$filter` eingesetzt: der Firma-Existenzprüfung (`` `bmvcc_firmaid eq ${firmaId}` ``), dem Standorte-Filter (`` `_bmvcc_bexiofirma_value eq ${firmaId}` ``) und dem Relationen-Filter (`` `_bmvcc_firma_value eq ${firmaId}` ``)
@@ -151,6 +152,7 @@ Umgesetzt wie in der Architektur festgelegt, ohne Datenbankschema-Änderungen (d
 
 #### BUG-2: Leerer `firmaId`-Query-Parameter fällt still auf einen Vollsync zurück
 - **Severity:** Low
+- **Status:** ✅ Fixed
 - **Steps to Reproduce:**
   1. `route.ts` liest `firmaId` mit `?? undefined` — das greift nur bei `null`, nicht bei einem leeren String
   2. Ein Aufruf mit `?firmaId=` (Parameter vorhanden, aber leer) liefert daher `firmaId = ""`
@@ -158,12 +160,21 @@ Umgesetzt wie in der Architektur festgelegt, ohne Datenbankschema-Änderungen (d
   4. Erwartet (optional, nicht in der Spec gefordert): Ein offensichtlich fehlerhafter Aufruf sollte eher auffallen als unbemerkt zum Vollsync zu werden
 - **Priority:** Nice to have (in der Praxis ruft nur das Admin-Tool mit einer echten GUID oder ganz ohne Parameter auf; durch die BUG-1-Behebung mit strikter GUID-Validierung verschwindet dieser Fall ohnehin automatisch mit, sofern ein leerer String dort ebenfalls als ungültig zurückgewiesen wird statt als "kein Parameter" behandelt zu werden)
 
+### Retest (2026-10-05)
+Beide Bugs in einem Fix behoben, gemeinsame Ursache: `firmaId` wurde nirgends auf GUID-Format geprüft, bevor sie verwendet wird.
+
+- **Fix:** `src/lib/sync/run-sync.ts` — neue `InvalidFirmaIdError`-Klasse, `GUID_PATTERN`-Regex und `requireValidFirmaId()`; wird als allererste Zeile von `runFirmaScopedSync()` aufgerufen, also bevor `firmaId` in irgendeinen Dataverse-`$filter` eingesetzt wird (behebt BUG-1). Zusätzlich prüft `runDataverseSync()` jetzt `if (firmaId !== undefined)` statt `if (firmaId)`, sodass ein leerer String nicht mehr still auf den Vollsync durchfällt, sondern denselben `requireValidFirmaId()`-Check durchläuft und mit `InvalidFirmaIdError` abgewiesen wird (behebt BUG-2).
+- **Fix:** `src/app/api/cron/sync-dataverse/route.ts` — fängt `InvalidFirmaIdError` ab und antwortet mit HTTP 400 (keine Ops-Mail, analog zu `FirmaNotFoundError` → 404, da auch dies ein Aufrufer-Fehler ist, kein Infrastrukturproblem)
+- **Neue Regressionstests:**
+  - `run-sync.test.ts` → `describe("firmaId validation (QA BUG-1/BUG-2)", ...)`: ein präparierter Injection-Wert (`"1 eq 1 or 1 eq 1"`) wird mit `InvalidFirmaIdError` abgewiesen, **ohne dass ein einziger Dataverse-Call stattfindet**; ein leerer String wird ebenso abgewiesen statt auf den Vollsync zu laufen; ein ganz weggelassener `firmaId`-Parameter (`undefined`) läuft weiterhin unverändert als Vollsync
+  - `route.test.ts` → neuer Test: ein `InvalidFirmaIdError` aus `runDataverseSync` führt zu HTTP 400 mit Fehlertext, ohne Ops-Mail
+- **Verifiziert:** `npm test` (373/373 grün), `npm run lint` (clean), `npm run build` (clean)
+
 ### Summary
-- **Acceptance Criteria:** 5/6 vollständig erfüllt, 1/6 (404 bei unbekannter firmaId) durch BUG-1 angreifbar
-- **Bugs Found:** 2 total (1 critical, 0 high, 0 medium, 1 low)
-- **Security:** 1 kritisches Finding (BUG-1) — Kernschutzmechanismus der gesamten Spec betroffen
-- **Production Ready:** NO
-- **Recommendation:** BUG-1 vor jedem Push/Deploy beheben (strikte GUID-Validierung für `firmaId`, am besten zentral am Anfang von `runDataverseSync`/`runFirmaScopedSync`, mit 400-Antwort in der Route). BUG-2 kann im selben Zug miterledigt werden. Ohnehin bereits als "nicht gepusht, wartet auf PROJ-5" vereinbart — diese Behebung muss vor diesem Push erledigt sein.
+- **Acceptance Criteria:** 6/6 vollständig erfüllt
+- **Bugs Found:** 2 total (1 critical, 0 high, 0 medium, 1 low) — beide behoben, siehe Retest
+- **Security:** Kein offenes Finding mehr
+- **Production Ready:** YES (code-seitig) — **aber weiterhin bewusst nicht gepusht**: der Commit wird gemäss der mit dem Nutzer getroffenen Entscheidung erst zusammen mit PROJ-5 (`obsi-hofer-admin`) auf `origin` gepusht, da das Entfernen des nächtlichen Cron-Triggers sonst jeden automatischen Dataverse-Sync in Produktion abschalten würde, bevor das Admin-Tool ihn ersetzen kann
 
 ## Deployment
 _To be added by /deploy_
