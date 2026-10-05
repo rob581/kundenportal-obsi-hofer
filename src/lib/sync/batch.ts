@@ -20,14 +20,24 @@ export async function batchUpsert(table: string, records: Record<string, unknown
 }
 
 // Pages through all ids in a table (optionally filtered), since PostgREST
-// caps a single response at 1000 rows by default.
-export async function fetchAllIds(table: string, onlyWhereNull?: string): Promise<string[]> {
+// caps a single response at 1000 rows by default. `whereIn` additionally
+// scopes to rows whose `column` is one of `values` — used by PROJ-12's
+// firma-scoped sync to determine "what did we previously have for this
+// Firma/Standort/Gerät" instead of the whole table.
+export async function fetchAllIds(
+  table: string,
+  onlyWhereNull?: string,
+  whereIn?: { column: string; values: string[] }
+): Promise<string[]> {
+  if (whereIn && whereIn.values.length === 0) return [];
+
   const ids: string[] = [];
   let from = 0;
 
   while (true) {
     let query = getSupabaseAdmin().from(table).select("id").range(from, from + ID_PAGE_SIZE - 1);
     if (onlyWhereNull) query = query.is(onlyWhereNull, null);
+    if (whereIn) query = query.in(whereIn.column, whereIn.values);
 
     const { data, error } = await query;
     if (error) throw new Error(`Reading ids from ${table} failed: ${error.message}`);

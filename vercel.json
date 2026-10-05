@@ -2,10 +2,6 @@
   "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ':!docs' ':!features' ':!*.md'",
   "crons": [
     {
-      "path": "/api/cron/sync-dataverse",
-      "schedule": "0 3 * * *"
-    },
-    {
       "path": "/api/cron/erfolgsmessung-report",
       "schedule": "0 6 * * 1"
     }

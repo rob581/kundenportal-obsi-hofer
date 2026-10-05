@@ -1,6 +1,6 @@
 # PROJ-12: Firma-Filter für Dataverse-Sync
 
-## Status: Planned
+## Status: In Progress
 **Created:** 2026-09-25
 **Last Updated:** 2026-09-25
 
@@ -94,6 +94,22 @@ Kein neues Datenmodell — dieselben sieben Entitäten wie heute (Firmen, Kontak
 
 ### D) Dependencies
 Keine neuen Pakete — reine Erweiterung der bestehenden Sync-Bausteine (`fetchAllDataverseRecords`, `fetchAllIds`, `computeMissingIds`).
+
+## Implementation Notes (Backend)
+
+Umgesetzt wie in der Architektur festgelegt, ohne Datenbankschema-Änderungen (die bestehenden `firma_id`/`standort_id`/`geraet_id`-Spalten und Indizes aus PROJ-1 decken alles ab):
+
+- `src/lib/sync/dataverse-client.ts` — `fetchAllDataverseRecords()` um einen optionalen `filter`-Parameter erweitert (rückwärtskompatibel); neue `fetchAllDataverseRecordsForIds()` für die ID-Verkettung (baut OR-Filterketten in 20er-Blöcken, analog zum bereits im `obsi-hofer-admin`-Projekt verwendeten Muster)
+- `src/lib/sync/batch.ts` — `fetchAllIds()` um einen optionalen `whereIn`-Parameter erweitert (rückwärtskompatibel), für das Scoping der "was hatten wir vorher"-Abfrage
+- `src/lib/sync/run-sync.ts` — `runDataverseSync(firmaId?)`: ohne `firmaId` unverändertes Verhalten; mit `firmaId` neuer `runFirmaScopedSync()`-Pfad mit der in der Architektur festgelegten Kette (Firma-Existenzprüfung zuerst, dann Standorte→Geräte→Prüfberichte sowie Relationen→Kontakte, Artikel weiterhin unabhängig/vollständig); neue `FirmaNotFoundError`-Klasse für die 404-Behandlung
+- `src/app/api/cron/sync-dataverse/route.ts` — liest `firmaId` aus dem Query-String, übergibt sie an `runDataverseSync()`; `FirmaNotFoundError` → 404 **ohne** Ops-Alert-Mail (ein Tippfehler im aufrufenden Admin-Tool ist kein Sync-Infrastruktur-Problem)
+- `vercel.json` — Eintrag für den automatischen nächtlichen Cron-Trigger (`0 3 * * *`) entfernt; der wöchentliche Erfolgsmessung-Report-Cron bleibt unverändert bestehen
+
+**Wichtiger Sicherheits-Hinweis zur Scoping-Logik:** Die "was hatten wir vorher"-Abfrage für Geräte/Prüfberichte wird mit denselben, in diesem Lauf frisch aus Dataverse ermittelten ID-Mengen (Standort-IDs der Firma, Geräte-IDs dieser Standorte) gescoped wie die Dataverse-Abfrage selbst — nicht mit einer separat aus der eigenen Datenbank abgeleiteten Menge. Das wurde bewusst so gewählt: Ein Gerät, das zwischenzeitlich zu einem anderen Standort verschoben wurde, hat in der eigenen Datenbank weiterhin den alten `standort_id`-Wert gespeichert (noch nicht aktualisiert) — taucht also korrekt als "fehlt jetzt" auf und wird zurecht bereinigt. Nur im selteneren Fall, dass der *Standort selbst* zwischenzeitlich einer anderen Firma zugeordnet wurde, bleiben betroffene Geräte unberührt (weder gelöscht noch aktualisiert) — unkritisch, da das nur zu vorübergehend veralteten Daten führt, nie zu einer fälschlichen Löschung.
+
+**Tests:** 3 neue/erweiterte Testdateien — `dataverse-client.test.ts` (neu, 5 Tests), `batch.test.ts` (neu, 5 Tests), `run-sync.test.ts` (erweitert um 6 Firma-Scoping-Tests, darunter der sicherheitskritische Test "rührt niemals ein Gerät einer anderen Firma an"), plus Anpassungen am bestehenden `route.test.ts`. Gesamte Testsuite: 369/369 grün. `npm run lint` und `npm run build` (inkl. TypeScript-Check) ebenfalls grün.
+
+**Produktions-Hinweis (noch nicht gepusht, siehe Rückfrage an den Nutzer):** Das Entfernen des automatischen nächtlichen Cron-Triggers ist eine reale Verhaltensänderung in Produktion — sobald das auf `main` landet, läuft der Sync nicht mehr automatisch, bis das Admin-Tool (`obsi-hofer-admin`, dortiges PROJ-5 "Sync-Freigabe pro Firma") selbst fertig gebaut und live ist. Ob dieser Commit schon jetzt gepusht werden soll oder erst zusammen mit PROJ-5, wurde dem Nutzer explizit zur Entscheidung vorgelegt.
 
 ## QA Test Results
 _To be added by /qa_

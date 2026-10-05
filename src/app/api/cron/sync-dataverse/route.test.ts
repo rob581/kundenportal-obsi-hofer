@@ -3,13 +3,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const runDataverseSyncMock = vi.fn();
 const sendOpsEmailMock = vi.fn().mockResolvedValue(undefined);
 
-vi.mock("@/lib/sync/run-sync", () => ({ runDataverseSync: () => runDataverseSyncMock() }));
+vi.mock("@/lib/sync/run-sync", () => {
+  class FirmaNotFoundError extends Error {
+    constructor(firmaId: string) {
+      super(`Firma mit ID "${firmaId}" wurde in Dataverse nicht gefunden.`);
+      this.name = "FirmaNotFoundError";
+    }
+  }
+  return {
+    runDataverseSync: (firmaId?: string) => runDataverseSyncMock(firmaId),
+    FirmaNotFoundError,
+  };
+});
 vi.mock("@/lib/notify/send-email", () => ({ sendOpsEmail: (subject: string, body: string) => sendOpsEmailMock(subject, body) }));
 
 import { GET } from "./route";
+import { FirmaNotFoundError } from "@/lib/sync/run-sync";
 
-function makeRequest(secret?: string) {
-  return new Request("http://localhost/api/cron/sync-dataverse", {
+function makeRequest(secret?: string, firmaId?: string) {
+  const url = new URL("http://localhost/api/cron/sync-dataverse");
+  if (firmaId) url.searchParams.set("firmaId", firmaId);
+  return new Request(url, {
     headers: secret !== undefined ? { authorization: `Bearer ${secret}` } : {},
   });
 }
@@ -118,5 +132,33 @@ describe("GET /api/cron/sync-dataverse", () => {
       "Dataverse-Sync fehlgeschlagen",
       expect.stringContaining("Missing CRON_SECRET")
     );
+  });
+
+  // PROJ-12: Firma-Filter.
+  it("passes a firmaId query parameter through to runDataverseSync", async () => {
+    runDataverseSyncMock.mockResolvedValue({ entities: [], warnings: [], errors: [] });
+
+    await GET(makeRequest("test-cron-secret", "firma-1"));
+
+    expect(runDataverseSyncMock).toHaveBeenCalledWith("firma-1");
+  });
+
+  it("calls runDataverseSync with undefined when no firmaId is given (unscoped run unchanged)", async () => {
+    runDataverseSyncMock.mockResolvedValue({ entities: [], warnings: [], errors: [] });
+
+    await GET(makeRequest("test-cron-secret"));
+
+    expect(runDataverseSyncMock).toHaveBeenCalledWith(undefined);
+  });
+
+  it("returns 404 without sending an ops email when the firmaId is unknown", async () => {
+    runDataverseSyncMock.mockRejectedValue(new FirmaNotFoundError("unbekannt-123"));
+
+    const res = await GET(makeRequest("test-cron-secret", "unbekannt-123"));
+
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toContain("unbekannt-123");
+    expect(sendOpsEmailMock).not.toHaveBeenCalled();
   });
 });

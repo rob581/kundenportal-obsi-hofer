@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { sendOpsEmail } from "@/lib/notify/send-email";
-import { runDataverseSync } from "@/lib/sync/run-sync";
+import { runDataverseSync, FirmaNotFoundError } from "@/lib/sync/run-sync";
 
 // Batched upserts over ~30k records comfortably fit in a few minutes;
 // 300s requires a Vercel plan that supports extended function duration
@@ -22,7 +22,20 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const result = await runDataverseSync();
+    // PROJ-12: optionaler Firma-Filter. Eine unbekannte firmaId ist ein
+    // Tippfehler im aufrufenden Admin-Tool, kein Sync-Infrastruktur-Problem —
+    // dafür wird bewusst keine Ops-Mail verschickt (siehe Spec).
+    const firmaId = new URL(request.url).searchParams.get("firmaId") ?? undefined;
+
+    let result;
+    try {
+      result = await runDataverseSync(firmaId);
+    } catch (error) {
+      if (error instanceof FirmaNotFoundError) {
+        return NextResponse.json({ error: error.message }, { status: 404 });
+      }
+      throw error;
+    }
 
     const allIssues = [...result.warnings, ...result.errors];
     if (allIssues.length > 0) {
