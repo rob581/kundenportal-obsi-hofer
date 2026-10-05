@@ -58,12 +58,42 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| ID-Verkettung (Firma→Standort→Gerät→Prüfbericht, Firma→Relation→Kontakt) statt Dataverse-Navigationsfilter über mehrere Beziehungsebenen | Dieselbe, bereits im `obsi-hofer-admin`-Projekt erprobte Technik; ein mehrstufiger Navigationsfilter ist für diese Tiefe nicht verlässlich verifiziert, ein Fehlschlag würde die sicherheitskritische Lösch-Erkennung verfälschen | 2026-10-05 |
+| Feste Ausführungsreihenfolge nur im firma-gefilterten Modus (Standorte vor Geräten, Geräte vor Prüfberichten, Relationen vor Kontakten) | Jeder Schritt liefert die ID-Menge, die der nächste Schritt als Filter braucht; ohne `firmaId` bleiben alle Entitäten wie bisher unabhängig | 2026-10-05 |
+| Lösch-Erkennung ("was hatten wir vorher") wird über den bereits gespeicherten eigenen Beziehungs-Stand gescoped, nicht über den aktuellen Dataverse-Abruf | Verhindert, dass ein zwischenzeitlich zu einer anderen Firma/Standort umgezogenes Gerät fälschlich als gelöscht markiert wird | 2026-10-05 |
+| Firma-Existenzprüfung über den ersten Kettenschritt (kein Treffer → sofort 404) | Erfüllt die Spec-Anforderung, einen Tippfehler bei der firmaId nicht als stillen Leerlauf durchgehen zu lassen | 2026-10-05 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### A) Component Structure
+Kein UI-Feature — reine Erweiterung des bestehenden Sync-Endpoints. Struktur des Sync-Ablaufs:
+
+```
+/api/cron/sync-dataverse (bestehender Endpoint, erweitert)
++-- Ohne firmaId: bisheriges Verhalten unverändert (alle Jobs unabhängig, wie heute)
++-- Mit firmaId: fester Ablauf mit zwei Ketten
+    +-- Kette 1: Firma → Standorte → Geräte → Prüfberichte
+    |   (Firma-Existenz wird dabei geprüft: keine Standorte/kein Treffer für
+    |    die firmaId selbst → 404 statt stillem Leerlauf)
+    +-- Kette 2: Firma → Relationen → Kontakte
+    +-- Artikel: unabhängig von beiden Ketten, immer vollständig (wie bisher)
+```
+
+### B) Data Model (plain language)
+Kein neues Datenmodell — dieselben sieben Entitäten wie heute (Firmen, Kontakte, Artikel, Standorte, Geräte, Prüfberichte, Relationen). Wichtig für den Firma-Filter: **Geräte und Prüfberichte haben in Dataverse keinen direkten Bezug zu einer Firma** — ein Gerät gehört zu einem Standort, ein Prüfbericht zu einem Gerät. Ebenso haben Kontakte keinen direkten Firma-Bezug, sondern werden nur über eine Relation (Firma↔Kontakt) verknüpft. Ein Firma-gefilterter Sync muss diese Kette deshalb Schritt für Schritt nachvollziehen, sowohl beim Abfragen von Dataverse als auch beim Abgleichen mit dem bisherigen Stand in der eigenen Datenbank.
+
+### C) Tech Decisions
+- **ID-Verkettung statt Dataverse-Navigationsfilter über mehrere Ebenen:** Jeder Schritt der Kette (z.B. "Standorte dieser Firma") liefert eine Liste von IDs, die der nächste Schritt als Filter verwendet (z.B. "Geräte an diesen Standorten"). Eine Alternative wäre ein einziger Datenbankfilter über den gesamten Beziehungspfad gewesen — dafür gibt es aber keine verlässlich getestete Grundlage bei einer dreistufigen Kette (Prüfbericht→Gerät→Standort→Firma), und ein Fehlschlag hier würde direkt die Lösch-Erkennung verfälschen. Die Verkettung ist dieselbe, bereits erprobte Technik wie im `obsi-hofer-admin`-Projekt (dort: Geräte eines Standorts, Prüfberichte eines Geräts).
+- **Feste Ausführungsreihenfolge nur im firma-gefilterten Modus:** Ohne `firmaId` bleiben alle Entitäten wie bisher unabhängig voneinander (Reihenfolge spielt keine Rolle). Mit `firmaId` müssen Standorte vor Geräten, Geräte vor Prüfberichten und Relationen vor Kontakten laufen, da jeder Schritt die ID-Liste des vorherigen braucht.
+- **Abgleich mit dem bisherigen Stand (Lösch-Erkennung) wird ebenfalls über dieselbe Beziehungskette eingeschränkt**, nicht nur die Dataverse-Abfrage: "Was hatten wir vorher?" wird für Geräte z.B. über "an Standorten dieser Firma" bestimmt, für Prüfberichte über "an Geräten dieser Firma" — beides anhand des *eigenen, bereits gespeicherten* Standort-/Geräte-Bezugs, unabhängig vom aktuellen Dataverse-Abruf. Das verhindert, dass ein zwischenzeitlich umgezogenes Gerät (anderer Standort/andere Firma) fälschlich als "gelöscht" markiert wird, nur weil es in diesem Lauf nicht mehr auftaucht.
+- **Artikel bleiben unabhängig von beiden Ketten, immer vollständig** — bereits in der Spec festgelegt, keine neue Entscheidung.
+- **Firma-Existenzprüfung über den ersten Kettenschritt:** Liefert die Firma-Abfrage selbst keinen Treffer für die übergebene `firmaId`, wird sofort mit 404 abgebrochen, bevor weitere Schritte versucht werden.
+
+### D) Dependencies
+Keine neuen Pakete — reine Erweiterung der bestehenden Sync-Bausteine (`fetchAllDataverseRecords`, `fetchAllIds`, `computeMissingIds`).
 
 ## QA Test Results
 _To be added by /qa_
