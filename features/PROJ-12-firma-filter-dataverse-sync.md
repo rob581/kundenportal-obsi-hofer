@@ -112,7 +112,58 @@ Umgesetzt wie in der Architektur festgelegt, ohne Datenbankschema-Änderungen (d
 **Produktions-Hinweis (noch nicht gepusht, siehe Rückfrage an den Nutzer):** Das Entfernen des automatischen nächtlichen Cron-Triggers ist eine reale Verhaltensänderung in Produktion — sobald das auf `main` landet, läuft der Sync nicht mehr automatisch, bis das Admin-Tool (`obsi-hofer-admin`, dortiges PROJ-5 "Sync-Freigabe pro Firma") selbst fertig gebaut und live ist. Ob dieser Commit schon jetzt gepusht werden soll oder erst zusammen mit PROJ-5, wurde dem Nutzer explizit zur Entscheidung vorgelegt.
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-10-05
+**Tester:** QA Engineer (AI)
+**Hinweis zur Testmethode:** Reine Code-Review + automatisierte Tests (gemocktes Dataverse/Supabase) — kein Zugriff auf eine echte Dataverse-Instanz in dieser Umgebung, und der Code ist (siehe oben) bewusst noch nicht gepusht/live.
+
+### Acceptance Criteria Status
+- [x] Firma-gefilterter Sync synchronisiert nur die Teilmenge dieser Firma, `dv_artikel` bleibt vollständig
+- [x] Ohne `firmaId` verhält sich der Endpoint unverändert (bestehende Tests weiterhin grün)
+- [x] Lösch-Erkennung bezieht sich ausschliesslich auf die ID-Teilmenge der Firma (Test: "never touches a Gerät belonging to a different Firma's Standort")
+- [ ] **Unbekannte `firmaId` → 404 statt stillem No-Op** — funktioniert korrekt für einen wohlgeformten, aber nicht existierenden Wert; siehe jedoch BUG-1, durch den dieser Schutz mit einem präparierten Wert umgangen werden kann
+- [x] Automatischer nächtlicher Cron-Trigger aus `vercel.json` entfernt
+- [x] Fehlender/falscher `CRON_SECRET` → 401, unverändert auch mit `firmaId`-Parameter
+
+### Edge Cases Status
+- [x] Firma ohne Standorte/Geräte → Sync läuft leer durch, kein Fehler (Code-Review: Kurzschluss in `fetchAllDataverseRecordsForIds`/`fetchAllIds` bei leerer ID-Menge)
+- [x] Kontakt mit mehreren Firmen verknüpft → idempotentes Upsert, unkritisch
+- [x] >20% fehlende Zeilen innerhalb der Firma-Teilmenge → bestehende Sicherheitslogik (`exceedsSafetyThreshold`) greift unverändert, jetzt auf die Teilmenge bezogen
+
+### Security Audit Results (Red Team / Code Review)
+- [x] Zugriff weiterhin nur mit gültigem `CRON_SECRET` (401 sonst), unverändert durch `firmaId` beeinflusst
+- [x] Supabase-seitige Filterung (`fetchAllIds`-`whereIn`) läuft über Supabase-eigene parametrisierte Queries (`.in()`) — keine Injection-Möglichkeit
+- [ ] **BUG: siehe BUG-1 (Critical)** — `firmaId` wird ungeprüft in drei Dataverse-`$filter`-Ausdrücke eingesetzt (OData-Injection)
+- [ ] BUG: siehe BUG-2 (Low) — leerer `firmaId`-Query-Parameter fällt still auf einen vollständigen Sync zurück statt auf einen Fehler
+
+### Bugs Found
+
+#### BUG-1: `firmaId` wird ungeprüft in Dataverse-`$filter`-Ausdrücke eingesetzt (OData-Injection)
+- **Severity:** Critical
+- **Steps to Reproduce:**
+  1. `firmaId` kommt direkt aus dem Query-String (`new URL(request.url).searchParams.get("firmaId")`) in `route.ts` und wird ohne jede Formatprüfung an `runDataverseSync()` weitergereicht
+  2. In `run-sync.ts` wird `firmaId` an drei Stellen roh in einen OData-`$filter` eingesetzt: der Firma-Existenzprüfung (`` `bmvcc_firmaid eq ${firmaId}` ``), dem Standorte-Filter (`` `_bmvcc_bexiofirma_value eq ${firmaId}` ``) und dem Relationen-Filter (`` `_bmvcc_firma_value eq ${firmaId}` ``)
+  3. Erwartet: Nur eine exakte GUID wird als `firmaId` akzeptiert; alles andere wird vor jeder Dataverse-Anfrage zurückgewiesen
+  4. Tatsächlich: Ein präparierter Wert wie `?firmaId=00000000-0000-0000-0000-000000000000 or 1 eq 1` würde (nach URL-Dekodierung durch Dataverse) zu einem Filter führen, der plötzlich auf **alle** Firmen/Standorte/Relationen zutrifft — sowohl die Existenzprüfung als auch die eigentliche Scoping-Logik wären dadurch ausgehebelt
+  5. Das trifft exakt das Risiko, vor dem die Spec selbst warnt: "Betreiber möchte, dass ein Firma-gefilterter Sync niemals Daten anderer Firmen fälschlicherweise als 'gelöscht' behandelt" — mit diesem Bug könnte ein solcher Aufruf faktisch wie ein Vollsync wirken, aber fälschlich als "erfolgreich auf eine Firma eingegrenzt" gemeldet werden, oder umgekehrt echte andere-Firmen-Daten in die Lösch-Erkennung hineinziehen
+  6. Gleiche Fehlerklasse wie bereits im `obsi-hofer-admin`-Projekt gefunden und dort behoben (`requireValidGuid`) — hier beim Erstellen von PROJ-12 übersehen, da die eigenen Tests nur mit wohlgeformten Test-IDs arbeiten, nie mit einem präparierten Wert
+- **Priority:** Fix before deployment (ohnehin noch nicht gepusht, siehe oben)
+
+#### BUG-2: Leerer `firmaId`-Query-Parameter fällt still auf einen Vollsync zurück
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. `route.ts` liest `firmaId` mit `?? undefined` — das greift nur bei `null`, nicht bei einem leeren String
+  2. Ein Aufruf mit `?firmaId=` (Parameter vorhanden, aber leer) liefert daher `firmaId = ""`
+  3. `runDataverseSync("")` prüft `if (firmaId)`, was für einen leeren String `false` ist → fällt still auf den vollständigen, ungefilterten Sync zurück statt auf einen Fehler
+  4. Erwartet (optional, nicht in der Spec gefordert): Ein offensichtlich fehlerhafter Aufruf sollte eher auffallen als unbemerkt zum Vollsync zu werden
+- **Priority:** Nice to have (in der Praxis ruft nur das Admin-Tool mit einer echten GUID oder ganz ohne Parameter auf; durch die BUG-1-Behebung mit strikter GUID-Validierung verschwindet dieser Fall ohnehin automatisch mit, sofern ein leerer String dort ebenfalls als ungültig zurückgewiesen wird statt als "kein Parameter" behandelt zu werden)
+
+### Summary
+- **Acceptance Criteria:** 5/6 vollständig erfüllt, 1/6 (404 bei unbekannter firmaId) durch BUG-1 angreifbar
+- **Bugs Found:** 2 total (1 critical, 0 high, 0 medium, 1 low)
+- **Security:** 1 kritisches Finding (BUG-1) — Kernschutzmechanismus der gesamten Spec betroffen
+- **Production Ready:** NO
+- **Recommendation:** BUG-1 vor jedem Push/Deploy beheben (strikte GUID-Validierung für `firmaId`, am besten zentral am Anfang von `runDataverseSync`/`runFirmaScopedSync`, mit 400-Antwort in der Route). BUG-2 kann im selben Zug miterledigt werden. Ohnehin bereits als "nicht gepusht, wartet auf PROJ-5" vereinbart — diese Behebung muss vor diesem Push erledigt sein.
 
 ## Deployment
 _To be added by /deploy_
