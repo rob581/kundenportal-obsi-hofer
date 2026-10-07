@@ -1,6 +1,6 @@
 # PROJ-13: Kontakt-Freigabe für Kundenportal-Zugang
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-10-06
 **Last Updated:** 2026-10-07
 
@@ -139,6 +139,23 @@ Gespeichert in: der bestehenden Supabase-Datenbank (neue Datenbank-Migration).
 - Keine neuen Pakete
 - Neue Datenbank-Migration (ein zusätzliches Feld an der Kontakt-Tabelle)
 - **Zu prüfen bei `/backend`:** Der Dataverse-Zugang des Portals muss das Feld `bmvcc_kundenportal` lesen dürfen. Er liest die Kontakt-Tabelle bereits. Nur falls Dataverse für dieses Feld eine Feldsicherheit hat, wäre zusätzlich eine Berechtigung nötig. Das lässt sich vor dem Deploy mit einem lesenden Abruf prüfen.
+
+## Implementation Notes (Backend)
+
+Umgesetzt wie im Tech Design, keine Abweichungen. Kein Frontend-Anteil.
+
+- `supabase/migrations/0011_kontakte_portal_freigabe.sql`: neue Spalte `dv_kontakte.ist_portal_freigegeben` (boolean, not null, default false). Rein additiv, mit dem bisherigen Code unschädlich
+- `src/lib/sync/jobs.ts`: Kontakte-Job liest zusätzlich `bmvcc_kundenportal`. Nur ein explizites `true` wird zu `ist_portal_freigegeben = true`, `false`/`null`/fehlend → `false`
+- `src/lib/sync/entities.ts`: Kontakt-Schema um `ist_portal_freigegeben` (boolean, Pflicht) erweitert
+- `src/lib/auth/access.ts`: `getPortalAccess()` verlangt zusätzlich `ist_portal_freigegeben = true`. Damit gilt die Regel automatisch für alle Aufrufer (Layout/Seiten, Firmen-Auswahl, Login-Ablauf inkl. Passkey, beide CSV-Exporte, Login-Log)
+- `src/app/login/actions.ts`: nur Kommentar angepasst (Code geht weiterhin an jede Adresse, siehe Technical Decisions)
+- Keine neuen API-Routen, keine RLS-Änderung (bestehende Tabelle, Zugriff weiterhin nur über den Service-Role-Client)
+
+**Tests:** `access.test.ts` +2 (aktiv + zugeordnet, aber nicht freigegeben → kein Zugang; fehlender Freigabe-Wert → kein Zugang), bestehende positive Fälle um die Freigabe ergänzt; neu `src/lib/sync/jobs.test.ts` (4: Feld wird abgefragt, `true` → freigegeben, `false` → nicht, `null`/fehlend → nicht). Gegenprobe: ohne die neue Bedingung in `access.ts` schlagen beide neuen Zugriffstests fehl. `npm test` 377/377, Lint, `tsc --noEmit` und Build grün.
+
+**Gegen echtes Dataverse verifiziert (rein lesend, 2026-10-07):** Der Dataverse-Zugang des Portals darf `bmvcc_kundenportal` lesen (keine Feldsicherheit). Stand: 596 Kontakte, davon 2 mit Häkchen, 594 leer (`null`), 0 explizit „Nein“. Bestätigt die Regel „leer = nicht freigegeben“.
+
+**Noch nicht ausgeführt:** Migration 0011 in Supabase. Der Code ist nur lokal committet und darf erst **nach** der Migration auf `main` (sonst scheitern Sync und Zugriffsprüfung an der fehlenden Spalte, siehe Inbetriebnahme im Tech Design).
 
 ## QA Test Results
 _To be added by /qa_

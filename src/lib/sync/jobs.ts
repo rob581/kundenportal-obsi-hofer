@@ -78,6 +78,7 @@ export const SYNC_JOBS: SyncJob[] = [
       "bmvcc_phone_fixed",
       "mobile_phone",
       "statecode",
+      "bmvcc_kundenportal",
     ],
     map: (r) => ({
       id: r.bmvcc_kontaktid as string,
@@ -87,6 +88,9 @@ export const SYNC_JOBS: SyncJob[] = [
       telefon: r.bmvcc_phone_fixed ?? null,
       mobil: r.mobile_phone ?? null,
       ist_aktiv: r.statecode === 0,
+      // PROJ-13: Häkchen "Kundenportal" aus obsi-hofer-admin. Meist leer
+      // (null) statt false — nur ein explizites true gilt als Freigabe.
+      ist_portal_freigegeben: r.bmvcc_kundenportal === true,
     }),
   },
   {

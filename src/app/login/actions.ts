@@ -7,10 +7,11 @@ import { logLoginEvent } from "@/lib/login-log/log-login";
 
 export async function requestLoginCode(email: string): Promise<{ error: string | null }> {
   const supabase = await createSupabaseServerClient();
-  // shouldCreateUser (Standard: true) erhält die bisherige Self-Service-UX:
-  // unbekannte, aber aktive Dataverse-Kontakte bekommen beim ersten Login
-  // direkt Zugriff, ohne separaten Registrieren-Schritt (siehe PROJ-2
-  // Decision Log, 2026-09-21).
+  // shouldCreateUser (Standard: true): kein separater Registrieren-Schritt
+  // (PROJ-2 Decision Log, 2026-09-21). Der Code geht bewusst an jede
+  // Adresse — ob ein Kontakt aktiv und freigegeben ist (PROJ-13), wird erst
+  // nach dem Login geprüft, damit sich von aussen nicht testen lässt, welche
+  // Adressen Zugang haben.
   const { error } = await supabase.auth.signInWithOtp({ email });
 
   if (error) {

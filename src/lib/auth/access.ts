@@ -7,9 +7,11 @@ export type PortalAccess = {
 };
 
 // PROJ-2 access rule: the verified email must match an ACTIVE Kontakt
-// (dv_kontakte.ist_aktiv), and that Kontakt must be linked to at least one
-// Firma via dv_relationen. Anything else — unknown email, inactive
-// contact, or an active contact with zero linked Firmen — means no
+// (dv_kontakte.ist_aktiv) that has been released for the portal
+// (dv_kontakte.ist_portal_freigegeben, PROJ-13 — set via obsi-hofer-admin),
+// and that Kontakt must be linked to at least one Firma via dv_relationen.
+// Anything else — unknown email, inactive or unreleased contact, or a
+// contact with zero linked Firmen — means no
 // access, and callers must show the same generic "Kein Zugang" message
 // for all of these (see spec Decision Log: don't reveal which case it was).
 //
@@ -25,6 +27,7 @@ export const getPortalAccess = cache(async (email: string): Promise<PortalAccess
     .select("id")
     .ilike("email", email)
     .eq("ist_aktiv", true)
+    .eq("ist_portal_freigegeben", true)
     .maybeSingle();
 
   if (kontaktError) throw new Error(`Kontakt-Lookup fehlgeschlagen: ${kontaktError.message}`);

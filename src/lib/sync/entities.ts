@@ -31,6 +31,7 @@ const kontaktSchema = z.object({
   telefon: z.string().nullable().optional(),
   mobil: z.string().nullable().optional(),
   ist_aktiv: z.boolean(),
+  ist_portal_freigegeben: z.boolean(),
 });
 
 const artikelSchema = z.object({

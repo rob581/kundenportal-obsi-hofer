@@ -44,7 +44,7 @@ beforeEach(() => {
 
 describe("getPortalAccess", () => {
   it("returns access for an active Kontakt with linked Firmen", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true }];
     tableData.dv_relationen = [
       { kontakt_id: "k1", firma_id: "f1" },
       { kontakt_id: "k1", firma_id: "f2" },
@@ -56,7 +56,7 @@ describe("getPortalAccess", () => {
   });
 
   it("matches email case-insensitively", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "Test@Example.com", ist_aktiv: true }];
+    tableData.dv_kontakte = [{ id: "k1", email: "Test@Example.com", ist_aktiv: true, ist_portal_freigegeben: true }];
     tableData.dv_relationen = [{ kontakt_id: "k1", firma_id: "f1" }];
 
     const access = await getPortalAccess("test@example.com");
@@ -73,7 +73,26 @@ describe("getPortalAccess", () => {
   });
 
   it("returns null for an inactive Kontakt", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: false }];
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: false, ist_portal_freigegeben: true }];
+
+    const access = await getPortalAccess("test@example.com");
+
+    expect(access).toBeNull();
+  });
+
+  // PROJ-13: Zugang nur mit Häkchen "Kundenportal" aus obsi-hofer-admin.
+  it("returns null for an active, linked Kontakt that is not released for the portal", async () => {
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: false }];
+    tableData.dv_relationen = [{ kontakt_id: "k1", firma_id: "f1" }];
+
+    const access = await getPortalAccess("test@example.com");
+
+    expect(access).toBeNull();
+  });
+
+  it("returns null when the release flag is missing (fail-closed)", async () => {
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_relationen = [{ kontakt_id: "k1", firma_id: "f1" }];
 
     const access = await getPortalAccess("test@example.com");
 
@@ -81,7 +100,7 @@ describe("getPortalAccess", () => {
   });
 
   it("returns null for an active Kontakt with no linked Firma", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true }];
     tableData.dv_relationen = [];
 
     const access = await getPortalAccess("test@example.com");
