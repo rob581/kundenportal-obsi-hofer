@@ -1,6 +1,6 @@
 # PROJ-13: Kontakt-Freigabe für Kundenportal-Zugang
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-10-06
 **Last Updated:** 2026-10-07
 
@@ -58,6 +58,7 @@
 
 ## Open Questions
 - [ ] Sollen Daten von Firmen, die noch aus dem früheren Vollsync in Supabase liegen, aber nie über das Admin-Tool freigegeben wurden, bereinigt werden? Durch PROJ-13 sind sie für Kunden nicht mehr erreichbar, solange kein freigegebener Kontakt dazugehört. Sie liegen aber weiterhin in der Portal-Datenbank. Bei Bedarf als eigenes Feature.
+- [ ] Soll die Login-Quote im wöchentlichen Erfolgsmessungs-Report (PROJ-11) künftig nur Firmen mit mindestens einem **freigegebenen** Kontakt zählen? Heute zählt sie alle Firmen mit einem aktiven Kontakt (ca. 277). Nach PROJ-13 kann sich bei den meisten davon niemand einloggen, die Quote wirkt dadurch künstlich tief. Nicht Teil von PROJ-13 (Report-Auswertung ist Out of Scope), bei Bedarf über `/refine PROJ-11`.
 
 ## Decision Log
 
@@ -76,12 +77,68 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Freigabe wird als neues Ja/Nein-Feld an der bestehenden Kontakt-Tabelle im Portal gespeichert, Standard „Nein“ | Das Häkchen ist eine Eigenschaft des Kontakts (wie in Dataverse). Der Standard „Nein“ setzt den fail-closed-Grundsatz direkt um: Alle bestehenden Kontakte gelten bis zum nächsten Sync ihrer Firma als nicht freigegeben, das ist zugleich der gewünschte harte Umstieg | 2026-10-07 |
+| Kein eigenes „Freigabe“-Register, keine Portal-Benutzer-Tabelle | Bleibt bei der PROJ-2-Entscheidung: Zugang wird bei jedem Aufruf frisch aus den synchronisierten Dataverse-Daten ermittelt | 2026-10-07 |
+| Die Prüfung kommt in die bestehende zentrale Zugriffsprüfung, nicht in einzelne Seiten | Seiten, Firmen-Auswahl, Login-Ablauf und beide CSV-Exporte laufen bereits alle über diese eine Prüfung. Eine zusätzliche Bedingung dort wirkt überall gleichzeitig, keine Stelle kann vergessen werden | 2026-10-07 |
+| Ein leerer Dataverse-Wert wird beim Sync als „Nein“ übernommen | Laut `obsi-hofer-admin` PROJ-8 ist das Feld bei fast allen Kontakten leer statt „Nein“. Leer darf nie als Freigabe gelten | 2026-10-07 |
+| Login-Code wird weiterhin an jede E-Mail-Adresse verschickt, auch an nicht freigegebene | Würde der Code nur an freigegebene Kontakte gehen, könnte man von aussen testen, ob eine Adresse freigegeben ist. So bleibt es bei der generischen „Kein Zugang“-Meldung nach dem Login (Product Decision) | 2026-10-07 |
+| Reihenfolge der Inbetriebnahme: Datenbank-Erweiterung → Code-Deploy → Firma synchronisieren | Läuft der neue Code vor der Datenbank-Erweiterung, scheitern Sync und Zugriffsprüfung. Die Datenbank-Erweiterung allein ist mit dem alten Code harmlos | 2026-10-07 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### A) Component Structure
+Keine neue oder geänderte Oberfläche. Geändert werden drei bestehende Bausteine im Hintergrund:
+
+```
+Dataverse-Sync (PROJ-1/PROJ-12, über Admin-Tool ausgelöst)
++-- Kontakte-Schritt: liest zusätzlich das Häkchen "Kundenportal"
+    +-- leer oder "Nein" → nicht freigegeben
+    +-- "Ja" → freigegeben
+
+Zentrale Zugriffsprüfung (PROJ-2, bei jedem Seitenaufruf)
++-- E-Mail passt zu einem Kontakt?
++-- Kontakt aktiv?
++-- Kontakt freigegeben?            ← NEU
++-- mindestens einer Firma zugeordnet?
+    +-- alles erfüllt → Zugang (Übersicht bzw. Firmen-Auswahl)
+    +-- sonst → bisherige generische "Kein Zugang"-Seite
+
+Wirkt automatisch auch für (unverändert, nutzen bereits dieselbe Prüfung):
++-- Login-Ablauf (E-Mail-Code und Passkey)
++-- Firmen-Auswahl
++-- alle geschützten Seiten
++-- CSV-Export Geräte-Übersicht (PROJ-8) und Prüfberichte (PROJ-10)
+```
+
+### B) Data Model (plain language)
+Die bestehende Kontakt-Tabelle im Portal bekommt ein zusätzliches Feld:
+- **Für Kundenportal freigegeben** (Ja/Nein), Standard: Nein
+
+Herkunft: das Häkchen „Kundenportal“ am Kontakt in Dataverse, das im Admin-Tool (`obsi-hofer-admin` PROJ-8) gesetzt wird. Es wird bei jedem Firma-Sync für alle Kontakte dieser Firma aktualisiert. Ein Kontakt mit mehreren Firmen wird bei jedem Sync einer seiner Firmen aktualisiert. Weil es derselbe Datensatz ist, wirkt das für alle seine Firmen.
+
+Alle bereits vorhandenen Kontakte (aus dem früheren Vollsync) bekommen beim Hinzufügen des Feldes automatisch „Nein“.
+
+Gespeichert in: der bestehenden Supabase-Datenbank (neue Datenbank-Migration).
+
+### C) Tech Decisions (für PM erklärt)
+- **Eine Bedingung mehr an einer einzigen Stelle:** Das Portal prüft heute schon an einer zentralen Stelle, ob jemand rein darf: aktiver Kontakt und mindestens eine Firma. Dort kommt „freigegeben“ als dritte Bedingung dazu. Seiten, Exporte, Firmen-Auswahl und Login nutzen alle diese Prüfung, deshalb gibt es keine Stelle, an der die Freigabe vergessen werden kann.
+- **Standard „Nein“:** Wer noch nie mit Häkchen synchronisiert wurde, kommt nicht rein. Das ist der in der Spec gewünschte harte Umstieg und zugleich die sichere Voreinstellung.
+- **Entzug wirkt sofort nach dem Sync:** Da die Prüfung bei jedem Seitenaufruf läuft, verliert ein Kunde den Zugang beim nächsten Klick nach dem Sync, auch wenn er gerade eingeloggt ist.
+- **Login-Code geht weiter an alle:** Sonst liesse sich durch Ausprobieren herausfinden, welche Adressen freigegeben sind.
+
+**Inbetriebnahme (wichtig, in dieser Reihenfolge):**
+1. Datenbank-Erweiterung in Supabase ausführen (unschädlich für den laufenden Betrieb)
+2. Code deployen. Ab hier hat niemand mehr Zugang, bis Schritt 4 läuft
+3. Im Admin-Tool den eigenen Testkontakt freigeben (geht auch schon vorher)
+4. Im Admin-Tool Cloudcab GmbH synchronisieren → Testkontakt hat wieder Zugang
+
+### D) Dependencies
+- Keine neuen Pakete
+- Neue Datenbank-Migration (ein zusätzliches Feld an der Kontakt-Tabelle)
+- **Zu prüfen bei `/backend`:** Der Dataverse-Zugang des Portals muss das Feld `bmvcc_kundenportal` lesen dürfen. Er liest die Kontakt-Tabelle bereits. Nur falls Dataverse für dieses Feld eine Feldsicherheit hat, wäre zusätzlich eine Berechtigung nötig. Das lässt sich vor dem Deploy mit einem lesenden Abruf prüfen.
 
 ## QA Test Results
 _To be added by /qa_
