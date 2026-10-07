@@ -1,6 +1,6 @@
 # PROJ-13: Kontakt-Freigabe für Kundenportal-Zugang
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-10-06
 **Last Updated:** 2026-10-07
 
@@ -229,4 +229,13 @@ Umgesetzt wie im Tech Design, keine Abweichungen. Kein Frontend-Anteil.
 - **Production Ready:** **JA**, Status Approved. Beim Deploy die Reihenfolge aus dem Tech Design einhalten (Migration ist bereits erledigt)
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-10-07 (automatisch via Vercel bei Push auf `main`, letzter Code-Commit `62e71ec`)
+- **Migration:** `supabase/migrations/0011_kontakte_portal_freigabe.sql`, vom Nutzer vor dem Push im Supabase SQL Editor ausgeführt und rein lesend verifiziert (Spalte vorhanden, alle 596 Kontakte `false`)
+- **Env-Variablen:** keine neuen
+- **Verifiziert:**
+  - Pre-Deployment: `npm test` 380/380, `npm run test:e2e` 38/38, Lint, `tsc --noEmit`, Build grün
+  - Smoke-Test Produktion: `/login` → 200; `/dashboard` und `/api/uebersicht/export` ohne Sitzung → 307 auf `/login`
+  - **Live durch den Nutzer** nach Freigabe des Testkontakts und Sync von Cloudcab GmbH über das Admin-Tool: Login mit Freigabe erfolgreich; Gegenprobe Häkchen entzogen + Sync → „Kein Zugang“; Häkchen wieder gesetzt + Sync → Zugang wieder da
+- **Wirkung:** Harter Umstieg. Seit diesem Deployment haben nur noch Kontakte Zugang, deren Häkchen „Kundenportal“ mit dem Sync ihrer Firma übernommen wurde
+- **Tag:** `v1.9.0-PROJ-13`
