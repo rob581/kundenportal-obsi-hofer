@@ -117,7 +117,7 @@ export const SYNC_JOBS: SyncJob[] = [
       "bmvcc_pruefer",
       "bmvcc_zubehoer",
       "bmvcc_dokumentation",
-      "bmvcc_notitzen",
+      "bmvcc_bemerkungen",
       "bmvcc_kundenid",
     ],
     map: (r) => ({
@@ -135,7 +135,10 @@ export const SYNC_JOBS: SyncJob[] = [
       pruefer: r.bmvcc_pruefer ?? null,
       zubehoer: r.bmvcc_zubehoer ?? null,
       dokumentation: r.bmvcc_dokumentation ?? null,
-      bemerkungen: r.bmvcc_notitzen ?? null,
+      // Live-Fund (obsi-hofer-admin, 2026-10-06): `bmvcc_notitzen` enthält
+      // kurze Kennungen (z.B. "105 Akra"), nicht die eigentlichen, teils
+      // mehrzeiligen Bemerkungen — die stehen in `bmvcc_bemerkungen`.
+      bemerkungen: r.bmvcc_bemerkungen ?? null,
       // Kunden-eigene Gerätebezeichnung (siehe PROJ-7) — bewusst nicht für
       // die Firma-Zuordnung verwendet, siehe PROJ-1 Decision Log.
       kunden_id: r.bmvcc_kundenid ?? null,
