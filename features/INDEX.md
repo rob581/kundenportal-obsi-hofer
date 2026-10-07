@@ -27,7 +27,8 @@
 | PROJ-10 | CSV-Export der Prüfberichte-Übersicht | Deployed | [Spec](../features/PROJ-10-csv-export-pruefberichte-uebersicht.md) | 2026-09-22 |
 | PROJ-11 | Erfolgsmessung Kundenportal | Deployed | [Spec](../features/PROJ-11-erfolgsmessung-kundenportal.md) | 2026-09-23 |
 | PROJ-12 | Firma-Filter für Dataverse-Sync | Approved | [Spec](../features/PROJ-12-firma-filter-dataverse-sync.md) | 2026-09-25 |
+| PROJ-13 | Kontakt-Freigabe für Kundenportal-Zugang | Roadmap | — | 2026-10-06 |
 
 <!-- Add features above this line -->
 
-## Next Available ID: PROJ-13
+## Next Available ID: PROJ-14
