@@ -185,3 +185,5 @@ Beide Bugs in einem Fix behoben, gemeinsame Ursache: `firmaId` wurde nirgends au
 - **Wirkung:** Der nächtliche automatische Vollsync entfällt ab diesem Deployment; Syncs laufen nur noch per Auslösung aus dem Admin-Tool (bzw. manuell per `CRON_SECRET`)
 - **Mit ausgeliefert:** `fix(PROJ-1)` Bemerkungen-Mapping `bmvcc_notitzen` → `bmvcc_bemerkungen` (greift pro Firma beim nächsten Sync)
 - **Tag:** `v1.8.0-PROJ-12`
+
+**Nachtrag (2026-10-07): Erster Push wurde von Vercel nicht gebaut.** Der erste Firma-Sync aus dem Admin-Tool lieferte 305 Firmen (Vollsync) — Produktion lief noch mit altem Code. Ursache: `ignoreCommand` in `vercel.json` verglich nur `HEAD^..HEAD`; der Push endete mit einem reinen Doku-Commit (`features/INDEX.md`), daher wurde der Build übersprungen, obwohl der Push davor liegenden PROJ-12-Code enthielt. Fix: Vergleich gegen `${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}` (letzter erfolgreich deployter Commit); ist dieser im Klon nicht verfügbar, schlägt `git diff` fehl und Vercel baut (fail-safe). Der falsche Vollsync hat keine Daten gelöscht (0 gelöscht) und entsprach dem bisherigen nächtlichen Sync.
