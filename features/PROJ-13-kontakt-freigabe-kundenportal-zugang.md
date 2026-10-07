@@ -58,7 +58,7 @@
 
 ## Open Questions
 - [ ] Sollen Daten von Firmen, die noch aus dem früheren Vollsync in Supabase liegen, aber nie über das Admin-Tool freigegeben wurden, bereinigt werden? Durch PROJ-13 sind sie für Kunden nicht mehr erreichbar, solange kein freigegebener Kontakt dazugehört. Sie liegen aber weiterhin in der Portal-Datenbank. Bei Bedarf als eigenes Feature.
-- [ ] Soll die Login-Quote im wöchentlichen Erfolgsmessungs-Report (PROJ-11) künftig nur Firmen mit mindestens einem **freigegebenen** Kontakt zählen? Heute zählt sie alle Firmen mit einem aktiven Kontakt (ca. 277). Nach PROJ-13 kann sich bei den meisten davon niemand einloggen, die Quote wirkt dadurch künstlich tief. Nicht Teil von PROJ-13 (Report-Auswertung ist Out of Scope), bei Bedarf über `/refine PROJ-11`.
+- [x] Soll die Login-Quote im wöchentlichen Erfolgsmessungs-Report (PROJ-11) künftig nur Firmen mit mindestens einem **freigegebenen** Kontakt zählen? → Ja, Basis und Logins nur noch aktive, freigegebene Kontakte; umgesetzt über `/refine PROJ-11` (2026-10-07)
 
 ## Decision Log
 

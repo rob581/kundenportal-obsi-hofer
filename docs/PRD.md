@@ -20,7 +20,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 | P1 | CSV-Export der Geräte-Übersicht | Deployed |
 | P1 | Prüfberichte-Übersicht | Deployed |
 | P1 | CSV-Export der Prüfberichte-Übersicht | Deployed |
-| P2 | Erfolgsmessung Kundenportal (intern, SQL + wöchentlicher E-Mail-Report) | Deployed |
+| P2 | Erfolgsmessung Kundenportal (intern, SQL + wöchentlicher E-Mail-Report) | Architected |
 | P1 | Firma-Filter für Dataverse-Sync (Cross-Repo-Abhängigkeit für obsi-hofer-admin) | Deployed |
 | P1 | Kontakt-Freigabe für Kundenportal-Zugang (Häkchen aus obsi-hofer-admin) | Deployed |
 

@@ -1,14 +1,15 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Deployed
+## Status: Architected
 **Created:** 2026-09-23
-**Last Updated:** 2026-09-23 (Refinement: wöchentlicher E-Mail-Report ergänzt)
+**Last Updated:** 2026-10-07 (Refinement: Login-Quote an die Kontakt-Freigabe aus PROJ-13 angepasst)
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — Datenbasis `dv_kontakte`/`dv_relationen`/`dv_firmen`
 - Requires: PROJ-2 (Kunden-Login) — Supabase Auth (`auth.users.last_sign_in_at`)
 - Requires: PROJ-8 (CSV-Export der Geräte-Übersicht) — Export-Route erhält Logging-Hook
 - Requires: PROJ-10 (CSV-Export der Prüfberichte-Übersicht) — Export-Route erhält Logging-Hook
+- Requires: PROJ-13 (Kontakt-Freigabe für Kundenportal-Zugang) — Login-Quote zählt nur freigegebene Kontakte (Nachtrag 2026-10-07)
 
 ## User Stories
 - Als Betreiber des Kundenportals (OBSI Hofer GmbH) möchte ich sehen, welcher Anteil meiner Kunden sich mindestens einmal eingeloggt hat, damit ich den Erfolg der Portal-Einführung messen kann.
@@ -61,10 +62,22 @@
 - [ ] Angenommen der wöchentliche Report wird erzeugt, wenn er die Login-Zählung enthält, dann listet er jede Firma mit mindestens einem erfassten Login samt Anzahl auf, absteigend sortiert
 - [ ] Angenommen es liegen noch keine erfassten Logins vor (z.B. direkt nach dem Deployment), wenn der Report erzeugt wird, dann zeigt er dafür einen expliziten Leer-Zustand statt eine leere Liste
 
+**Nachtrag 2026-10-07 — Login-Quote nach PROJ-13 (Kontakt-Freigabe):**
+
+Ersetzt bei AC „SQL-Abfrage für die Login-Quote“ (oben), AC „Report listet jede Firma …“ und AC „keine Firmen mit aktivem Kontakt“ jeweils „Firma mit mindestens einem aktiven Kontakt“ durch „Firma mit mindestens einem aktiven **und freigegebenen** Kontakt“.
+
+- [ ] Angenommen eine Firma hat aktive Kontakte, aber keiner davon ist fürs Kundenportal freigegeben, wenn die Login-Quote berechnet wird, dann zählt diese Firma nicht zur Basis der Quote und erscheint nicht in der Firmenliste
+- [ ] Angenommen eine Firma hat mindestens einen aktiven, freigegebenen Kontakt, wenn die Login-Quote berechnet wird, dann zählt sie zur Basis, und als „eingeloggt“ gilt sie nur, wenn sich einer ihrer aktiven, freigegebenen Kontakte schon einmal eingeloggt hat
+- [ ] Angenommen der einzige Login einer Firma stammt von einem Kontakt, der heute nicht (mehr) freigegeben ist, wenn die Login-Quote berechnet wird, dann gilt die Firma als „nicht eingeloggt“ (bzw. fällt ganz aus der Basis, wenn sie keinen freigegebenen Kontakt mehr hat)
+- [ ] Angenommen noch kein Kontakt ist freigegeben, wenn der Report erzeugt wird, dann zeigt er „keine Kunden mit Zugang“ statt einer Quote von 0/0 oder eines Fehlers
+
 ## Edge Cases
 - Firma ohne aktiven Kontakt (nie Zugang vergeben) → zählt nicht in der Login-Quoten-Basis
+- Firma mit aktiven, aber nicht freigegebenen Kontakten → zählt seit PROJ-13 ebenfalls nicht zur Basis (Nachtrag 2026-10-07)
+- Freigegebener Kontakt einer Firma, die noch nie über das Admin-Tool synchronisiert wurde → Freigabe ist im Portal noch nicht bekannt (PROJ-13), Firma zählt erst nach dem Sync zur Basis
 - Firma mit mehreren Kontakten, nur einer hat sich je eingeloggt → Firma zählt als "mind. 1 Login" (Aggregation auf Firma-Ebene)
-- Kontakt wird nachträglich deaktiviert → Login-Quoten-Basis ist ein Snapshot der *aktuell* aktiven Kontakte zum Abfragezeitpunkt, nicht historisch
+- Kontakt wird nachträglich deaktiviert oder seine Freigabe entzogen → Login-Quoten-Basis ist ein Snapshot der *aktuell* aktiven, freigegebenen Kontakte zum Abfragezeitpunkt, nicht historisch
+- Firmen mit mehreren Kontakten, die dieselbe E-Mail-Adresse haben (Bexio-Dubletten) → unverändert, der Login wird über die E-Mail-Adresse zugeordnet
 - Sehr viele Exporte in kurzer Zeit (Skript/Bot) → kein zusätzliches Rate-Limiting in diesem Feature, Sicherheit läuft weiterhin über den bestehenden Auth-Check der Export-Routen
 - Export-Route wird ohne gültige Session aufgerufen → wird bereits vor Erreichen der Logging-Logik mit 401/Redirect abgefangen (bestehendes Verhalten aus PROJ-8/PROJ-10), kein Log-Eintrag
 - Report-Erzeugung: keine Exports im aktuellen/in einem Monat → zeigt `0` statt die Zeile wegzulassen oder abzustürzen
@@ -95,7 +108,7 @@
 | Keine eigene UI/kein Admin-Backend für die Kennzahlen, nur SQL-Abfragen/Views im Supabase SQL Editor | PRD Non-Goal "Kein Admin-Backend für interne Mitarbeiter"; Kennzahlen sind rein intern, für ein 1-Personen-Team reicht direkter DB-Zugriff | 2026-09-23 |
 | `export_log` erfasst nur `firma_id`, `entity`, `created_at` — keine Kontakt-/E-Mail-Zuordnung | Für die Kennzahl "Anzahl CSV-Exports/Monat" nicht nötig; vermeidet unnötige Personendaten | 2026-09-23 |
 | Login-Quote wird auf Firma-Ebene aggregiert, nicht pro einzelnem Kontakt | PRD-Formulierung "Anteil Kunden mit mind. 1 Login" meint die Firma als Kunde, nicht die einzelne Ansprechperson | 2026-09-23 |
-| Login-Quoten-Basis = Firmen mit mind. einem aktiven Kontakt (nicht alle Firmen in Dataverse) | Nur Firmen mit tatsächlich vergebenem Zugang können überhaupt einloggen; alles andere würde die Quote künstlich verwässern | 2026-09-23 |
+| ~~Login-Quoten-Basis = Firmen mit mind. einem aktiven Kontakt (nicht alle Firmen in Dataverse)~~ — angepasst 2026-10-07, siehe unten | Nur Firmen mit tatsächlich vergebenem Zugang können überhaupt einloggen; alles andere würde die Quote künstlich verwässern | 2026-09-23 |
 | RLS auf `export_log` aktiviert, aber ohne jegliche Policies | Schreibzugriff nur über den Service-Role-Client (umgeht RLS ohnehin), Lesezugriff nur durch den Projektinhaber direkt im SQL Editor — kein Client-seitiger Zugriff vorgesehen | 2026-09-23 |
 | Logging-Fehler dürfen den Export selbst nicht blockieren (best-effort, fire-and-forget) | Kennzahlen-Erfassung ist ein Nice-to-have und darf die Kernfunktion (CSV-Download) niemals gefährden | 2026-09-23 |
 | Kein Backfill historischer Export-Daten vor Feature-Einführung | Zähler beginnt bei 0 ab Deployment; rückwirkende Rekonstruktion aus bestehenden Daten nicht möglich | 2026-09-23 |
@@ -108,6 +121,8 @@
 | Kein Backfill für `login_log`, auch nicht aus Supabase's `auth.audit_log_entries` | Ausdrücklicher Nutzerwunsch ("benötige keine vergangenen Daten") — spart die Untersuchung eines internen, nicht offiziell dokumentierten Supabase-Systems | 2026-09-23 |
 | Login-Zählung hakt sich in beide bestehenden Login-Wege ein: `verifyLoginCode` (Server Action, E-Mail+Code) direkt serverseitig, Passkey-Login über einen neuen Endpoint `POST /api/auth/log-login` (da dieser Weg komplett clientseitig läuft und keinen eigenen Server Action hat) | Beide Anmeldewege müssen gleichermassen gezählt werden, sonst wäre die Zahl systematisch unvollständig | 2026-09-23 |
 | Login zählt für **jede** mit dem Kontakt verknüpfte Firma, nicht nur für die später ausgewählte | Konsistent mit der bestehenden Login-Quote-Semantik, die ebenfalls firmenweit unabhängig von der Firmenauswahl auswertet | 2026-09-23 |
+| Login-Quoten-Basis = Firmen mit mind. einem **aktiven und freigegebenen** Kontakt; als „eingeloggt“ zählen nur Logins dieser Kontakte | Seit PROJ-13 heisst „Zugang vergeben“ = Häkchen „Kundenportal“. Die bisherige Basis (alle rund 277 Firmen mit aktiven Kontakten) hätte die Quote künstlich tief gemacht. Gleiche Regel wie die Zugriffsprüfung, damit Quote und tatsächlicher Zugang übereinstimmen; alte Test-Logins heute nicht freigegebener Kontakte zählen nicht mehr | 2026-10-07 |
+| Login-Zählung pro Firma (`login_log`) bleibt unverändert | Sie schreibt nur bei erfolgreichem Zugang, und der setzt seit PROJ-13 die Freigabe ohnehin voraus | 2026-10-07 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
@@ -122,6 +137,7 @@
 | Exports-pro-Monat weiterhin ohne eigene Datenbank-Funktion, Gruppierung im Anwendungscode | `export_log` ist über den bestehenden Service-Role-Client direkt lesbar (kein `auth`-Zugriff nötig); ein zweites DB-Objekt wäre unnötige zusätzliche Angriffsfläche für eine triviale Gruppierung | 2026-09-23 |
 | `sendSyncAlertEmail` wird zu einer generischen `sendOpsEmail` verallgemeinert (reine Umbenennung/Verschiebung, kein Verhaltensunterschied) | Wird jetzt von zwei Cron-Jobs genutzt (Sync + wöchentlicher Report), der sync-spezifische Name wäre irreführend geworden | 2026-09-23 |
 | Neuer Cron-Eintrag in `vercel.json` (`0 6 * * 1`), eigener Endpoint `/api/cron/erfolgsmessung-report`, gleicher `CRON_SECRET`-Schutz wie der bestehende Sync-Cron | Konsistent mit dem einzigen bereits etablierten Cron-Muster im Projekt, kein neues Sicherheitskonzept nötig | 2026-09-23 |
+| Anpassung der Login-Quote (2026-10-07) als neue Migration, die die bestehende Datenbank-Funktion `erfolgsmessung_login_status()` ersetzt: zusätzliche Bedingung „Kontakt freigegeben“ an derselben Stelle wie „Kontakt aktiv“ | Keine Änderung am Report-Code, an der Mail oder an den Rechten nötig; Ergebnisform der Funktion (Firma, Name, Login ja/nein) bleibt gleich. Execute-Rechte (nur `service_role`) werden in der Migration erneut gesetzt | 2026-10-07 |
 
 ---
 <!-- Sections below are added by subsequent skills -->

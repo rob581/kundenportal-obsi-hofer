@@ -25,7 +25,7 @@
 | PROJ-8 | CSV-Export der Geräte-Übersicht | Deployed | [Spec](../features/PROJ-8-csv-export-geraete-uebersicht.md) | 2026-09-22 |
 | PROJ-9 | Prüfberichte-Übersicht | Deployed | [Spec](../features/PROJ-9-pruefberichte-uebersicht.md) | 2026-09-22 |
 | PROJ-10 | CSV-Export der Prüfberichte-Übersicht | Deployed | [Spec](../features/PROJ-10-csv-export-pruefberichte-uebersicht.md) | 2026-09-22 |
-| PROJ-11 | Erfolgsmessung Kundenportal | Deployed | [Spec](../features/PROJ-11-erfolgsmessung-kundenportal.md) | 2026-09-23 |
+| PROJ-11 | Erfolgsmessung Kundenportal | Architected | [Spec](../features/PROJ-11-erfolgsmessung-kundenportal.md) | 2026-09-23 |
 | PROJ-12 | Firma-Filter für Dataverse-Sync | Deployed | [Spec](../features/PROJ-12-firma-filter-dataverse-sync.md) | 2026-09-25 |
 | PROJ-13 | Kontakt-Freigabe für Kundenportal-Zugang | Deployed | [Spec](../features/PROJ-13-kontakt-freigabe-kundenportal-zugang.md) | 2026-10-06 |
 
