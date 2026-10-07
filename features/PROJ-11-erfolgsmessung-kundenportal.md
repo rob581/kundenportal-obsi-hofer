@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-23
 **Last Updated:** 2026-10-07 (Refinement: Login-Quote an die Kontakt-Freigabe aus PROJ-13 angepasst)
 
@@ -430,7 +430,7 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - **Status:** ✅ Behoben (2026-10-07), Lösung c auf Nutzerentscheid: Der Nutzer hat im Supabase SQL Editor `delete from login_log where created_at < '2026-10-07T00:00:00Z';` ausgeführt (einmalige Datenbereinigung, keine Migration, kein Code). Vorab rein lesend geprüft: 32 Einträge der 5 Firmen vom 23./24.09. betroffen, 5 Einträge von Cloudcab GmbH (ab 07.10.) bleiben. Danach rein lesend verifiziert: 0 alte Einträge, „Logins pro Firma“ zeigt nur noch Cloudcab GmbH, keine Firma mehr ausserhalb der Login-Quote
 
 ### Beobachtung (kein PROJ-11-Bug, betrifft PROJ-13)
-Bei den 5 Firmen ohne freigegebenen Kontakt hat sich vor PROJ-13 jemand eingeloggt (letzter Login bei allen exakt 2026-09-24 14:50). Der identische Zeitpunkt spricht für **eine einzige Person**, deren Kontakt mehreren Firmen zugeordnet ist (ein Login wird für jede ihrer Firmen gezählt), also vermutlich ein Testzugang. Seit dem PROJ-13-Deploy hat diese Person keinen Zugang mehr. Vom Nutzer zu bestätigen, ob das gewollt ist.
+Bei den 5 Firmen ohne freigegebenen Kontakt hat sich vor PROJ-13 jemand eingeloggt (letzter Login bei allen exakt 2026-09-24 14:50). Der identische Zeitpunkt spricht für **eine einzige Person**, deren Kontakt mehreren Firmen zugeordnet ist (ein Login wird für jede ihrer Firmen gezählt), also vermutlich ein Testzugang. Seit dem PROJ-13-Deploy hat diese Person keinen Zugang mehr. **Vom Nutzer bestätigt (2026-10-07): war ein Testzugang**, der Zugangsverlust ist gewollt.
 
 ### Automatisierte Tests
 - `npm test`: 380/380 grün (keine Code-Änderung in diesem Nachtrag)
@@ -462,3 +462,10 @@ Bei den 5 Firmen ohne freigegebenen Kontakt hat sich vor PROJ-13 jemand eingelog
 - **Deployed:** 2026-09-23 (automatisch via Vercel bei Push auf `main`)
 - **Live verifiziert (2026-09-24):** echter Wochenreport zeigt konsistente Daten über alle vier Sektionen — Login-Quote (4/275), Logins pro Firma, CSV-Exports pro Monat und CSV-Exports pro Firma stimmen erwartungsgemäss überein (siehe Open Questions: der zuvor beobachtete Login-Quote-Bug war ein externes PROJ-2-Problem, nicht PROJ-11, und ist inzwischen behoben)
 - Keine neue Migration, kein neuer Endpoint — reine Report-Text-Erweiterung
+
+**Nachtrag 2026-10-07 — Login-Quote nach PROJ-13 (Kontakt-Freigabe):**
+- **Deployed:** 2026-10-07. Kein Code-Deploy nötig: Die Änderung liegt ausschliesslich in der Datenbank-Funktion und wirkt seit der Ausführung von Migration 0012
+- **Migration:** `supabase/migrations/0012_erfolgsmessung_login_status_freigabe.sql`, vom Nutzer im Supabase SQL Editor ausgeführt und rein lesend verifiziert (1/1 Firma statt 2/277; Browser-Schlüssel weiterhin ohne Execute-Recht)
+- **Datenbereinigung:** `login_log`-Einträge vor dem 07.10.2026 vom Nutzer gelöscht (32 Einträge, ein Testzugang vom 23./24.09.), siehe QA BUG-1
+- **Verifiziert:** `npm test` 380/380, `npm run test:e2e` 38/38; lokal erzeugter Report zeigt „1/1 Firmen (100%)“, „Eingeloggt: Cloudcab GmbH“, „Logins pro Firma“ nur noch Cloudcab GmbH. Der erste echte Wochenreport mit der neuen Quote kommt am Montag, 12.10.2026
+- **Tag:** `v1.10.0-PROJ-11`
