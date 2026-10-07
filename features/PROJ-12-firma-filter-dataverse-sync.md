@@ -181,7 +181,7 @@ Beide Bugs in einem Fix behoben, gemeinsame Ursache: `firmaId` wurde nirgends au
 - **Deployed:** 2026-10-07 (automatisch via Vercel bei Push auf `main`), nachdem der Nutzer bestätigt hat, dass PROJ-5 in `obsi-hofer-admin` den firma-gefilterten Sync auslösen kann
 - **Migrationen:** keine
 - **Env-Variablen:** keine neuen (nutzt bestehendes `CRON_SECRET`)
-- **Verifiziert:** `npm run lint`/`npm run build` lokal fehlerfrei, 373/373 Tests grün; Smoke-Test Produktion: `/login` → 200, `/api/cron/sync-dataverse?firmaId=x` ohne Secret → 401. Ein authentifizierter Firma-Sync über das Admin-Tool gegen Produktion steht beim Nutzer noch aus
+- **Verifiziert:** `npm run lint`/`npm run build` lokal fehlerfrei, 373/373 Tests grün; Smoke-Test Produktion: `/login` → 200, `/api/cron/sync-dataverse?firmaId=x` ohne Secret → 401. Firma-gefilterter Sync über das Admin-Tool (`obsi-hofer-admin` PROJ-5) gegen Produktion vom Nutzer nach dem Ignore-Step-Fix erfolgreich getestet (2026-10-07)
 - **Wirkung:** Der nächtliche automatische Vollsync entfällt ab diesem Deployment; Syncs laufen nur noch per Auslösung aus dem Admin-Tool (bzw. manuell per `CRON_SECRET`)
 - **Mit ausgeliefert:** `fix(PROJ-1)` Bemerkungen-Mapping `bmvcc_notitzen` → `bmvcc_bemerkungen` (greift pro Firma beim nächsten Sync)
 - **Tag:** `v1.8.0-PROJ-12`
