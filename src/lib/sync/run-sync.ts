@@ -146,32 +146,6 @@ const THRESHOLD_WARNING = (slug: string) =>
   `"${slug}": mehr als 20% der zuvor bekannten Zeilen fehlen im aktuellen Lauf — ` +
   `Löschung übersprungen, bitte Dataverse-Verbindung prüfen.`;
 
-export async function runDataverseSync(firmaId?: string): Promise<SyncRunResult> {
-  // Strikt auf `undefined` geprüft (nicht nur "truthy"): ein leerer String
-  // (`?firmaId=`) soll als ungültiger Wert fehlschlagen, nicht still auf den
-  // Vollsync zurückfallen (QA BUG-2) — die eigentliche Formatprüfung
-  // übernimmt `requireValidFirmaId()` gleich zu Beginn von `runFirmaScopedSync`.
-  if (firmaId !== undefined) return runFirmaScopedSync(firmaId);
-
-  const entities: EntitySyncSummary[] = [];
-  const warnings: string[] = [];
-  const errors: string[] = [];
-
-  for (const job of SYNC_JOBS) {
-    try {
-      const { summary } = await syncOneEntity(job);
-      entities.push(summary);
-      if (summary.skippedDueToThreshold) warnings.push(THRESHOLD_WARNING(job.slug));
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(`Sync for "${job.slug}" failed, continuing with remaining entities:`, message);
-      errors.push(`"${job.slug}": ${message}`);
-    }
-  }
-
-  return { entities, warnings, errors };
-}
-
 // PROJ-12: Geräte/Prüfberichte/Kontakte have no direct Firma reference in
 // Dataverse (Gerät → Standort → Firma; Kontakt → Relation → Firma), so a
 // Firma-scoped run has to walk that chain step by step — Standorte before
@@ -179,7 +153,11 @@ export async function runDataverseSync(firmaId?: string): Promise<SyncRunResult>
 // step's id set feeding the next. Artikel stays independent and always
 // fully synced regardless of scope (Product Decision, small cross-Firma
 // master data).
-async function runFirmaScopedSync(firmaId: string): Promise<SyncRunResult> {
+//
+// Es gibt bewusst keinen Vollsync über alle Firmen mehr (Decision Log,
+// 2026-10-07): firmaId ist Pflicht, damit ein Aufruf, dem sie versehentlich
+// fehlt, nicht still alle Firmen synchronisiert.
+export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> {
   // Vor jeder anderen Aktion: firmaId muss eine wohlgeformte GUID sein, bevor
   // sie irgendwo in einen Dataverse-$filter eingesetzt wird (siehe QA BUG-1).
   requireValidFirmaId(firmaId);

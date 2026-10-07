@@ -17,7 +17,7 @@ vi.mock("@/lib/sync/run-sync", () => {
     }
   }
   return {
-    runDataverseSync: (firmaId?: string) => runDataverseSyncMock(firmaId),
+    runDataverseSync: (firmaId: string) => runDataverseSyncMock(firmaId),
     FirmaNotFoundError,
     InvalidFirmaIdError,
   };
@@ -27,9 +27,10 @@ vi.mock("@/lib/notify/send-email", () => ({ sendOpsEmail: (subject: string, body
 import { GET } from "./route";
 import { FirmaNotFoundError, InvalidFirmaIdError } from "@/lib/sync/run-sync";
 
-function makeRequest(secret?: string, firmaId?: string) {
+// firmaId ist Pflicht (kein Vollsync mehr) — null lässt den Parameter weg.
+function makeRequest(secret?: string, firmaId: string | null = "firma-1") {
   const url = new URL("http://localhost/api/cron/sync-dataverse");
-  if (firmaId) url.searchParams.set("firmaId", firmaId);
+  if (firmaId !== null) url.searchParams.set("firmaId", firmaId);
   return new Request(url, {
     headers: secret !== undefined ? { authorization: `Bearer ${secret}` } : {},
   });
@@ -89,7 +90,7 @@ describe("GET /api/cron/sync-dataverse", () => {
     const res = await GET(makeRequest("test-cron-secret"));
     expect(res.status).toBe(200);
     expect(sendOpsEmailMock).toHaveBeenCalledWith(
-      "Dataverse-Sync: Probleme beim täglichen Lauf",
+      "Dataverse-Sync: Probleme beim Sync für Firma firma-1",
       expect.stringContaining("artikel")
     );
   });
@@ -150,12 +151,21 @@ describe("GET /api/cron/sync-dataverse", () => {
     expect(runDataverseSyncMock).toHaveBeenCalledWith("firma-1");
   });
 
-  it("calls runDataverseSync with undefined when no firmaId is given (unscoped run unchanged)", async () => {
-    runDataverseSyncMock.mockResolvedValue({ entities: [], warnings: [], errors: [] });
+  // Decision Log 2026-10-07: kein Vollsync mehr — ohne firmaId wird gar
+  // nichts synchronisiert, statt still alle Firmen zu übertragen.
+  it("returns 400 without syncing or sending an ops email when firmaId is missing", async () => {
+    const res = await GET(makeRequest("test-cron-secret", null));
 
-    await GET(makeRequest("test-cron-secret"));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toContain("firmaId fehlt");
+    expect(runDataverseSyncMock).not.toHaveBeenCalled();
+    expect(sendOpsEmailMock).not.toHaveBeenCalled();
+  });
 
-    expect(runDataverseSyncMock).toHaveBeenCalledWith(undefined);
+  it("still requires the cron secret before reporting a missing firmaId", async () => {
+    const res = await GET(makeRequest(undefined, null));
+    expect(res.status).toBe(401);
   });
 
   it("returns 404 without sending an ops email when the firmaId is unknown", async () => {

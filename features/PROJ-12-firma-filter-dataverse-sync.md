@@ -24,7 +24,8 @@
 **Format:** Angenommen [Vorbedingung] / Wenn [Aktion] / Dann [Ergebnis]
 
 - [ ] Angenommen der Endpoint wird mit einem gültigen `firmaId`-Query-Parameter aufgerufen, wenn der Sync läuft, dann werden nur Firmen/Standorte/Geräte/Prüfberichte/Kontakte/Relationen dieser einen Firma synchronisiert, `dv_artikel` weiterhin vollständig
-- [ ] Angenommen der Endpoint wird ohne `firmaId`-Parameter aufgerufen, wenn der Sync läuft, dann verhält er sich wie bisher (vollständige Synchronisation aller Entitäten)
+- [ ] ~~Angenommen der Endpoint wird ohne `firmaId`-Parameter aufgerufen, wenn der Sync läuft, dann verhält er sich wie bisher (vollständige Synchronisation aller Entitäten)~~ — ersetzt 2026-10-07, siehe nächstes AC
+- [x] Angenommen der Endpoint wird ohne `firmaId`-Parameter aufgerufen, wenn die Anfrage ankommt, dann wird sie mit 400 abgelehnt und nichts synchronisiert (kein Vollsync mehr, siehe Decision Log 2026-10-07)
 - [ ] Angenommen ein Firma-gefilterter Sync läuft, wenn die Lösch-Erkennung (`computeMissingIds`/Sicherheits-Schwellenwert) greift, dann bezieht sie sich ausschliesslich auf zuvor bekannte IDs dieser einen Firma, nie auf Datensätze anderer Firmen
 - [ ] Angenommen die übergebene `firmaId` existiert nicht in Dataverse, wenn der Sync aufgerufen wird, dann wird ein Fehler (404) zurückgegeben statt eines stillen No-Ops
 - [ ] Angenommen der automatische nächtliche Cron-Trigger wird entfernt, wenn `vercel.json` geprüft wird, dann existiert dort kein Eintrag mehr für `/api/cron/sync-dataverse`
@@ -48,7 +49,8 @@
 ### Product Decisions
 | Decision | Rationale | Date |
 |----------|-----------|------|
-| Vollsync-Fähigkeit (kein `firmaId`) bleibt erhalten, nur der automatische Cron-Trigger entfällt | Nützlich für Notfälle/Ersteinrichtung, weniger riskant als den Vollsync komplett zu entfernen | 2026-09-25 |
+| ~~Vollsync-Fähigkeit (kein `firmaId`) bleibt erhalten, nur der automatische Cron-Trigger entfällt~~ — aufgehoben 2026-10-07 | Nützlich für Notfälle/Ersteinrichtung, weniger riskant als den Vollsync komplett zu entfernen | 2026-09-25 |
+| Vollsync entfernt: `firmaId` ist Pflicht, ohne sie antwortet der Endpoint mit 400 | Seit dem Wegfall des nächtlichen Crons gibt es keinen legitimen Aufruf ohne Firma mehr; ein Aufruf, dem die `firmaId` versehentlich fehlt, soll nicht still alle Firmen synchronisieren (Empfehlung aus `obsi-hofer-admin` nach dem ersten Produktionslauf, vom Nutzer entschieden) | 2026-10-07 |
 | Firma-gefilterter Sync nutzt denselben `CRON_SECRET` wie bisher | Keine neue Auth-Mechanik nötig — beide Aufrufer (früher Vercel Cron, künftig das Admin-Tool) sind gleichermassen vertrauenswürdige interne Systeme | 2026-09-25 |
 | Unbekannte `firmaId` liefert einen Fehler statt eines stillen No-Ops | Verhindert, dass ein Tippfehler im Admin-Tool unbemerkt bleibt | 2026-09-25 |
 | `dv_artikel` bleibt bei jedem Firma-Sync vollständig synchronisiert, nicht gefiltert | Firmenübergreifende Stammdaten mit kleiner Datenmenge — Filterung würde nur Komplexität ohne spürbaren Nutzen bringen | 2026-09-25 |
@@ -73,7 +75,7 @@ Kein UI-Feature — reine Erweiterung des bestehenden Sync-Endpoints. Struktur d
 
 ```
 /api/cron/sync-dataverse (bestehender Endpoint, erweitert)
-+-- Ohne firmaId: bisheriges Verhalten unverändert (alle Jobs unabhängig, wie heute)
++-- Ohne firmaId: 400, kein Sync (seit 2026-10-07; ursprünglich: bisheriger Vollsync)
 +-- Mit firmaId: fester Ablauf mit zwei Ketten
     +-- Kette 1: Firma → Standorte → Geräte → Prüfberichte
     |   (Firma-Existenz wird dabei geprüft: keine Standorte/kein Treffer für
@@ -185,5 +187,7 @@ Beide Bugs in einem Fix behoben, gemeinsame Ursache: `firmaId` wurde nirgends au
 - **Wirkung:** Der nächtliche automatische Vollsync entfällt ab diesem Deployment; Syncs laufen nur noch per Auslösung aus dem Admin-Tool (bzw. manuell per `CRON_SECRET`)
 - **Mit ausgeliefert:** `fix(PROJ-1)` Bemerkungen-Mapping `bmvcc_notitzen` → `bmvcc_bemerkungen` (greift pro Firma beim nächsten Sync)
 - **Tag:** `v1.8.0-PROJ-12`
+
+**Änderung (2026-10-07): Vollsync entfernt.** `runDataverseSync(firmaId: string)` verlangt jetzt eine `firmaId`; der ungefilterte Codepfad ist gelöscht. `route.ts` antwortet ohne `firmaId` mit 400 (`"Parameter firmaId fehlt."`), ohne Ops-Mail; die Auth-Prüfung (401) läuft weiterhin zuerst. Betreff der Problem-Mail von "Probleme beim täglichen Lauf" auf "Probleme beim Sync für Firma <id>" geändert. Tests: die 5 Vollsync-Tests und der "ohne firmaId → Vollsync"-Test entfallen; Soft-Delete der Prüfberichte, 20%-Schwelle und "Firma neu angelegt" sind jetzt im Firma-Modus abgedeckt, dazu 2 Route-Tests (400 ohne `firmaId`, 401 vor 400). 371/371 Tests, Lint und Build grün.
 
 **Nachtrag (2026-10-07): Erster Push wurde von Vercel nicht gebaut.** Der erste Firma-Sync aus dem Admin-Tool lieferte 305 Firmen (Vollsync) — Produktion lief noch mit altem Code. Ursache: `ignoreCommand` in `vercel.json` verglich nur `HEAD^..HEAD`; der Push endete mit einem reinen Doku-Commit (`features/INDEX.md`), daher wurde der Build übersprungen, obwohl der Push davor liegenden PROJ-12-Code enthielt. Fix: Vergleich gegen `${VERCEL_GIT_PREVIOUS_SHA:-HEAD^}` (letzter erfolgreich deployter Commit) mit `|| exit 1`: ist dieser Commit im flachen Vercel-Klon (Tiefe 10) nicht verfügbar, endet `git diff` mit 128 (beim ersten Versuch passiert, Commit `74cff60`) — das wird auf 1 normalisiert, damit Vercel baut. Der falsche Vollsync hat keine Daten gelöscht (0 gelöscht) und entsprach dem bisherigen nächtlichen Sync.

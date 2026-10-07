@@ -22,10 +22,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // PROJ-12: optionaler Firma-Filter. Eine unbekannte firmaId ist ein
-    // Tippfehler im aufrufenden Admin-Tool, kein Sync-Infrastruktur-Problem —
-    // dafür wird bewusst keine Ops-Mail verschickt (siehe Spec).
-    const firmaId = new URL(request.url).searchParams.get("firmaId") ?? undefined;
+    // PROJ-12: firmaId ist Pflicht — einen Vollsync über alle Firmen gibt es
+    // nicht mehr (Decision Log 2026-10-07). Eine fehlende, ungültige oder
+    // unbekannte firmaId ist ein Fehler im aufrufenden Admin-Tool, kein
+    // Sync-Infrastruktur-Problem — dafür wird bewusst keine Ops-Mail verschickt.
+    const firmaId = new URL(request.url).searchParams.get("firmaId");
+    if (firmaId === null) {
+      return NextResponse.json({ error: "Parameter firmaId fehlt." }, { status: 400 });
+    }
 
     let result;
     try {
@@ -43,7 +47,7 @@ export async function GET(request: Request) {
     const allIssues = [...result.warnings, ...result.errors];
     if (allIssues.length > 0) {
       await sendOpsEmail(
-        "Dataverse-Sync: Probleme beim täglichen Lauf",
+        `Dataverse-Sync: Probleme beim Sync für Firma ${firmaId}`,
         allIssues.join("\n")
       );
     } else if (process.env.CRON_NOTIFY_ON_SUCCESS) {
