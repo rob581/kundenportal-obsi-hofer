@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-23
 **Last Updated:** 2026-10-07 (Refinement: Login-Quote an die Kontakt-Freigabe aus PROJ-13 angepasst)
 
@@ -395,6 +395,52 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - **Regression:** Pass — volle Vitest-Suite (173 Tests) und volle Playwright-Suite (38 Tests, alle Browser) grün
 - **Production Ready:** YES
 - **Recommendation:** Status auf "Approved" setzen und deployen. Nach dem nächsten echten Passkey-Login einmal den `login_log`-Eintrag im SQL Editor gegenprüfen. BUG-1/BUG-2/BUG-3 gesammelt bei einer der nächsten Gelegenheiten mitnehmen, keiner davon blockiert das Deployment.
+
+## QA Test Results — Nachtrag: Login-Quote nach PROJ-13 (2026-10-07)
+
+**Tested:** 2026-10-07
+**Tester:** QA Engineer (AI)
+**Testmethode:** Rein lesende Prüfungen gegen die echte Datenbank, nachdem der Nutzer Migration 0012 ausgeführt hat: Funktion `erfolgsmessung_login_status()` Firma für Firma gegen eine unabhängige Nachrechnung verglichen (Kontakte aktiv + freigegeben → Relationen → `auth.users.last_sign_in_at`). Report-Text lokal mit `buildErfolgsmessungReport()` erzeugt, **nicht** versendet. SQL-Review der Migration und der manuellen Abfragen.
+
+### Acceptance Criteria Status (Nachtrag 2026-10-07)
+- [x] Firma mit aktiven, aber nicht freigegebenen Kontakten zählt nicht zur Basis: live, Basis sank von 277 auf 1 Firma
+- [x] Firma mit aktivem, freigegebenem Kontakt zählt zur Basis, „eingeloggt“ nur über diese Kontakte: live, Funktion und Nachrechnung stimmen Firma für Firma überein (0 Abweichungen); SQL-Review: der Freigabe-Filter steht im Join auf `dv_kontakte`, also *vor* dem Login-Abgleich, Logins anderer Kontakte können nicht einfliessen
+- [x] Einziger Login von einem heute nicht freigegebenen Kontakt → Firma nicht eingeloggt bzw. nicht in der Basis: live, die 5 Firmen mit Logins vom 23./24.09. ohne freigegebenen Kontakt erscheinen nicht mehr in der Quote
+- [x] Noch kein Kontakt freigegeben → „Keine Kunden mit Zugang.“: bestehender Unit-Test (`report.test.ts`), leere Funktionsrückgabe ergibt genau diesen Text
+- [x] Report zeigt die neue Quote: lokal erzeugt „1/1 Firmen (100%)“, „Eingeloggt: Cloudcab GmbH“
+- [x] Manuelle SQL-Abfrage (`supabase/queries/erfolgsmessung.sql`) nutzt dieselbe Bedingung wie die Funktion (Review, beide Abfragen)
+
+### Security Audit Results
+- [x] Execute-Recht nach `create or replace` weiterhin nur für `service_role`: Aufruf mit dem öffentlichen (Browser-)Schlüssel → `42501 permission denied`
+- [x] Funktion liefert weiterhin nur Firma, Name und Login ja/nein, keine `auth.users`-Rohdaten
+
+### Bugs Found
+
+#### BUG-1: „Logins pro Firma“ zeigt Firmen, die nicht mehr in der Login-Quote vorkommen
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Wochenreport erzeugen (oder lokal `buildErfolgsmessungReport()`)
+  2. Abschnitt „Login-Quote“: 1/1 Firmen (nur Cloudcab GmbH)
+  3. Abschnitt „Logins pro Firma“ (aus `login_log`): 6 Firmen, darunter Rehaklinik Bellikon (16), StWZ Energie AG (5), 4Viertel (4), Hauswartprofis AG (4), Obsi Hofer GmbH (3)
+  4. Erwartet: beide Abschnitte beziehen sich auf dieselbe Kundenbasis
+  5. Tatsächlich: `login_log` enthält Logins von vor PROJ-13 (23./24.09.2026) von Kontakten, die heute nicht freigegeben sind. Die Decision-Log-Begründung „login_log bleibt unverändert, weil es nur bei Zugang schreibt“ stimmt für neue Einträge, übersieht aber die bestehenden
+- **Einordnung:** Nur interner Betreiber-Report, keine Kundenwirkung. Die Zahlen sind nicht falsch (diese Logins haben stattgefunden), aber die beiden Abschnitte widersprechen sich scheinbar
+- **Mögliche Lösungen (Entscheidung beim Nutzer):** a) so lassen und hinnehmen; b) „Logins pro Firma“ ebenfalls auf Firmen mit freigegebenem Kontakt beschränken; c) `login_log`-Einträge vor dem PROJ-13-Deploy (2026-10-07) einmalig löschen
+- **Priority:** Nice to have
+
+### Beobachtung (kein PROJ-11-Bug, betrifft PROJ-13)
+Bei den 5 Firmen ohne freigegebenen Kontakt hat sich vor PROJ-13 jemand eingeloggt (letzter Login bei allen exakt 2026-09-24 14:50). Der identische Zeitpunkt spricht für **eine einzige Person**, deren Kontakt mehreren Firmen zugeordnet ist (ein Login wird für jede ihrer Firmen gezählt), also vermutlich ein Testzugang. Seit dem PROJ-13-Deploy hat diese Person keinen Zugang mehr. Vom Nutzer zu bestätigen, ob das gewollt ist.
+
+### Automatisierte Tests
+- `npm test`: 380/380 grün (keine Code-Änderung in diesem Nachtrag)
+- `npm run test:e2e`: 38/38 grün
+- Keine neuen Unit-/E2E-Tests: Die Änderung liegt ausschliesslich in einer SQL-Funktion (keine lokale Datenbank für automatisierte Tests vorhanden), live gegen die echte Datenbank verifiziert. Der Leer-Zustand ist bereits per Unit-Test abgedeckt
+
+### Summary
+- **Acceptance Criteria (Nachtrag):** 6/6 erfüllt, live verifiziert
+- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low)
+- **Security:** keine Findings
+- **Production Ready:** **JA**, Status Approved. Migration 0012 ist bereits produktiv wirksam, kein Code-Deploy nötig
 
 ## Deployment
 - **Production URL:** https://obsi-hoferkundenportal.vercel.app
