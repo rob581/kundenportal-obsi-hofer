@@ -1,6 +1,6 @@
 # PROJ-11: Erfolgsmessung Kundenportal
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-23
 **Last Updated:** 2026-10-07 (Refinement: Login-Quote an die Kontakt-Freigabe aus PROJ-13 angepasst)
 
@@ -207,6 +207,14 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - `src/lib/erfolgsmessung/report.ts` refaktoriert: gemeinsame `countByFirma()`-Hilfsfunktion extrahiert (vorher in `getLoginsProFirma` dupliziert), `LoginCountRow` zu generischem `FirmaCountRow` umbenannt, da jetzt auch für Exports genutzt. Neue `fetchExportLogRows()` liest `export_log` einmal mit `firma_id, entity, created_at` — sowohl `getExportsProMonat()` als auch die neue `getExportsProFirma()` werten dieselben Rohdaten aus (kein zusätzlicher DB-Roundtrip für die neue Sicht). Report um neuen Abschnitt "=== CSV-Exports pro Firma ===" ergänzt (gleiches Format/Sortierung wie "Logins pro Firma").
 - 6 neue/angepasste Tests in `report.test.ts` (`getExportsProFirma` inkl. leerem Ergebnis, `buildErfolgsmessungReport`-Erweiterung) — insgesamt 175 Tests grün.
 - `npx tsc --noEmit`, `npx eslint`, `npx vitest run` und `npm run build` laufen fehlerfrei durch.
+
+**Nachtrag 2026-10-07 — Login-Quote nach PROJ-13 (Backend):**
+
+- Neue Migration `supabase/migrations/0012_erfolgsmessung_login_status_freigabe.sql`: ersetzt `erfolgsmessung_login_status()` per `create or replace`. Einzige Änderung im Join auf `dv_kontakte`: zusätzlich `ist_portal_freigegeben = true` neben `ist_aktiv = true`. Gleiche Ergebnisform (Firma, Name, `hat_login`), Execute-Rechte (nur `service_role`) erneut gesetzt. Setzt Migration 0011 (PROJ-13) voraus
+- `supabase/queries/erfolgsmessung.sql`: beide Login-Quoten-Abfragen (pro Firma, Gesamt-Quote) mit derselben Bedingung, damit manuelle Abfrage und Report übereinstimmen
+- Kein Änderungsbedarf im Anwendungscode: `report.ts` ruft weiterhin dieselbe Funktion auf; der Leer-Zustand „Keine Kunden mit Zugang.“ existiert bereits und ist getestet (`report.test.ts`). `login_log` unverändert (siehe Decision Log)
+- **Rein lesend gegen die echten Daten nachgerechnet (vor Ausführung der Migration):** die bisherige Funktion liefert 277 Firmen in der Basis, davon 2 mit Login (0,7 %); nach der neuen Regel ergibt sich 1 Firma mit Login von 1 (aktuell genau 1 freigegebener, synchronisierter Kontakt)
+- `npm test` unverändert grün (keine Code-Änderung)
 
 ## QA Test Results
 

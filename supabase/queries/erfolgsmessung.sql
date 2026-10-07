@@ -8,8 +8,9 @@
 
 -- ============================================================
 -- 1) Login-Quote: welcher Anteil der Kunden (= Firmen mit mindestens einem
---    aktiven, freigeschalteten Kontakt) hat sich mindestens einmal
---    eingeloggt?
+--    aktiven, fürs Kundenportal freigegebenen Kontakt, PROJ-13) hat sich
+--    mindestens einmal eingeloggt? Gleiche Regel wie die Funktion
+--    erfolgsmessung_login_status() (Migration 0012).
 -- ============================================================
 
 -- 1a) Pro Firma (zum Nachschauen, wer noch fehlt):
@@ -19,7 +20,7 @@ select
   bool_or(u.last_sign_in_at is not null) as hat_login
 from dv_firmen f
 join dv_relationen r on r.firma_id = f.id
-join dv_kontakte k on k.id = r.kontakt_id and k.ist_aktiv = true
+join dv_kontakte k on k.id = r.kontakt_id and k.ist_aktiv = true and k.ist_portal_freigegeben = true
 left join auth.users u on lower(u.email) = lower(k.email)
 group by f.id, f.name
 order by hat_login, f.name;
@@ -31,7 +32,7 @@ with pro_firma as (
     bool_or(u.last_sign_in_at is not null) as hat_login
   from dv_firmen f
   join dv_relationen r on r.firma_id = f.id
-  join dv_kontakte k on k.id = r.kontakt_id and k.ist_aktiv = true
+  join dv_kontakte k on k.id = r.kontakt_id and k.ist_aktiv = true and k.ist_portal_freigegeben = true
   left join auth.users u on lower(u.email) = lower(k.email)
   group by f.id
 )
