@@ -187,7 +187,7 @@ Umgesetzt wie im Tech Design, keine Abweichungen. Kein Frontend-Anteil.
 - [x] Passkey eines nicht mehr freigegebenen Kontakts: Passkey-Login führt in dieselbe Zugriffsprüfung (Code-Review)
 - [x] Firmen-Auswahl während Entzug: Auswahl-Action prüft serverseitig erneut über `getPortalAccess()`
 - [x] Harter Umstieg: Default `false` in der echten Datenbank bestätigt
-- [ ] **Neu gefunden:** zwei aktive Kontakte mit derselben E-Mail-Adresse, beide freigegeben → BUG-1
+- [x] **Neu gefunden:** zwei aktive Kontakte mit derselben E-Mail-Adresse, beide freigegeben → BUG-1, behoben
 
 **Zusätzlich beobachtet (kein Bug, Hinweis für den Betrieb):** Wird ein Kontakt in Bexio aus Firma A entfernt **und** gleichzeitig das Häkchen entzogen, aktualisiert der Sync von A diesen Kontakt nicht mehr, weil er nicht mehr zu A gehört. Ist er noch Firma B zugeordnet, bleibt er bis zum Sync von B freigegeben. Entspricht der Spec-Regel „Entzug wirkt mit dem Sync einer seiner Firmen“.
 
@@ -211,16 +211,20 @@ Umgesetzt wie im Tech Design, keine Abweichungen. Kein Frontend-Anteil.
 - **Ursache:** schon seit PROJ-2 vorhanden (mit zwei *aktiven* Kontakten scheitert der Login dieser 4 Adressen heute schon). Durch PROJ-13 ist das Problem sogar geringer: Ist nur einer der beiden Kontakte freigegeben, funktioniert der Login. Es tritt erst wieder auf, wenn ein Freigeber beide Häkchen setzt. Das ist naheliegend, weil beide nebeneinander in derselben Firmenliste im Admin-Tool erscheinen
 - **Workaround:** Im Admin-Tool nur einen der beiden Kontakte freigeben, oder die Dublette in Bexio bereinigen
 - **Priority:** Fix in next sprint (nicht deploy-blockierend: betrifft 4 Personen, Workaround vorhanden, nicht durch PROJ-13 verursacht)
+- **Status:** ✅ Fixed (2026-10-07, auf Wunsch des Nutzers vor dem Deploy). `getPortalAccess()` in `src/lib/auth/access.ts` liest jetzt **alle** aktiven, freigegebenen Kontakte der verifizierten E-Mail-Adresse statt genau einen (`maybeSingle`) und vereinigt deren Firmen ohne Duplikate. Eine nicht freigegebene Dublette trägt keine Firmen bei. `contactId` ist bei Dubletten deterministisch die kleinste ID (wird im Produktivcode nicht verwendet).
+  - Tests: Der Mock in `access.test.ts` verhält sich bei mehreren Treffern jetzt wie die echte Datenbank (Fehler `PGRST116` statt „erste Zeile“), sonst hätte er den Bug verdeckt. +3 Tests (beide Dubletten freigegeben mit gemeinsamer Firma → eine Firma; verschiedene Firmen → vereinigt; nicht freigegebene Dublette → ihre Firma zählt nicht). Gegenprobe: Mit dem alten Code schlagen 2 davon fehl
+  - Gegen die echte Datenbank (rein lesend): Die neue Abfrage liefert für alle 4 Dubletten-Adressen ohne Fehler je 2 Kontakte und 1 Firma
+  - `npm test` 380/380, Lint, `tsc --noEmit` und Build grün
 
 ### Automatisierte Tests
-- `npm test`: 377/377 grün (davon 6 neu für PROJ-13: `access.test.ts` +2, `jobs.test.ts` 4)
+- `npm test`: 377/377 grün (davon 6 neu für PROJ-13: `access.test.ts` +2, `jobs.test.ts` 4); nach dem BUG-1-Fix 380/380
 - `npm run test:e2e`: 38/38 grün (Regression aller Features, Chromium + Mobile Safari)
 - Keine eigene PROJ-13-E2E-Suite: Ohne Login ist alles bereits abgedeckt (alle geschützten Seiten und beide Exporte → `/login`, Specs PROJ-2/3/5/6/8/9/10). Der Unterschied freigegeben/nicht freigegeben zeigt sich erst nach einem echten Login
 - Cross-Browser/Responsive: entfällt, keine Oberflächenänderung
 
 ### Summary
 - **Acceptance Criteria:** 9/9 erfüllt (per Unit-Tests, Code-Review und Datenbankprüfung; Live-Login-Nachweis folgt beim Deploy)
-- **Bugs Found:** 1 total (0 critical, 0 high, 1 medium, 0 low), schon seit PROJ-2 vorhanden
+- **Bugs Found:** 1 total (0 critical, 0 high, 1 medium, 0 low), schon seit PROJ-2 vorhanden, **behoben**
 - **Security:** keine Findings
 - **Production Ready:** **JA**, Status Approved. Beim Deploy die Reihenfolge aus dem Tech Design einhalten (Migration ist bereits erledigt)
 

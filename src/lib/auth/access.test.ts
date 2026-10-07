@@ -23,7 +23,11 @@ function makeQuery(table: string) {
       rows = rows.filter((r) => values.includes(r[column]));
       return builder;
     },
-    maybeSingle: async () => ({ data: rows[0] ?? null, error: null }),
+    // Like real PostgREST: more than one row is an error (PGRST116), not "take the first".
+    maybeSingle: async () =>
+      rows.length > 1
+        ? { data: null, error: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" } }
+        : { data: rows[0] ?? null, error: null },
     // Supabase query builders are thenable — awaiting without a terminal
     // call (e.g. plain .eq()) resolves with the full row list.
     then: (resolve: (v: { data: Row[]; error: null }) => void) => resolve({ data: rows, error: null }),
@@ -97,6 +101,54 @@ describe("getPortalAccess", () => {
     const access = await getPortalAccess("test@example.com");
 
     expect(access).toBeNull();
+  });
+
+  // QA BUG-1 (PROJ-13): Bexio-Dubletten — dieselbe E-Mail bei mehreren Kontakten.
+  describe("several Kontakte sharing one e-mail address", () => {
+    it("grants access when both duplicates are released, deduplicating a shared Firma", async () => {
+      tableData.dv_kontakte = [
+        { id: "k2", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
+        { id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
+      ];
+      tableData.dv_relationen = [
+        { kontakt_id: "k1", firma_id: "f1" },
+        { kontakt_id: "k2", firma_id: "f1" },
+      ];
+
+      const access = await getPortalAccess("test@example.com");
+
+      expect(access).toEqual({ contactId: "k1", firmaIds: ["f1"] });
+    });
+
+    it("combines the Firmen of all released duplicates", async () => {
+      tableData.dv_kontakte = [
+        { id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
+        { id: "k2", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
+      ];
+      tableData.dv_relationen = [
+        { kontakt_id: "k1", firma_id: "f1" },
+        { kontakt_id: "k2", firma_id: "f2" },
+      ];
+
+      const access = await getPortalAccess("test@example.com");
+
+      expect(access?.firmaIds.sort()).toEqual(["f1", "f2"]);
+    });
+
+    it("ignores the Firmen of a duplicate that is not released", async () => {
+      tableData.dv_kontakte = [
+        { id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
+        { id: "k2", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: false },
+      ];
+      tableData.dv_relationen = [
+        { kontakt_id: "k1", firma_id: "f1" },
+        { kontakt_id: "k2", firma_id: "f2" },
+      ];
+
+      const access = await getPortalAccess("test@example.com");
+
+      expect(access).toEqual({ contactId: "k1", firmaIds: ["f1"] });
+    });
   });
 
   it("returns null for an active Kontakt with no linked Firma", async () => {

@@ -22,28 +22,36 @@ export type PortalAccess = {
 export const getPortalAccess = cache(async (email: string): Promise<PortalAccess | null> => {
   const supabase = getSupabaseAdmin();
 
-  const { data: kontakt, error: kontaktError } = await supabase
+  // PROJ-13 QA BUG-1: dieselbe E-Mail kann in Dataverse mehreren Kontakten
+  // gehören (Bexio-Dubletten, aktuell 4 Adressen). Früher brach der Lookup
+  // dann ab (`maybeSingle` mit mehreren Treffern) — jetzt zählen alle
+  // aktiven, freigegebenen Kontakte dieser (verifizierten) Adresse, ihre
+  // Firmen werden vereinigt. Nicht freigegebene Dubletten tragen nichts bei.
+  const { data: kontakte, error: kontaktError } = await supabase
     .from("dv_kontakte")
     .select("id")
     .ilike("email", email)
     .eq("ist_aktiv", true)
-    .eq("ist_portal_freigegeben", true)
-    .maybeSingle();
+    .eq("ist_portal_freigegeben", true);
 
   if (kontaktError) throw new Error(`Kontakt-Lookup fehlgeschlagen: ${kontaktError.message}`);
-  if (!kontakt) return null;
+  const kontaktIds = (kontakte ?? []).map((k) => k.id as string).sort();
+  if (kontaktIds.length === 0) return null;
 
   const { data: relationen, error: relationenError } = await supabase
     .from("dv_relationen")
     .select("firma_id")
-    .eq("kontakt_id", kontakt.id);
+    .in("kontakt_id", kontaktIds);
 
   if (relationenError) throw new Error(`Relationen-Lookup fehlgeschlagen: ${relationenError.message}`);
 
-  const firmaIds = (relationen ?? []).map((r) => r.firma_id).filter((id): id is string => !!id);
+  const firmaIds = [
+    ...new Set((relationen ?? []).map((r) => r.firma_id).filter((id): id is string => !!id)),
+  ];
   if (firmaIds.length === 0) return null;
 
-  return { contactId: kontakt.id as string, firmaIds };
+  // contactId: bei Dubletten deterministisch der erste (nach ID sortiert).
+  return { contactId: kontaktIds[0], firmaIds };
 });
 
 export async function getFirmenNamen(firmaIds: string[]): Promise<{ id: string; name: string }[]> {
