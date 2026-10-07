@@ -1,6 +1,6 @@
 # PROJ-13: Kontakt-Freigabe für Kundenportal-Zugang
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-10-06
 **Last Updated:** 2026-10-07
 
@@ -158,7 +158,71 @@ Umgesetzt wie im Tech Design, keine Abweichungen. Kein Frontend-Anteil.
 **Noch nicht ausgeführt:** Migration 0011 in Supabase. Der Code ist nur lokal committet und darf erst **nach** der Migration auf `main` (sonst scheitern Sync und Zugriffsprüfung an der fehlenden Spalte, siehe Inbetriebnahme im Tech Design).
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-10-07
+**Tester:** QA Engineer (AI)
+**Testmethode:** Code-Review gegen alle Kriterien und Edge Cases, Unit- und E2E-Suiten, rein lesende Prüfungen gegen die echte Supabase-Datenbank und Dataverse. Kein echter Kunden-Login: Jeder automatisierte Login würde eine echte Code-Mail versenden (gleiche Einschränkung wie in PROJ-2), und vor dem Deploy ist niemand freigegeben. Der Live-Nachweis erfolgt deshalb beim `/deploy` (Testkontakt freigeben → Cloudcab GmbH synchronisieren → Login).
+
+### Datenbank und Daten (rein lesend verifiziert)
+- Migration 0011 ist ausgeführt: `dv_kontakte.ist_portal_freigegeben` existiert, alle 596 Kontakte stehen auf `false` (erwarteter Stand vor dem ersten Sync mit dem neuen Code)
+- Dataverse: Der Portal-Zugang darf `bmvcc_kundenportal` lesen. 2 Kontakte haben das Häkchen, beide aktiv und mit E-Mail
+- E-Mail-Adressen ohne führende/nachfolgende Leerzeichen, keine Formatprobleme
+- 4 E-Mail-Adressen gehören zu je 2 aktiven Kontakten, siehe BUG-1
+
+### Acceptance Criteria Status
+- [x] Häkchen wird mit dem Sync der Firma übernommen: `jobs.test.ts` (Feld wird abgefragt, korrekt gemappt). Der Firma-Sync-Test in `run-sync.test.ts` validiert das gemappte Kontakt-Objekt gegen das erweiterte Schema
+- [x] Aktiv + Häkchen + Firma → Zugang wie bisher: `access.test.ts` (positive Fälle); Weiterleitung eine/mehrere Firmen unverändert (PROJ-2)
+- [x] Aktiv + Firma, ohne Häkchen → generische „Kein Zugang“-Meldung: `access.test.ts`. Gleicher `null`-Rückgabewert wie bei unbekannt/inaktiv, dadurch identische Meldung
+- [x] Häkchen, aber inaktiv → „Kein Zugang“: `access.test.ts` (inaktiver Fall ist jetzt mit gesetztem Häkchen formuliert)
+- [x] Entzug wirkt nach Sync beim nächsten Seitenaufruf, inklusive Exporte: Code-Review. `getPortalAccess()` läuft bei jedem Request im geschützten Layout, in `current-firma.ts`, in beiden Export-Routen und in der Firmen-Auswahl
+- [x] Freigabe wirkt nach Sync: wie oben, Spiegelfall
+- [x] Ohne Sync gilt der zuletzt synchronisierte Stand: Code-Review. Zugriff liest nur `dv_kontakte`, nie Dataverse direkt
+- [x] Nie synchronisierter Kontakt gilt als nicht freigegeben: Spalten-Default `false` (in der echten Datenbank verifiziert) und `access.test.ts` „fehlender Freigabe-Wert → kein Zugang“
+- [x] Prüfung serverseitig: Code-Review. Einzige Lesestelle für `dv_kontakte` ist `access.ts`. Alle Datenabfragen (Dashboard, Geräte, Prüfberichte) bekommen die Firma nur über `current-firma.ts`, das gegen die freigegebenen Firmen prüft
+
+### Edge Cases Status
+- [x] Kontakt mehrerer Firmen: Häkchen am Kontakt-Datensatz, Sync einer Firma aktualisiert ihn für alle (Code-Review, Kontakte werden per ID-Kette aus den Relationen der Firma geladen)
+- [x] Relation entfernt, Häkchen bleibt: bestehendes PROJ-2-Verhalten (keine Firma → kein Zugang)
+- [x] Freigegeben ohne E-Mail: kein Login möglich, aktuell 0 solcher Kontakte
+- [x] Passkey eines nicht mehr freigegebenen Kontakts: Passkey-Login führt in dieselbe Zugriffsprüfung (Code-Review)
+- [x] Firmen-Auswahl während Entzug: Auswahl-Action prüft serverseitig erneut über `getPortalAccess()`
+- [x] Harter Umstieg: Default `false` in der echten Datenbank bestätigt
+- [ ] **Neu gefunden:** zwei aktive Kontakte mit derselben E-Mail-Adresse, beide freigegeben → BUG-1
+
+**Zusätzlich beobachtet (kein Bug, Hinweis für den Betrieb):** Wird ein Kontakt in Bexio aus Firma A entfernt **und** gleichzeitig das Häkchen entzogen, aktualisiert der Sync von A diesen Kontakt nicht mehr, weil er nicht mehr zu A gehört. Ist er noch Firma B zugeordnet, bleibt er bis zum Sync von B freigegeben. Entspricht der Spec-Regel „Entzug wirkt mit dem Sync einer seiner Firmen“.
+
+### Security Audit Results (Red Team)
+- [x] Fail-closed: leerer, fehlender oder unbekannter Wert ergibt nie Zugang (Mapping nur `=== true`, Spalten-Default `false`, Abfrage verlangt `true`)
+- [x] Keine Umgehung über einzelne Seiten oder Exporte: alle laufen über dieselbe zentrale Prüfung
+- [x] Keine Enumeration: Login-Code geht weiterhin an jede Adresse, alle Ablehnungsgründe zeigen dieselbe Meldung
+- [x] Kein neuer Eingabepunkt, keine neue API-Route, keine RLS-Änderung (Tabelle weiterhin nur über den Service-Role-Client erreichbar)
+- [x] Portal schreibt nichts nach Dataverse (read-only unverändert)
+
+### Bugs Found
+
+#### BUG-1: Login bricht mit Fehlerseite ab, wenn zwei freigegebene Kontakte dieselbe E-Mail-Adresse haben
+- **Severity:** Medium
+- **Steps to Reproduce:**
+  1. Eine der 4 betroffenen Adressen wählen. Jede gehört zu 2 aktiven Kontakten, jeweils derselben Firma
+  2. Im Admin-Tool beide Kontakte dieser Firma freigeben und die Firma synchronisieren
+  3. Mit dieser Adresse einloggen
+  4. Erwartet: Zugang zur Firma
+  5. Tatsächlich: Die Zugriffsabfrage erwartet genau einen Kontakt pro Adresse und bricht bei zwei Treffern ab (rein lesend gegen die echte Datenbank nachgestellt: Fehler `PGRST116`, „multiple rows returned“). Der Kunde sieht die allgemeine Next.js-Fehlerseite statt des Portals
+- **Ursache:** schon seit PROJ-2 vorhanden (mit zwei *aktiven* Kontakten scheitert der Login dieser 4 Adressen heute schon). Durch PROJ-13 ist das Problem sogar geringer: Ist nur einer der beiden Kontakte freigegeben, funktioniert der Login. Es tritt erst wieder auf, wenn ein Freigeber beide Häkchen setzt. Das ist naheliegend, weil beide nebeneinander in derselben Firmenliste im Admin-Tool erscheinen
+- **Workaround:** Im Admin-Tool nur einen der beiden Kontakte freigeben, oder die Dublette in Bexio bereinigen
+- **Priority:** Fix in next sprint (nicht deploy-blockierend: betrifft 4 Personen, Workaround vorhanden, nicht durch PROJ-13 verursacht)
+
+### Automatisierte Tests
+- `npm test`: 377/377 grün (davon 6 neu für PROJ-13: `access.test.ts` +2, `jobs.test.ts` 4)
+- `npm run test:e2e`: 38/38 grün (Regression aller Features, Chromium + Mobile Safari)
+- Keine eigene PROJ-13-E2E-Suite: Ohne Login ist alles bereits abgedeckt (alle geschützten Seiten und beide Exporte → `/login`, Specs PROJ-2/3/5/6/8/9/10). Der Unterschied freigegeben/nicht freigegeben zeigt sich erst nach einem echten Login
+- Cross-Browser/Responsive: entfällt, keine Oberflächenänderung
+
+### Summary
+- **Acceptance Criteria:** 9/9 erfüllt (per Unit-Tests, Code-Review und Datenbankprüfung; Live-Login-Nachweis folgt beim Deploy)
+- **Bugs Found:** 1 total (0 critical, 0 high, 1 medium, 0 low), schon seit PROJ-2 vorhanden
+- **Security:** keine Findings
+- **Production Ready:** **JA**, Status Approved. Beim Deploy die Reihenfolge aus dem Tech Design einhalten (Migration ist bereits erledigt)
 
 ## Deployment
 _To be added by /deploy_
