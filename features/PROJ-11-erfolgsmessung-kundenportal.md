@@ -215,6 +215,7 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - Kein Änderungsbedarf im Anwendungscode: `report.ts` ruft weiterhin dieselbe Funktion auf; der Leer-Zustand „Keine Kunden mit Zugang.“ existiert bereits und ist getestet (`report.test.ts`). `login_log` unverändert (siehe Decision Log)
 - **Rein lesend gegen die echten Daten nachgerechnet (vor Ausführung der Migration):** die bisherige Funktion liefert 277 Firmen in der Basis, davon 2 mit Login (0,7 %); nach der neuen Regel ergibt sich 1 Firma mit Login von 1 (aktuell genau 1 freigegebener, synchronisierter Kontakt)
 - `npm test` unverändert grün (keine Code-Änderung)
+- **Migration 0012 vom Nutzer ausgeführt (2026-10-07), rein lesend verifiziert:** Funktion liefert jetzt 1 Firma, davon 1 mit Login, identisch zur vorab berechneten Erwartung. Aufruf mit dem öffentlichen (Browser-)Schlüssel wird weiterhin abgelehnt (`42501 permission denied`)
 
 ## QA Test Results
 
