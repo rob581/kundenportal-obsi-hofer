@@ -427,6 +427,7 @@ Siehe Decision Log für die vollständige Begründung je Einzelentscheidung.
 - **Einordnung:** Nur interner Betreiber-Report, keine Kundenwirkung. Die Zahlen sind nicht falsch (diese Logins haben stattgefunden), aber die beiden Abschnitte widersprechen sich scheinbar
 - **Mögliche Lösungen (Entscheidung beim Nutzer):** a) so lassen und hinnehmen; b) „Logins pro Firma“ ebenfalls auf Firmen mit freigegebenem Kontakt beschränken; c) `login_log`-Einträge vor dem PROJ-13-Deploy (2026-10-07) einmalig löschen
 - **Priority:** Nice to have
+- **Status:** ✅ Behoben (2026-10-07), Lösung c auf Nutzerentscheid: Der Nutzer hat im Supabase SQL Editor `delete from login_log where created_at < '2026-10-07T00:00:00Z';` ausgeführt (einmalige Datenbereinigung, keine Migration, kein Code). Vorab rein lesend geprüft: 32 Einträge der 5 Firmen vom 23./24.09. betroffen, 5 Einträge von Cloudcab GmbH (ab 07.10.) bleiben. Danach rein lesend verifiziert: 0 alte Einträge, „Logins pro Firma“ zeigt nur noch Cloudcab GmbH, keine Firma mehr ausserhalb der Login-Quote
 
 ### Beobachtung (kein PROJ-11-Bug, betrifft PROJ-13)
 Bei den 5 Firmen ohne freigegebenen Kontakt hat sich vor PROJ-13 jemand eingeloggt (letzter Login bei allen exakt 2026-09-24 14:50). Der identische Zeitpunkt spricht für **eine einzige Person**, deren Kontakt mehreren Firmen zugeordnet ist (ein Login wird für jede ihrer Firmen gezählt), also vermutlich ein Testzugang. Seit dem PROJ-13-Deploy hat diese Person keinen Zugang mehr. Vom Nutzer zu bestätigen, ob das gewollt ist.
@@ -438,7 +439,7 @@ Bei den 5 Firmen ohne freigegebenen Kontakt hat sich vor PROJ-13 jemand eingelog
 
 ### Summary
 - **Acceptance Criteria (Nachtrag):** 6/6 erfüllt, live verifiziert
-- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low)
+- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low), **behoben**
 - **Security:** keine Findings
 - **Production Ready:** **JA**, Status Approved. Migration 0012 ist bereits produktiv wirksam, kein Code-Deploy nötig
 
