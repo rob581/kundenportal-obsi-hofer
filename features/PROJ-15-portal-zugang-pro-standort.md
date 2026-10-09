@@ -1,6 +1,6 @@
 # PROJ-15: Portal-Zugang pro Standort
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-10-09
 **Last Updated:** 2026-10-09
 
@@ -307,4 +307,15 @@ Umgesetzt wie im Tech Design. Kein Frontend-Anteil.
 **Live-Test beim Deploy:** Im Admin-Tool bei der Firma mit 3 Standorten einem Testkontakt nur einen Standort freigeben → synchronisieren → im Portal prüfen, dass nur dieser Standort sichtbar ist (Übersicht, Detailseite eines anderen Standorts per Adresse, Exporte); dann den Zugang entziehen → synchronisieren → „Kein Zugang“.
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-10-09 (automatisch via Vercel bei Push auf `main`, letzter Code-Commit `1d6a410`)
+- **Migration:** `supabase/migrations/0013_portalzugaenge.sql`, vom Nutzer vor dem Push im Supabase SQL Editor ausgeführt und rein lesend verifiziert (Tabelle vorhanden, für Browser-Clients gesperrt; Login-Quoten-Funktion läuft)
+- **Env-Variablen:** keine neuen
+- **Verifiziert:**
+  - Pre-Deployment: `npm test` 219/219, `npm run test:e2e` 38/38, Lint, `tsc --noEmit`, Build grün
+  - Smoke-Test Produktion: `/login` → 200; `/dashboard` und `/api/uebersicht/export` ohne Sitzung → 307 auf `/login`
+  - **Live durch den Nutzer** nach Sync der 3 Firmen mit Zugängen über das Admin-Tool: Login der bestehenden Kontakte wie bisher; Teil-Freigabe (ein Standort einer Firma mit 3 Standorten) zeigt nur diesen Standort; Entzug + Sync → „Kein Zugang“
+- **Wirkung:** Harter Umstieg. Zugang und sichtbare Standorte kommen seit diesem Deployment ausschliesslich aus `bmvcc_portalzugang`; das Häkchen `bmvcc_kundenportal` wird vom Portal weder gelesen noch abgefragt
+- **Nachgelagert:** Portal-Spalte `dv_kontakte.ist_portal_freigegeben` kann in einer späteren Migration entfernt werden (wird nicht mehr genutzt)
+- **Rückmeldung an das Admin-Tool:** am 2026-10-09 vorbereitet (Text siehe Chat); das Admin-Tool kann `bmvcc_kundenportal` ab jetzt als Übergangsfeld behandeln
+- **Tag:** `v1.11.0-PROJ-15`
