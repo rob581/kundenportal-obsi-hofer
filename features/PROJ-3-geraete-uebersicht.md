@@ -1,13 +1,14 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: Deployed
+## Status: Architected
 **Created:** 2026-09-17
-**Last Updated:** 2026-10-09 (Refinement: Spalte „Bemerkung Prüfung“)
+**Last Updated:** 2026-10-09 (Refinements: Spalte „Bemerkung Prüfung“; Standort-Filter und -Spalte)
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — liefert die Geräte-, Standort- und Firmen-Daten
 - Requires: PROJ-2 (Kunden-Login) — liefert die aktuell ausgewählte Firma, auf die die Geräteliste eingeschränkt wird
 - Betrifft (Nachtrag 2026-10-09): PROJ-7 (Zusatzspalte „Bemerkungen“ wird umbenannt in „Bemerkungen Gerät“), PROJ-8 (CSV-Export erhält die neue Spalte)
+- Requires (Nachtrag 2 2026-10-09): PROJ-15 (Portal-Zugang pro Standort) — liefert die Standorte, die ein Kunde innerhalb der Firma sieht; PROJ-8 (CSV-Export übernimmt den neuen Filter)
 
 ## User Stories
 - Als Kunde möchte ich alle Geräte meiner Firma in einer Liste sehen, damit ich einen Überblick über deren Status habe.
@@ -16,6 +17,7 @@
 - Als Kunde möchte ich auf ein Gerät klicken können, um alle verfügbaren Details zu sehen.
 - Als Kunde einer Firma ohne Geräte möchte ich eine klare Meldung sehen, statt einer leeren oder verwirrenden Seite.
 - Als Kunde möchte ich in der Übersicht direkt die Bemerkung aus der letzten Prüfung jedes Geräts sehen, damit ich Hinweise des Prüfers (z. B. Mängel) erkenne, ohne jedes Gerät einzeln zu öffnen (Nachtrag 2026-10-09).
+- Als Kunde mit Zugang zu mehreren Standorten einer Firma möchte ich sehen, an welchem Standort ein Gerät steht, und die Liste auf einen Standort einschränken können, damit ich nicht alle Standorte gemischt durchsehen muss (Nachtrag 2 2026-10-09).
 
 ## Out of Scope
 - Link zu Prüfberichten pro Gerät — folgt, sobald PROJ-4 (Prüfberichte-Liste) existiert, wird dann per `/refine PROJ-3` oder direkt bei PROJ-4 ergänzt
@@ -26,6 +28,8 @@
 - Anzeige von Geräten mehrerer Firmen gleichzeitig — nur die aktuell in PROJ-2 ausgewählte Firma
 - Suche oder Filter nach dem Text der Prüfbericht-Bemerkung (Nachtrag 2026-10-09): Suche bleibt bei Seriennummer, Barcode, Lagerort (und KundenID)
 - Bemerkungen älterer Prüfberichte in der Übersicht: nur der aktuelle; ältere stehen auf der Detailseite (PROJ-4)
+- Standort-Auswahl beim Login oder im Kopfbereich (wie die Firmen-Auswahl): bewusst nicht, alle freigegebenen Standorte bleiben gemeinsam sichtbar; nur ein Filter in der Übersicht (Nachtrag 2 2026-10-09)
+- Standort-Filter auf Dashboard (PROJ-5) und Prüfberichte-Übersicht (PROJ-9/PROJ-10): nicht Teil dieses Nachtrags, bei Bedarf separat
 
 ## Acceptance Criteria
 
@@ -51,7 +55,19 @@
 - [ ] Angenommen für die Firma ist die Zusatzspalte für die Gerät-Bemerkung eingeschaltet (PROJ-7), wenn Übersicht oder CSV-Export angezeigt bzw. erzeugt werden, dann heisst diese Spalte „Bemerkungen Gerät“ (statt bisher „Bemerkungen“)
 - [ ] Angenommen ein Gerät hatte früher zwei Prüfberichte am selben neuesten Prüfdatum (Altdaten, aktuell 269 Geräte), wenn die Übersicht angezeigt wird, dann erscheint genau eine Bemerkung, und zwar jedes Mal dieselbe: bevorzugt die eines Berichts mit Bemerkung
 
+**Nachtrag 2 2026-10-09 — Standort-Filter und Spalte „Standort“:**
+
+- [ ] Angenommen der Kunde sieht in der gewählten Firma mehr als einen Standort (PROJ-15), wenn er die Geräte-Übersicht aufruft, dann gibt es einen Filter „Standort“ (Standard „Alle Standorte“) und eine Spalte „Standort“ direkt vor „Lagerort“
+- [ ] Angenommen der Kunde sieht in der gewählten Firma genau einen Standort, wenn er die Übersicht aufruft, dann gibt es weder Filter noch Spalte (Ansicht wie bisher)
+- [ ] Angenommen der Kunde wählt einen Standort, wenn die Liste angezeigt wird, dann enthält sie nur Geräte dieses Standorts, kombiniert (UND) mit Status-Filter, Suche und „zu prüfen“; die Seitenzählung beginnt wieder bei Seite 1
+- [ ] Angenommen der Filter-Auswahl, wenn sie geöffnet wird, dann listet sie alle Standorte der Firma, für die der Kunde einen Zugang hat, alphabetisch nach Namen (Standorte ohne Namen als „(ohne Namen)“)
+- [ ] Angenommen ein Standort ist gewählt, wenn der Kunde die Übersicht als CSV exportiert (PROJ-8), dann enthält der Export nur Geräte dieses Standorts (die Spalte „Standort“ ist im Export schon immer enthalten)
+- [ ] Angenommen die Adresse enthält einen Standort, für den der Kunde keinen Zugang hat oder der nicht zur gewählten Firma gehört, wenn die Übersicht oder der Export geladen wird, dann werden keine Geräte dieses Standorts gezeigt (keine Datenfreigabe über die Adresse)
+- [ ] Angenommen der Kunde wechselt die Firma, wenn die Übersicht neu lädt, dann ist der Standort-Filter zurückgesetzt (wie die übrigen Filter)
+
 ## Edge Cases
+- **Standort-Filter (Nachtrag 2):** Ein freigegebener Standort ohne Geräte erscheint trotzdem in der Auswahl; gewählt ergibt er die normale „Keine Ergebnisse“-Meldung
+- **Standort-Filter (Nachtrag 2):** Verliert der Kunde den Zugang zum gerade gewählten Standort (Sync), zeigt die Übersicht beim nächsten Aufruf für diesen Wert keine Geräte; die Auswahl bietet ihn nicht mehr an
 - **Bemerkung Prüfung (Nachtrag 2026-10-09):** Das Feld „Letzte Prüfung“ stammt vom Gerät, die Bemerkung vom neuesten Prüfbericht. Weichen die beiden Daten in Dataverse voneinander ab, gilt für die Bemerkung immer der neueste Prüfbericht
 - **Bemerkung Prüfung, mehrzeilig (aktuell 192 Fälle):** Zeilenumbrüche werden in der Übersicht als Leerzeichen dargestellt (zwei Zeilen Platz), vollständig auf der Detailseite und im CSV
 - **Bemerkung Prüfung auf Touch-Geräten:** Ohne Maus gibt es kein Darüberfahren; der volle Text ist auf der Detailseite erreichbar
@@ -87,6 +103,10 @@
 | In der Übersicht auf zwei Zeilen gekürzt, voller Text beim Darüberfahren und auf der Detailseite | Tabelle bleibt kompakt und gleichmässig hoch | 2026-10-09 |
 | Zusatzspalte „Bemerkungen“ (Gerät, PROJ-7) wird in „Bemerkungen Gerät“ umbenannt; neue Spalte heisst „Bemerkung Prüfung“ | Zwei verschiedene Bemerkungen dürfen nicht gleich heissen; gleiche Benennung wie im geplanten PDF-Export (PROJ-14) | 2026-10-09 |
 | Neue Spalte auch im CSV-Export, ungekürzt, direkt nach „Letzte Prüfung“ | Der Export bildet die Übersicht ab (PROJ-8), Kürzung wäre im Export nur hinderlich | 2026-10-09 |
+| Mehrere Standorte einer Firma bleiben gemeinsam sichtbar; neu ein Standort-Filter und eine Spalte „Standort“ in der Übersicht statt einer Standort-Auswahl beim Login | Nutzerentscheidung nach dem ersten Kunden mit zwei Standorten (2026-10-09): kleiner Eingriff, kein zusätzlicher Schritt beim Login | 2026-10-09 |
+| Filter und Spalte nur bei mehr als einem sichtbaren Standort | Für die Mehrheit (ein Standort) bleibt die Übersicht unverändert schlank | 2026-10-09 |
+| Spalte „Standort“ direkt vor „Lagerort“ | Liest sich als grob → fein; Gerät bleibt erste Spalte (Nutzerentscheidung) | 2026-10-09 |
+| Filter wirkt auf den CSV-Export, nicht auf Dashboard und Prüfberichte | Gleiches Prinzip wie bei den übrigen Übersicht-Filtern (PROJ-8); Dashboard/Prüfberichte bei Bedarf separat | 2026-10-09 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
@@ -146,6 +166,13 @@ Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842)
 - **Anzeige:** neue Spalte nach „Letzte Prüfung“, Text auf zwei Zeilen begrenzt, voller Text als Tooltip (bestehende Mittel, keine neue Komponente nötig)
 - **Export:** gleiche Ermittlung, voller Text; Escaping wie alle Freitextfelder (PROJ-8)
 - **Umbenennung:** nur die Spaltenbeschriftung der PROJ-7-Zusatzspalte ändert sich; der interne Schlüssel und die Firmen-Einstellungen bleiben gleich, keine Datenmigration
+- **Keine neuen Pakete, keine Migration**
+
+### Nachtrag 2 2026-10-09 — Standort-Filter und Spalte (Tech Design)
+- **Daten:** keine neue Speicherung. Die Auswahl entsteht aus den Standorten, die die Übersicht ohnehin schon für den Kunden ermittelt (Firma + freigegebene Standorte, PROJ-15) — dieselbe zentrale Stelle, dadurch kann die Auswahl nie mehr anbieten, als der Kunde sehen darf
+- **Filter:** neuer Adress-Parameter für den Standort, wie Status/Suche/„zu prüfen“; wird serverseitig nur angewendet, wenn er unter den freigegebenen Standorten der gewählten Firma ist — sonst zeigt die Liste für diesen Wert keine Geräte (nie fremde)
+- **Anzeige:** Auswahl in der bestehenden Filterleiste (vorhandene shadcn-Select-Komponente wie beim Status-Filter), Spalte vor „Lagerort“; beides nur bei mehr als einem Standort
+- **Export:** der Export-Knopf gibt den Standort-Parameter wie die übrigen Filter weiter; der Export wendet dieselbe Filterlogik an
 - **Keine neuen Pakete, keine Migration**
 
 ## Implementation Notes (Frontend)

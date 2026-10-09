@@ -70,6 +70,7 @@ Keine offenen Fragen — alle Kernentscheidungen wurden im Interview getroffen.
 | Fehlende Werte bleiben in der CSV leer statt "—" wie in der UI | CSV wird oft maschinell weiterverarbeitet (Formeln, Re-Import) — "—" als Text würde dort stören | 2026-09-22 |
 | CSV-Injection-Schutz für Freitextfelder (Escaping bei `=`/`+`/`-`/`@`-Präfix) | Bekanntes Sicherheitsrisiko bei CSV-Exporten mit Freitext-Herkunft aus Dataverse; geringer Zusatzaufwand, verhindert dass Excel Werte als Formel ausführt | 2026-09-22 |
 | Export erhält die neue Standardspalte „Bemerkung Prüfung“ (ungekürzt, nach „Letzte Prüfung“); Zusatzspalte „Bemerkungen“ heisst „Bemerkungen Gerät“ | Export bildet die Übersicht ab, siehe PROJ-3 Nachtrag 2026-10-09 | 2026-10-09 |
+| Export übernimmt den neuen Standort-Filter der Übersicht (Spalte „Standort“ war im Export schon enthalten) | Export bildet die Übersicht ab, siehe PROJ-3 Nachtrag 2 2026-10-09 | 2026-10-09 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
