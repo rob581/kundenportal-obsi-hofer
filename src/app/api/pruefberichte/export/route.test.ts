@@ -8,7 +8,11 @@ const logExportEventMock = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUserEmail: () => getCurrentUserEmailMock() }));
 vi.mock("@/lib/auth/access", () => ({ getPortalAccess: (email: string) => getPortalAccessMock(email) }));
-vi.mock("@/lib/auth/current-firma", () => ({ getCurrentFirmaId: () => getCurrentFirmaIdMock() }));
+// PROJ-15: Routen holen Firma + freigegebene Standorte über getCurrentFirmaScope.
+vi.mock("@/lib/auth/current-firma", () => ({
+  getCurrentFirmaId: () => getCurrentFirmaIdMock(),
+  getCurrentFirmaScope: async () => ({ firmaId: await getCurrentFirmaIdMock(), standortIds: ["st-a"] }),
+}));
 vi.mock("@/lib/pruefberichte/queries", () => ({
   getPruefberichteExportRows: (firmaId: string, filters: unknown) => getPruefberichteExportRowsMock(firmaId, filters),
 }));
@@ -88,7 +92,7 @@ describe("GET /api/pruefberichte/export", () => {
 
     await GET(makeRequest("?zeitraum=30"));
 
-    expect(getPruefberichteExportRowsMock).toHaveBeenCalledWith("f1", { zeitraum: "30" });
+    expect(getPruefberichteExportRowsMock).toHaveBeenCalledWith({ firmaId: "f1", standortIds: ["st-a"] }, { zeitraum: "30" });
   });
 
   it("passes zeitraum as undefined when omitted (treated as 'alle' downstream)", async () => {
@@ -99,7 +103,7 @@ describe("GET /api/pruefberichte/export", () => {
 
     await GET(makeRequest());
 
-    expect(getPruefberichteExportRowsMock).toHaveBeenCalledWith("f1", { zeitraum: undefined });
+    expect(getPruefberichteExportRowsMock).toHaveBeenCalledWith({ firmaId: "f1", standortIds: ["st-a"] }, { zeitraum: undefined });
   });
 
   it("returns 500 without crashing when the export query fails", async () => {

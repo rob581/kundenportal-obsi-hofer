@@ -47,21 +47,30 @@ beforeEach(() => {
 });
 
 describe("getPortalAccess", () => {
-  it("returns access for an active Kontakt with linked Firmen", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true }];
-    tableData.dv_relationen = [
-      { kontakt_id: "k1", firma_id: "f1" },
-      { kontakt_id: "k1", firma_id: "f2" },
+  // PROJ-15: Zugang = aktiver Kontakt mit Portalzugang zu einem Standort,
+  // der einer Firma gehört. Firmen = Firmen dieser Standorte.
+  function seedStandorte() {
+    tableData.dv_standorte = [
+      { id: "s1", firma_id: "f1" },
+      { id: "s2", firma_id: "f1" },
+      { id: "s3", firma_id: "f2" },
     ];
+  }
+
+  it("returns the Firmen and Standorte of an active Kontakt's Zugänge", async () => {
+    seedStandorte();
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_portalzugaenge = [{ id: "pz1", kontakt_id: "k1", standort_id: "s1" }];
 
     const access = await getPortalAccess("test@example.com");
 
-    expect(access).toEqual({ contactId: "k1", firmaIds: ["f1", "f2"] });
+    expect(access).toEqual({ contactId: "k1", firmaIds: ["f1"], standortIds: ["s1"] });
   });
 
   it("matches email case-insensitively", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "Test@Example.com", ist_aktiv: true, ist_portal_freigegeben: true }];
-    tableData.dv_relationen = [{ kontakt_id: "k1", firma_id: "f1" }];
+    seedStandorte();
+    tableData.dv_kontakte = [{ id: "k1", email: "Test@Example.com", ist_aktiv: true }];
+    tableData.dv_portalzugaenge = [{ id: "pz1", kontakt_id: "k1", standort_id: "s1" }];
 
     const access = await getPortalAccess("test@example.com");
 
@@ -71,93 +80,95 @@ describe("getPortalAccess", () => {
   it("returns null for an unknown email", async () => {
     tableData.dv_kontakte = [];
 
-    const access = await getPortalAccess("nobody@example.com");
-
-    expect(access).toBeNull();
+    expect(await getPortalAccess("nobody@example.com")).toBeNull();
   });
 
-  it("returns null for an inactive Kontakt", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: false, ist_portal_freigegeben: true }];
+  it("returns null for an inactive Kontakt even with a Zugang", async () => {
+    seedStandorte();
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: false }];
+    tableData.dv_portalzugaenge = [{ id: "pz1", kontakt_id: "k1", standort_id: "s1" }];
 
-    const access = await getPortalAccess("test@example.com");
-
-    expect(access).toBeNull();
+    expect(await getPortalAccess("test@example.com")).toBeNull();
   });
 
-  // PROJ-13: Zugang nur mit Häkchen "Kundenportal" aus obsi-hofer-admin.
-  it("returns null for an active, linked Kontakt that is not released for the portal", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: false }];
-    tableData.dv_relationen = [{ kontakt_id: "k1", firma_id: "f1" }];
-
-    const access = await getPortalAccess("test@example.com");
-
-    expect(access).toBeNull();
-  });
-
-  it("returns null when the release flag is missing (fail-closed)", async () => {
+  it("returns null for an active Kontakt without any Zugang (last Zugang revoked)", async () => {
+    seedStandorte();
     tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_portalzugaenge = [];
+    // A Bexio relation alone no longer grants access.
     tableData.dv_relationen = [{ kontakt_id: "k1", firma_id: "f1" }];
+
+    expect(await getPortalAccess("test@example.com")).toBeNull();
+  });
+
+  it("ignores the old PROJ-13 checkbox: a Zugang grants access even if ist_portal_freigegeben is false", async () => {
+    seedStandorte();
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: false }];
+    tableData.dv_portalzugaenge = [{ id: "pz1", kontakt_id: "k1", standort_id: "s1" }];
+
+    expect(await getPortalAccess("test@example.com")).not.toBeNull();
+  });
+
+  it("shows only the Standorte with Zugang, not all Standorte of the Firma", async () => {
+    seedStandorte();
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_portalzugaenge = [{ id: "pz1", kontakt_id: "k1", standort_id: "s2" }];
 
     const access = await getPortalAccess("test@example.com");
 
-    expect(access).toBeNull();
+    expect(access).toEqual({ contactId: "k1", firmaIds: ["f1"], standortIds: ["s2"] });
+  });
+
+  it("lists every Firma the Kontakt has a Zugang for, with exactly those Standorte", async () => {
+    seedStandorte();
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_portalzugaenge = [
+      { id: "pz1", kontakt_id: "k1", standort_id: "s1" },
+      { id: "pz2", kontakt_id: "k1", standort_id: "s3" },
+    ];
+
+    const access = await getPortalAccess("test@example.com");
+
+    expect(access?.firmaIds.sort()).toEqual(["f1", "f2"]);
+    expect(access?.standortIds).toEqual(["s1", "s3"]);
+  });
+
+  it("ignores a Zugang to a Standort that is unknown or belongs to no Firma (fail-closed)", async () => {
+    tableData.dv_standorte = [{ id: "s-ohne-firma", firma_id: null }];
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_portalzugaenge = [
+      { id: "pz1", kontakt_id: "k1", standort_id: "s-ohne-firma" },
+      { id: "pz2", kontakt_id: "k1", standort_id: "s-unbekannt" },
+    ];
+
+    expect(await getPortalAccess("test@example.com")).toBeNull();
+  });
+
+  it("never lets an orphaned Zugang (no Kontakt) grant access", async () => {
+    seedStandorte();
+    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true }];
+    tableData.dv_portalzugaenge = [{ id: "pz-verwaist", kontakt_id: null, standort_id: "s1" }];
+
+    expect(await getPortalAccess("test@example.com")).toBeNull();
   });
 
   // QA BUG-1 (PROJ-13): Bexio-Dubletten — dieselbe E-Mail bei mehreren Kontakten.
-  describe("several Kontakte sharing one e-mail address", () => {
-    it("grants access when both duplicates are released, deduplicating a shared Firma", async () => {
-      tableData.dv_kontakte = [
-        { id: "k2", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
-        { id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
-      ];
-      tableData.dv_relationen = [
-        { kontakt_id: "k1", firma_id: "f1" },
-        { kontakt_id: "k2", firma_id: "f1" },
-      ];
-
-      const access = await getPortalAccess("test@example.com");
-
-      expect(access).toEqual({ contactId: "k1", firmaIds: ["f1"] });
-    });
-
-    it("combines the Firmen of all released duplicates", async () => {
-      tableData.dv_kontakte = [
-        { id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
-        { id: "k2", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
-      ];
-      tableData.dv_relationen = [
-        { kontakt_id: "k1", firma_id: "f1" },
-        { kontakt_id: "k2", firma_id: "f2" },
-      ];
-
-      const access = await getPortalAccess("test@example.com");
-
-      expect(access?.firmaIds.sort()).toEqual(["f1", "f2"]);
-    });
-
-    it("ignores the Firmen of a duplicate that is not released", async () => {
-      tableData.dv_kontakte = [
-        { id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true },
-        { id: "k2", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: false },
-      ];
-      tableData.dv_relationen = [
-        { kontakt_id: "k1", firma_id: "f1" },
-        { kontakt_id: "k2", firma_id: "f2" },
-      ];
-
-      const access = await getPortalAccess("test@example.com");
-
-      expect(access).toEqual({ contactId: "k1", firmaIds: ["f1"] });
-    });
-  });
-
-  it("returns null for an active Kontakt with no linked Firma", async () => {
-    tableData.dv_kontakte = [{ id: "k1", email: "test@example.com", ist_aktiv: true, ist_portal_freigegeben: true }];
-    tableData.dv_relationen = [];
+  it("combines the Zugänge of all active Kontakte sharing one e-mail address", async () => {
+    seedStandorte();
+    tableData.dv_kontakte = [
+      { id: "k2", email: "test@example.com", ist_aktiv: true },
+      { id: "k1", email: "test@example.com", ist_aktiv: true },
+    ];
+    tableData.dv_portalzugaenge = [
+      { id: "pz1", kontakt_id: "k1", standort_id: "s1" },
+      { id: "pz2", kontakt_id: "k2", standort_id: "s3" },
+    ];
 
     const access = await getPortalAccess("test@example.com");
 
-    expect(access).toBeNull();
+    expect(access?.contactId).toBe("k1");
+    expect(access?.firmaIds.sort()).toEqual(["f1", "f2"]);
+    expect(access?.standortIds).toEqual(["s1", "s3"]);
   });
 });
 

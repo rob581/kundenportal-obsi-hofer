@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getFirmenNamen } from "@/lib/auth/access";
-import { getCurrentFirmaId } from "@/lib/auth/current-firma";
+import { getCurrentFirmaScope } from "@/lib/auth/current-firma";
 import { getDashboardKennzahlen } from "@/lib/dashboard/queries";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
 import { AppHeader } from "@/components/app-header";
@@ -50,14 +50,15 @@ function StatusKachel({
 }
 
 export default async function DashboardPage() {
-  const currentFirmaId = await getCurrentFirmaId();
+  const scope = await getCurrentFirmaScope();
+  const currentFirmaId = scope.firmaId;
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
 
   let kennzahlen: Awaited<ReturnType<typeof getDashboardKennzahlen>> | null = null;
   let loadError: string | null = null;
   try {
-    kennzahlen = await getDashboardKennzahlen(currentFirmaId);
+    kennzahlen = await getDashboardKennzahlen(scope);
   } catch (error) {
     console.error("getDashboardKennzahlen fehlgeschlagen:", error);
     loadError = "Die Kennzahlen konnten nicht geladen werden.";

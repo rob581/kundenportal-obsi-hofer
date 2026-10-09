@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getFirmenNamen } from "@/lib/auth/access";
-import { getCurrentFirmaId } from "@/lib/auth/current-firma";
+import { getCurrentFirmaScope } from "@/lib/auth/current-firma";
 import { getGeraeteList } from "@/lib/geraete/queries";
 import { formatArtikelInfo } from "@/lib/geraete/artikel-info";
 import { resolveZusatzspalten } from "@/lib/geraete/zusatzspalten";
@@ -38,7 +38,8 @@ export default async function UebersichtPage({
 }: {
   searchParams: Promise<{ status?: string; suche?: string; seite?: string; zuPruefen?: string }>;
 }) {
-  const currentFirmaId = await getCurrentFirmaId();
+  const scope = await getCurrentFirmaScope();
+  const currentFirmaId = scope.firmaId;
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
 
@@ -62,7 +63,7 @@ export default async function UebersichtPage({
   let result: Awaited<ReturnType<typeof getGeraeteList>> | null = null;
   let loadError: string | null = null;
   try {
-    result = await getGeraeteList(currentFirmaId, {
+    result = await getGeraeteList(scope, {
       status: params.status,
       suche: params.suche,
       seite,

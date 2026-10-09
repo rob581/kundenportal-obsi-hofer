@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getStandortIdsFuerFirma, getArtikelMapFuerIds } from "@/lib/geraete/queries";
 import { formatArtikelInfo } from "@/lib/geraete/artikel-info";
 import type { Pruefbericht, PruefberichteFirmaQuery, PruefberichteFirmaResult, PruefberichtMitGeraet } from "./types";
+import type { FirmaScope } from "@/lib/auth/current-firma";
 
 const PAGE_SIZE = 25;
 
@@ -69,10 +70,10 @@ function zeitraumCutoff(zeitraum?: string): string | null {
 // Grössenordnung (im Schnitt ~65 Prüfberichte pro Firma laut
 // PROJ-1-Datenfund) unproblematisch.
 async function fetchAllePruefberichteFuerFirma(
-  firmaId: string,
+  scope: FirmaScope,
   zeitraum?: string
 ): Promise<PruefberichtFirmaRow[]> {
-  const standortIds = await getStandortIdsFuerFirma(firmaId);
+  const standortIds = await getStandortIdsFuerFirma(scope);
   if (standortIds.length === 0) return [];
 
   const supabase = getSupabaseAdmin();
@@ -176,11 +177,11 @@ async function anreichernMitGeraetLabel(rows: PruefberichtFirmaRow[]): Promise<P
 // Die Geräte-/Artikel-Anreicherung für die "Gerät"-Spalte erfolgt erst NACH
 // der Paginierung, nur für die tatsächlich angezeigte Seite (max. 25 Zeilen).
 export async function getPruefberichteFuerFirma(
-  firmaId: string,
+  scope: FirmaScope,
   query: PruefberichteFirmaQuery
 ): Promise<PruefberichteFirmaResult> {
   const page = Math.max(1, query.seite ?? 1);
-  const alle = await fetchAllePruefberichteFuerFirma(firmaId, query.zeitraum);
+  const alle = await fetchAllePruefberichteFuerFirma(scope, query.zeitraum);
 
   const total = alle.length;
   const start = (page - 1) * PAGE_SIZE;
@@ -198,9 +199,9 @@ export async function getPruefberichteFuerFirma(
 // URL, ohne die Validierung von pruefberichte/page.tsx zu durchlaufen —
 // zeitraumCutoff() fängt ungültige Werte selbst ab (siehe PROJ-9 BUG-1).
 export async function getPruefberichteExportRows(
-  firmaId: string,
+  scope: FirmaScope,
   filters: { zeitraum?: string }
 ): Promise<PruefberichtMitGeraet[]> {
-  const alle = await fetchAllePruefberichteFuerFirma(firmaId, filters.zeitraum);
+  const alle = await fetchAllePruefberichteFuerFirma(scope, filters.zeitraum);
   return anreichernMitGeraetLabel(alle);
 }

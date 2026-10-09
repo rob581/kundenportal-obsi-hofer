@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserEmail } from "@/lib/auth/session";
 import { getPortalAccess } from "@/lib/auth/access";
-import { getCurrentFirmaId } from "@/lib/auth/current-firma";
+import { getCurrentFirmaScope } from "@/lib/auth/current-firma";
 import { getPruefberichteExportRows } from "@/lib/pruefberichte/queries";
 import { buildPruefberichteExportCsv } from "@/lib/pruefberichte/export-csv";
 import { logExportEvent } from "@/lib/export-log/log-export";
@@ -17,13 +17,14 @@ export async function GET(request: Request) {
   const access = await getPortalAccess(email);
   if (!access) redirect("/kein-zugang");
 
-  const firmaId = await getCurrentFirmaId();
+  const scope = await getCurrentFirmaScope();
+  const firmaId = scope.firmaId;
 
   const { searchParams } = new URL(request.url);
   const zeitraum = searchParams.get("zeitraum") ?? undefined;
 
   try {
-    const items = await getPruefberichteExportRows(firmaId, { zeitraum });
+    const items = await getPruefberichteExportRows(scope, { zeitraum });
     const csv = buildPruefberichteExportCsv(items);
     const datum = new Date().toISOString().slice(0, 10);
 

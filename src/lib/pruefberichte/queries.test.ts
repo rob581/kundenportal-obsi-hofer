@@ -130,6 +130,9 @@ describe("getPruefberichteFuerGeraet", () => {
 });
 
 const STANDORT_A = "st-a";
+// PROJ-15: Firma + freigegebene Standorte (siehe geraete/queries.test.ts).
+const F1 = { firmaId: "f1", standortIds: [STANDORT_A] };
+const F_UNKNOWN = { firmaId: "f-unknown", standortIds: [] as string[] };
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -153,7 +156,7 @@ describe("getPruefberichteFuerFirma", () => {
   it("returns an empty result for a Firma with no Standorte", async () => {
     tableData.dv_standorte = [];
 
-    const result = await getPruefberichteFuerFirma("f-unknown", {});
+    const result = await getPruefberichteFuerFirma(F_UNKNOWN, {});
 
     expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 25 });
   });
@@ -162,7 +165,7 @@ describe("getPruefberichteFuerFirma", () => {
     tableData.dv_standorte = [{ id: STANDORT_A, name: "Hauptlager", firma_id: "f1" }];
     tableData.dv_geraete = [];
 
-    const result = await getPruefberichteFuerFirma("f1", {});
+    const result = await getPruefberichteFuerFirma(F1, {});
 
     expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 25 });
   });
@@ -174,7 +177,7 @@ describe("getPruefberichteFuerFirma", () => {
       { id: "pb-fremd", geraet_id: "g-fremd", pruefdatum: daysAgo(5), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const result = await getPruefberichteFuerFirma("f1", {});
+    const result = await getPruefberichteFuerFirma(F1, {});
 
     expect(result.items.map((i) => i.id)).toEqual(["pb1"]);
   });
@@ -186,7 +189,7 @@ describe("getPruefberichteFuerFirma", () => {
       { id: "pb2", geraet_id: "g1", pruefdatum: daysAgo(2), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: "2026-01-01T00:00:00Z" },
     ];
 
-    const result = await getPruefberichteFuerFirma("f1", {});
+    const result = await getPruefberichteFuerFirma(F1, {});
 
     expect(result.items.map((i) => i.id)).toEqual(["pb1"]);
   });
@@ -199,7 +202,7 @@ describe("getPruefberichteFuerFirma", () => {
       { id: "neu", geraet_id: "g2", pruefdatum: daysAgo(1), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const result = await getPruefberichteFuerFirma("f1", {});
+    const result = await getPruefberichteFuerFirma(F1, {});
 
     expect(result.items.map((i) => i.id)).toEqual(["neu", "alt", "kein-datum"]);
   });
@@ -211,7 +214,7 @@ describe("getPruefberichteFuerFirma", () => {
       { id: "alt", geraet_id: "g1", pruefdatum: daysAgo(400), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const result = await getPruefberichteFuerFirma("f1", { zeitraum: "30" });
+    const result = await getPruefberichteFuerFirma(F1, { zeitraum: "30" });
 
     expect(result.items.map((i) => i.id)).toEqual(["aktuell"]);
   });
@@ -223,7 +226,7 @@ describe("getPruefberichteFuerFirma", () => {
       { id: "alt", geraet_id: "g1", pruefdatum: daysAgo(400), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const result = await getPruefberichteFuerFirma("f1", { zeitraum: "alle" });
+    const result = await getPruefberichteFuerFirma(F1, { zeitraum: "alle" });
 
     expect(result.items.map((i) => i.id).sort()).toEqual(["alt", "aktuell"].sort());
   });
@@ -240,11 +243,11 @@ describe("getPruefberichteFuerFirma", () => {
       deleted_at: null,
     }));
 
-    const page1 = await getPruefberichteFuerFirma("f1", { seite: 1 });
+    const page1 = await getPruefberichteFuerFirma(F1, { seite: 1 });
     expect(page1.items.length).toBe(25);
     expect(page1.total).toBe(30);
 
-    const page2 = await getPruefberichteFuerFirma("f1", { seite: 2 });
+    const page2 = await getPruefberichteFuerFirma(F1, { seite: 2 });
     expect(page2.items.length).toBe(5);
   });
 
@@ -255,7 +258,7 @@ describe("getPruefberichteFuerFirma", () => {
       { id: "pb2", geraet_id: "g2", pruefdatum: daysAgo(2), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const result = await getPruefberichteFuerFirma("f1", {});
+    const result = await getPruefberichteFuerFirma(F1, {});
 
     expect(result.items.find((i) => i.id === "pb1")?.geraetLabel).toBe("Feuerlöscher 6kg ABC");
     expect(result.items.find((i) => i.id === "pb2")?.geraetLabel).toBe("Rauchmelder Typ X");
@@ -279,7 +282,7 @@ describe("getPruefberichteFuerFirma", () => {
       },
     ];
 
-    const result = await getPruefberichteFuerFirma("f1", {});
+    const result = await getPruefberichteFuerFirma(F1, {});
 
     expect(result.items[0]).toMatchObject({ bemerkungen: "Alles ok", pruefer: "M. Keller" });
   });
@@ -290,7 +293,7 @@ describe("getPruefberichteFuerFirma", () => {
       { id: "pb1", geraet_id: "g1", pruefdatum: daysAgo(400), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const result = await getPruefberichteFuerFirma("f1", { zeitraum: "nicht-numerisch" as never });
+    const result = await getPruefberichteFuerFirma(F1, { zeitraum: "nicht-numerisch" as never });
 
     expect(result.items.map((i) => i.id)).toEqual(["pb1"]);
   });
@@ -300,7 +303,7 @@ describe("getPruefberichteExportRows", () => {
   it("returns an empty array for a Firma with no Standorte", async () => {
     tableData.dv_standorte = [];
 
-    const items = await getPruefberichteExportRows("f-unknown", {});
+    const items = await getPruefberichteExportRows(F_UNKNOWN, {});
 
     expect(items).toEqual([]);
   });
@@ -317,7 +320,7 @@ describe("getPruefberichteExportRows", () => {
       deleted_at: null,
     }));
 
-    const items = await getPruefberichteExportRows("f1", {});
+    const items = await getPruefberichteExportRows(F1, {});
 
     expect(items.length).toBe(30);
   });
@@ -329,7 +332,7 @@ describe("getPruefberichteExportRows", () => {
       { id: "pb-fremd", geraet_id: "g-fremd", pruefdatum: daysAgo(1), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const items = await getPruefberichteExportRows("f1", {});
+    const items = await getPruefberichteExportRows(F1, {});
 
     expect(items.map((i) => i.id)).toEqual(["pb1"]);
   });
@@ -341,7 +344,7 @@ describe("getPruefberichteExportRows", () => {
       { id: "alt", geraet_id: "g1", pruefdatum: daysAgo(400), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const items = await getPruefberichteExportRows("f1", { zeitraum: "30" });
+    const items = await getPruefberichteExportRows(F1, { zeitraum: "30" });
 
     expect(items.map((i) => i.id)).toEqual(["aktuell"]);
   });
@@ -352,7 +355,7 @@ describe("getPruefberichteExportRows", () => {
       { id: "pb1", geraet_id: "g1", pruefdatum: daysAgo(400), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
     ];
 
-    const items = await getPruefberichteExportRows("f1", { zeitraum: "irgendwas-ungueltiges" });
+    const items = await getPruefberichteExportRows(F1, { zeitraum: "irgendwas-ungueltiges" });
 
     expect(items.map((i) => i.id)).toEqual(["pb1"]);
   });
@@ -375,10 +378,30 @@ describe("getPruefberichteExportRows", () => {
       deleted_at: null,
     }));
 
-    const items = await getPruefberichteExportRows("f1", {});
+    const items = await getPruefberichteExportRows(F1, {});
 
     expect(items.length).toBe(250);
     expect(items.find((i) => i.geraetId === "g0")?.geraetLabel).toBe("Gerät 0");
     expect(items.find((i) => i.geraetId === "g249")?.geraetLabel).toBe("Gerät 249");
+  });
+});
+
+// PROJ-15: Prüfberichte nur von Geräten an Standorten mit Zugang.
+describe("Standort-Einschränkung (PROJ-15)", () => {
+  it("lists and exports only Prüfberichte of Geräte at Standorte with Zugang", async () => {
+    seedFirmaMitGeraeten();
+    tableData.dv_standorte = [...tableData.dv_standorte, { id: "st-a2", name: "Nebenlager", firma_id: "f1" }];
+    tableData.dv_geraete = [...tableData.dv_geraete, { id: "g-a2", name: "Gerät Nebenlager", artikel_id: null, standort_id: "st-a2" }];
+    tableData.dv_pruefberichte = [
+      { id: "pb-a", geraet_id: "g1", pruefdatum: daysAgo(5), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
+      { id: "pb-a2", geraet_id: "g-a2", pruefdatum: daysAgo(5), ergebnis: "Freigabe", bemerkungen: null, pruefer: null, deleted_at: null },
+    ];
+    const NUR_A = { firmaId: "f1", standortIds: [STANDORT_A] };
+
+    const liste = await getPruefberichteFuerFirma(NUR_A, {});
+    const export_ = await getPruefberichteExportRows(NUR_A, {});
+
+    expect(liste.items.map((p) => p.id)).toEqual(["pb-a"]);
+    expect(export_.map((p) => p.id)).toEqual(["pb-a"]);
   });
 });

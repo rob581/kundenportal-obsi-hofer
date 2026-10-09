@@ -111,7 +111,8 @@ async function syncOneEntity(job: SyncJob, scope?: EntityScope): Promise<EntityS
   const existingIdSet = new Set(existingIds);
   const fetchedIds = new Set(mappedRecords.map((r) => r.id));
   const missingIds = computeMissingIds(existingIds, fetchedIds);
-  const skippedDueToThreshold = exceedsSafetyThreshold(existingIds.length, missingIds.length);
+  const skippedDueToThreshold =
+    !config.ignoreDeleteThreshold && exceedsSafetyThreshold(existingIds.length, missingIds.length);
 
   let added = 0;
   let updated = 0;
@@ -216,6 +217,25 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
     recordError("standorte", error);
   }
 
+  // PROJ-15: Portalzugänge der Standorte dieser Firma. Ihre Kontakte werden
+  // unten zusätzlich zu den Relationen-Kontakten synchronisiert, damit sich
+  // ein Kontakt mit Zugang auch ohne Relation zur Firma anmelden kann.
+  let zugangKontaktIds: string[] = [];
+  try {
+    const outcome = await syncOneEntity(findJob("portalzugaenge"), {
+      kind: "idSet",
+      dataverseIdColumn: "_bmvcc_standort_value",
+      ids: standortIds,
+      supabaseWhereIn: { column: "standort_id", values: standortIds },
+    });
+    record(outcome);
+    zugangKontaktIds = outcome.mappedRecords
+      .map((r) => r.kontakt_id)
+      .filter((v): v is string => typeof v === "string");
+  } catch (error) {
+    recordError("portalzugaenge", error);
+  }
+
   let geraetIds: string[] = [];
   try {
     const outcome = await syncOneEntity(findJob("geraete"), {
@@ -250,13 +270,15 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
       supabaseWhereIn: { column: "firma_id", values: [firmaId] },
     });
     record(outcome);
-    kontaktIds = [
-      ...new Set(outcome.mappedRecords.map((r) => r.kontakt_id).filter((v): v is string => typeof v === "string")),
-    ];
+    kontaktIds = outcome.mappedRecords
+      .map((r) => r.kontakt_id)
+      .filter((v): v is string => typeof v === "string");
   } catch (error) {
     recordError("relationen", error);
   }
 
+  // Kontakte aus Relationen UND Portalzugängen (PROJ-15), ohne Doppelte.
+  kontaktIds = [...new Set([...kontaktIds, ...zugangKontaktIds])];
   try {
     const outcome = await syncOneEntity(findJob("kontakte"), {
       kind: "idSet",

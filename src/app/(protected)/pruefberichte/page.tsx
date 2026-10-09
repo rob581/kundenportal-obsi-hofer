@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { getFirmenNamen } from "@/lib/auth/access";
-import { getCurrentFirmaId } from "@/lib/auth/current-firma";
+import { getCurrentFirmaScope } from "@/lib/auth/current-firma";
 import { getPruefberichteFuerFirma } from "@/lib/pruefberichte/queries";
 import type { Zeitraum } from "@/lib/pruefberichte/types";
 import { getStatusBadgeVariant } from "@/lib/status-badge";
@@ -38,7 +38,8 @@ export default async function PruefberichtePage({
 }: {
   searchParams: Promise<{ zeitraum?: string; seite?: string }>;
 }) {
-  const currentFirmaId = await getCurrentFirmaId();
+  const scope = await getCurrentFirmaScope();
+  const currentFirmaId = scope.firmaId;
   const firmen = await getFirmenNamen([currentFirmaId]);
   const firma = firmen[0];
 
@@ -51,7 +52,7 @@ export default async function PruefberichtePage({
   let result: Awaited<ReturnType<typeof getPruefberichteFuerFirma>> | null = null;
   let loadError: string | null = null;
   try {
-    result = await getPruefberichteFuerFirma(currentFirmaId, { zeitraum, seite });
+    result = await getPruefberichteFuerFirma(scope, { zeitraum, seite });
   } catch {
     loadError = "Die Prüfberichte konnten nicht geladen werden.";
   }

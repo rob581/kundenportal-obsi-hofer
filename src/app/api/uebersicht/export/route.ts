@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserEmail } from "@/lib/auth/session";
 import { getPortalAccess } from "@/lib/auth/access";
-import { getCurrentFirmaId } from "@/lib/auth/current-firma";
+import { getCurrentFirmaScope } from "@/lib/auth/current-firma";
 import { getGeraeteExportRows } from "@/lib/geraete/queries";
 import { resolveZusatzspalten } from "@/lib/geraete/zusatzspalten";
 import { getFirmaEinstellungen } from "@/lib/firma-einstellungen/queries";
@@ -20,7 +20,8 @@ export async function GET(request: Request) {
   const access = await getPortalAccess(email);
   if (!access) redirect("/kein-zugang");
 
-  const firmaId = await getCurrentFirmaId();
+  const scope = await getCurrentFirmaScope();
+  const firmaId = scope.firmaId;
 
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") ?? undefined;
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
   const sucheKundenId = zusatzspalten.some((spalte) => spalte.key === "kundenId");
 
   try {
-    const items = await getGeraeteExportRows(firmaId, { status, suche, zuPruefen, sucheKundenId });
+    const items = await getGeraeteExportRows(scope, { status, suche, zuPruefen, sucheKundenId });
     const csv = buildGeraeteExportCsv(items, zusatzspalten);
     const datum = new Date().toISOString().slice(0, 10);
 

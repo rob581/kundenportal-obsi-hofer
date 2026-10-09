@@ -7,10 +7,10 @@
 -- Block kopieren und ausführen.
 
 -- ============================================================
--- 1) Login-Quote: welcher Anteil der Kunden (= Firmen mit mindestens einem
---    aktiven, fürs Kundenportal freigegebenen Kontakt, PROJ-13) hat sich
---    mindestens einmal eingeloggt? Gleiche Regel wie die Funktion
---    erfolgsmessung_login_status() (Migration 0012).
+-- 1) Login-Quote: welcher Anteil der Kunden (= Firmen, für deren Standorte
+--    mindestens ein aktiver Kontakt einen Portalzugang hat, PROJ-15) hat
+--    sich mindestens einmal eingeloggt? Gleiche Regel wie die Funktion
+--    erfolgsmessung_login_status() (Migration 0013).
 -- ============================================================
 
 -- 1a) Pro Firma (zum Nachschauen, wer noch fehlt):
@@ -19,8 +19,9 @@ select
   f.name as firma_name,
   bool_or(u.last_sign_in_at is not null) as hat_login
 from dv_firmen f
-join dv_relationen r on r.firma_id = f.id
-join dv_kontakte k on k.id = r.kontakt_id and k.ist_aktiv = true and k.ist_portal_freigegeben = true
+join dv_standorte s on s.firma_id = f.id
+join dv_portalzugaenge pz on pz.standort_id = s.id
+join dv_kontakte k on k.id = pz.kontakt_id and k.ist_aktiv = true
 left join auth.users u on lower(u.email) = lower(k.email)
 group by f.id, f.name
 order by hat_login, f.name;
@@ -31,8 +32,9 @@ with pro_firma as (
     f.id as firma_id,
     bool_or(u.last_sign_in_at is not null) as hat_login
   from dv_firmen f
-  join dv_relationen r on r.firma_id = f.id
-  join dv_kontakte k on k.id = r.kontakt_id and k.ist_aktiv = true and k.ist_portal_freigegeben = true
+  join dv_standorte s on s.firma_id = f.id
+  join dv_portalzugaenge pz on pz.standort_id = s.id
+  join dv_kontakte k on k.id = pz.kontakt_id and k.ist_aktiv = true
   left join auth.users u on lower(u.email) = lower(k.email)
   group by f.id
 )

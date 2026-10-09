@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getZuPruefenCutoff } from "./zu-pruefen";
 import type { Geraet, GeraeteQuery, GeraeteResult } from "./types";
+import type { FirmaScope } from "@/lib/auth/current-firma";
 
 const PAGE_SIZE = 25;
 
@@ -129,11 +130,18 @@ export async function getArtikelMapFuerIds(artikelIds: string[]): Promise<Map<st
   );
 }
 
-export async function getStandorteFuerFirma(firmaId: string) {
+// PROJ-15: die einzige Stelle, an der Datenabfragen "die Standorte der
+// Firma" ermitteln — liefert nur Standorte, die zur Firma gehören UND für
+// die der Kunde einen Portalzugang hat. Übersicht, Exporte, Prüfberichte und
+// Dashboard bauen alle darauf auf.
+export async function getStandorteFuerFirma(scope: FirmaScope) {
+  if (scope.standortIds.length === 0) return [];
+
   const { data, error } = await getSupabaseAdmin()
     .from("dv_standorte")
     .select("id, name")
-    .eq("firma_id", firmaId);
+    .eq("firma_id", scope.firmaId)
+    .in("id", scope.standortIds);
 
   if (error) throw new Error(`Standorte-Lookup fehlgeschlagen: ${error.message}`);
   return (data ?? []) as { id: string; name: string | null }[];
@@ -141,8 +149,8 @@ export async function getStandorteFuerFirma(firmaId: string) {
 
 // Shared with src/lib/dashboard/queries.ts (see PROJ-5 Tech Design: reuse
 // this resolution instead of duplicating it) — just the IDs, no names.
-export async function getStandortIdsFuerFirma(firmaId: string): Promise<string[]> {
-  const standorte = await getStandorteFuerFirma(firmaId);
+export async function getStandortIdsFuerFirma(scope: FirmaScope): Promise<string[]> {
+  const standorte = await getStandorteFuerFirma(scope);
   return standorte.map((s) => s.id);
 }
 
@@ -175,8 +183,8 @@ function applyGeraeteFilters<T extends { ilike: (...args: any[]) => T; or: (...a
 // have no real foreign keys since PROJ-1's BUG-1 fix, so PostgREST can't
 // embed the join — we resolve the Firma's Standort-IDs first, then query
 // Geräte against that ID list.
-export async function getGeraeteList(firmaId: string, query: GeraeteQuery): Promise<GeraeteResult> {
-  const standorte = await getStandorteFuerFirma(firmaId);
+export async function getGeraeteList(scope: FirmaScope, query: GeraeteQuery): Promise<GeraeteResult> {
+  const standorte = await getStandorteFuerFirma(scope);
   const standortIds = standorte.map((s) => s.id);
   const standortNamen = new Map(standorte.map((s) => [s.id, s.name]));
 
@@ -237,11 +245,12 @@ export async function getGeraeteList(firmaId: string, query: GeraeteQuery): Prom
   return { items, total: count ?? items.length, page, pageSize: PAGE_SIZE, statusOptions };
 }
 
-// firmaId comes from the caller's own session/cookie (never from the URL),
-// so an id that resolves to a device outside that Firma is treated exactly
-// like an unknown id (null) — this is the actual access check, since RLS on
-// dv_geraete denies everyone but the service role.
-export async function getGeraetById(id: string, firmaId: string): Promise<Geraet | null> {
+// The scope comes from the caller's own session/cookie (never from the URL),
+// so an id that resolves to a device outside that Firma — or, since PROJ-15,
+// at a Standort without Portalzugang — is treated exactly like an unknown id
+// (null). This is the actual access check, since RLS on dv_geraete denies
+// everyone but the service role.
+export async function getGeraetById(id: string, scope: FirmaScope): Promise<Geraet | null> {
   const supabase = getSupabaseAdmin();
 
   const { data: geraet, error } = await supabase
@@ -256,7 +265,7 @@ export async function getGeraetById(id: string, firmaId: string): Promise<Geraet
   if (!geraet) return null;
 
   const row = geraet as GeraetRow;
-  if (!row.standort_id) return null;
+  if (!row.standort_id || !scope.standortIds.includes(row.standort_id)) return null;
 
   const { data: standort, error: standortError } = await supabase
     .from("dv_standorte")
@@ -265,7 +274,7 @@ export async function getGeraetById(id: string, firmaId: string): Promise<Geraet
     .maybeSingle();
 
   if (standortError) throw new Error(`Standort-Lookup fehlgeschlagen: ${standortError.message}`);
-  if (!standort || standort.firma_id !== firmaId) return null;
+  if (!standort || standort.firma_id !== scope.firmaId) return null;
 
   let artikel: ArtikelInfo | null = null;
   if (row.artikel_id) {
@@ -288,10 +297,10 @@ export async function getGeraetById(id: string, firmaId: string): Promise<Geraet
 // Firma→Standort-Auflösung und dieselbe Filterlogik wie getGeraeteList
 // (siehe applyGeraeteFilters), damit Übersicht und Export nie auseinanderlaufen.
 export async function getGeraeteExportRows(
-  firmaId: string,
+  scope: FirmaScope,
   filters: Pick<GeraeteQuery, "status" | "suche" | "zuPruefen" | "sucheKundenId">
 ): Promise<Geraet[]> {
-  const standorte = await getStandorteFuerFirma(firmaId);
+  const standorte = await getStandorteFuerFirma(scope);
   const standortIds = standorte.map((s) => s.id);
   const standortNamen = new Map(standorte.map((s) => [s.id, s.name]));
 

@@ -5,6 +5,15 @@ import { getPortalAccess } from "@/lib/auth/access";
 
 const SELECTED_FIRMA_COOKIE = "obsi_selected_firma";
 
+// PROJ-15: Firma plus die Standorte, für die der Kunde einen Portalzugang
+// hat. Jede Datenabfrage (Übersicht, Detail, Prüfberichte, Dashboard,
+// Exporte) bekommt diesen Bereich statt nur der Firma-ID und zeigt nur
+// Standorte, die sowohl zur Firma gehören als auch freigegeben sind.
+export type FirmaScope = {
+  firmaId: string;
+  standortIds: string[];
+};
+
 // Shared by every page under (protected) that shows firma-scoped data
 // (Geräte-Übersicht, device detail, ...). Centralized so the "does the
 // visitor actually have an active Firma selected" check can't be forgotten
@@ -25,4 +34,12 @@ export async function getCurrentFirmaId(): Promise<string> {
     redirect("/firmen-auswahl");
   }
   return selected;
+}
+
+export async function getCurrentFirmaScope(): Promise<FirmaScope> {
+  const firmaId = await getCurrentFirmaId();
+  // getPortalAccess ist per Request gecacht — kein zweiter DB-Lookup.
+  const email = await getCurrentUserEmail();
+  const access = email ? await getPortalAccess(email) : null;
+  return { firmaId, standortIds: access?.standortIds ?? [] };
 }

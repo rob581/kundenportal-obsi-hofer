@@ -90,6 +90,12 @@ beforeEach(() => {
 const STANDORT_A = "st-a";
 const STANDORT_B = "st-b";
 
+// PROJ-15: Datenabfragen bekommen Firma + freigegebene Standorte. Realistisch
+// enthält die Liste die Zugänge über alle Firmen des Kunden (hier auch B von
+// f2) — die Firma-Prüfung muss fremde Standorte trotzdem aussortieren.
+const F1 = { firmaId: "f1", standortIds: [STANDORT_A, STANDORT_B] };
+const F_UNKNOWN = { firmaId: "f-unknown", standortIds: [] as string[] };
+
 function daysAgo(n: number): string {
   const d = new Date();
   d.setDate(d.getDate() - n);
@@ -178,7 +184,7 @@ describe("getGeraeteList", () => {
   it("returns only devices whose Standort belongs to the requested Firma", async () => {
     seedZweiFirmen();
 
-    const result = await getGeraeteList("f1", {});
+    const result = await getGeraeteList(F1, {});
 
     expect(result.items.map((g) => g.id).sort()).toEqual(["g1", "g2", "g3"]);
     expect(result.total).toBe(3);
@@ -187,7 +193,7 @@ describe("getGeraeteList", () => {
   it("returns an empty result for a Firma with no Standorte", async () => {
     seedZweiFirmen();
 
-    const result = await getGeraeteList("f-unknown", {});
+    const result = await getGeraeteList(F_UNKNOWN, {});
 
     expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 25, statusOptions: [] });
   });
@@ -195,7 +201,7 @@ describe("getGeraeteList", () => {
   it("deduplicates status options case-insensitively across the whole Firma", async () => {
     seedZweiFirmen();
 
-    const result = await getGeraeteList("f1", {});
+    const result = await getGeraeteList(F1, {});
 
     expect(result.statusOptions.map((s) => s.toLowerCase())).toEqual(
       ["freigabe", "keine freigabe", "letzte freigabe"].sort()
@@ -206,7 +212,7 @@ describe("getGeraeteList", () => {
   it("filters by status case-insensitively", async () => {
     seedZweiFirmen();
 
-    const result = await getGeraeteList("f1", { status: "freigabe" });
+    const result = await getGeraeteList(F1, { status: "freigabe" });
 
     expect(result.items.map((g) => g.id)).toEqual(["g1"]);
   });
@@ -214,37 +220,37 @@ describe("getGeraeteList", () => {
   it("filters by search term across Seriennummer, Barcode and Lagerort", async () => {
     seedZweiFirmen();
 
-    const bySeriennummer = await getGeraeteList("f1", { suche: "RM-1187" });
+    const bySeriennummer = await getGeraeteList(F1, { suche: "RM-1187" });
     expect(bySeriennummer.items.map((g) => g.id)).toEqual(["g2"]);
 
-    const byBarcode = await getGeraeteList("f1", { suche: "4012345000041" });
+    const byBarcode = await getGeraeteList(F1, { suche: "4012345000041" });
     expect(byBarcode.items.map((g) => g.id)).toEqual(["g1"]);
 
-    const byLagerort = await getGeraeteList("f1", { suche: "Flur EG" });
+    const byLagerort = await getGeraeteList(F1, { suche: "Flur EG" });
     expect(byLagerort.items.map((g) => g.id)).toEqual(["g2"]);
   });
 
   it("no longer matches on Gerätename (AC: Suche ersetzt durch Seriennummer/Barcode/Lagerort)", async () => {
     seedZweiFirmen();
 
-    const byName = await getGeraeteList("f1", { suche: "Absturzsicherung" });
+    const byName = await getGeraeteList(F1, { suche: "Absturzsicherung" });
     expect(byName.items).toEqual([]);
   });
 
   it("only searches KundenID when sucheKundenId is set (Zusatzspalte muss aktiv sein, PROJ-7)", async () => {
     seedZweiFirmen();
 
-    const ohneFlag = await getGeraeteList("f1", { suche: "KD-2026-001" });
+    const ohneFlag = await getGeraeteList(F1, { suche: "KD-2026-001" });
     expect(ohneFlag.items).toEqual([]);
 
-    const mitFlag = await getGeraeteList("f1", { suche: "KD-2026-001", sucheKundenId: true });
+    const mitFlag = await getGeraeteList(F1, { suche: "KD-2026-001", sucheKundenId: true });
     expect(mitFlag.items.map((g) => g.id)).toEqual(["g1"]);
   });
 
   it("sorts by letzte_pruefung descending with never-inspected devices first", async () => {
     seedZweiFirmen();
 
-    const result = await getGeraeteList("f1", {});
+    const result = await getGeraeteList(F1, {});
 
     expect(result.items.map((g) => g.id)).toEqual(["g3", "g1", "g2"]);
   });
@@ -254,11 +260,11 @@ describe("getGeraeteList", () => {
 
     // g2's Lagerort matches the search term, but its Status doesn't match
     // "Freigabe" — only a device matching BOTH may be returned.
-    const result = await getGeraeteList("f1", { status: "Freigabe", suche: "Flur EG" });
+    const result = await getGeraeteList(F1, { status: "Freigabe", suche: "Flur EG" });
 
     expect(result.items).toEqual([]);
 
-    const matchesBoth = await getGeraeteList("f1", { status: "Freigabe", suche: "4012345000041" });
+    const matchesBoth = await getGeraeteList(F1, { status: "Freigabe", suche: "4012345000041" });
     expect(matchesBoth.items.map((g) => g.id)).toEqual(["g1"]);
   });
 
@@ -282,13 +288,13 @@ describe("getGeraeteList", () => {
       kunden_id: null,
     }));
 
-    const page1 = await getGeraeteList("f1", { seite: 1 });
+    const page1 = await getGeraeteList(F1, { seite: 1 });
     expect(page1.items.length).toBe(25);
     expect(page1.total).toBe(30);
     expect(page1.pageSize).toBe(25);
     expect(page1.page).toBe(1);
 
-    const page2 = await getGeraeteList("f1", { seite: 2 });
+    const page2 = await getGeraeteList(F1, { seite: 2 });
     expect(page2.items.length).toBe(5);
     expect(page2.total).toBe(30);
 
@@ -299,7 +305,7 @@ describe("getGeraeteList", () => {
   it("populates Artikel fields in the list too (Gerät-Spalte zeigt Artikel-Info, PROJ-3-Refinement)", async () => {
     seedZweiFirmen();
 
-    const result = await getGeraeteList("f1", {});
+    const result = await getGeraeteList(F1, {});
     const g1 = result.items.find((g) => g.id === "g1");
     const g2 = result.items.find((g) => g.id === "g2");
 
@@ -313,7 +319,7 @@ describe("getGeraeteList", () => {
   it("maps kunden_id to kundenId (PROJ-7 Zusatzspalte)", async () => {
     seedZweiFirmen();
 
-    const result = await getGeraeteList("f1", {});
+    const result = await getGeraeteList(F1, {});
 
     expect(result.items.find((g) => g.id === "g1")?.kundenId).toBe("KD-2026-001");
     expect(result.items.find((g) => g.id === "g2")?.kundenId).toBeNull();
@@ -375,7 +381,7 @@ describe("getGeraeteList", () => {
       },
     ];
 
-    const result = await getGeraeteList("f1", { zuPruefen: true });
+    const result = await getGeraeteList(F1, { zuPruefen: true });
 
     expect(result.items.map((g) => g.id).sort()).toEqual(["never", "overdue"]);
   });
@@ -385,7 +391,7 @@ describe("getGeraetById", () => {
   it("returns full details including Artikel for a device owned by the Firma", async () => {
     seedZweiFirmen();
 
-    const geraet = await getGeraetById("g1", "f1");
+    const geraet = await getGeraetById("g1", F1);
 
     expect(geraet).toMatchObject({
       id: "g1",
@@ -399,7 +405,7 @@ describe("getGeraetById", () => {
   it("returns null for a device belonging to a different Firma (no data leak via id guessing)", async () => {
     seedZweiFirmen();
 
-    const geraet = await getGeraetById("g4", "f1");
+    const geraet = await getGeraetById("g4", F1);
 
     expect(geraet).toBeNull();
   });
@@ -407,7 +413,7 @@ describe("getGeraetById", () => {
   it("returns null for an unknown id", async () => {
     seedZweiFirmen();
 
-    const geraet = await getGeraetById("does-not-exist", "f1");
+    const geraet = await getGeraetById("does-not-exist", F1);
 
     expect(geraet).toBeNull();
   });
@@ -433,7 +439,7 @@ describe("getGeraetById", () => {
       },
     ];
 
-    const geraet = await getGeraetById("g5", "f1");
+    const geraet = await getGeraetById("g5", F1);
 
     expect(geraet).toBeNull();
   });
@@ -444,7 +450,7 @@ describe("getGeraeteExportRows", () => {
     tableData.dv_standorte = [];
     tableData.dv_geraete = [];
 
-    const items = await getGeraeteExportRows("f-unknown", {});
+    const items = await getGeraeteExportRows(F_UNKNOWN, {});
 
     expect(items).toEqual([]);
   });
@@ -469,7 +475,7 @@ describe("getGeraeteExportRows", () => {
       kunden_id: null,
     }));
 
-    const items = await getGeraeteExportRows("f1", {});
+    const items = await getGeraeteExportRows(F1, {});
 
     expect(items.length).toBe(30);
   });
@@ -477,13 +483,13 @@ describe("getGeraeteExportRows", () => {
   it("applies the same status/suche/zuPruefen filters as getGeraeteList", async () => {
     seedZweiFirmen();
 
-    const byStatus = await getGeraeteExportRows("f1", { status: "freigabe" });
+    const byStatus = await getGeraeteExportRows(F1, { status: "freigabe" });
     expect(byStatus.map((g) => g.id)).toEqual(["g1"]);
 
-    const bySuche = await getGeraeteExportRows("f1", { suche: "RM-1187" });
+    const bySuche = await getGeraeteExportRows(F1, { suche: "RM-1187" });
     expect(bySuche.map((g) => g.id)).toEqual(["g2"]);
 
-    const byKundenId = await getGeraeteExportRows("f1", { suche: "KD-2026-001", sucheKundenId: true });
+    const byKundenId = await getGeraeteExportRows(F1, { suche: "KD-2026-001", sucheKundenId: true });
     expect(byKundenId.map((g) => g.id)).toEqual(["g1"]);
   });
 
@@ -515,10 +521,66 @@ describe("getGeraeteExportRows", () => {
       dimension: null,
     }));
 
-    const items = await getGeraeteExportRows("f1", {});
+    const items = await getGeraeteExportRows(F1, {});
 
     expect(items.length).toBe(250);
     expect(items.find((g) => g.id === "g0")?.artikelBezeichnung).toBe("Artikel 0");
     expect(items.find((g) => g.id === "g249")?.artikelBezeichnung).toBe("Artikel 249");
+  });
+});
+
+// PROJ-15: Portal-Zugang pro Standort — innerhalb derselben Firma sieht ein
+// Kunde nur die Standorte, für die er einen Zugang hat.
+describe("Standort-Einschränkung (PROJ-15)", () => {
+  const STANDORT_A2 = "st-a2";
+  const NUR_A = { firmaId: "f1", standortIds: [STANDORT_A] };
+
+  function seedFirmaMitZweiStandorten() {
+    seedZweiFirmen();
+    tableData.dv_standorte = [
+      ...tableData.dv_standorte,
+      { id: STANDORT_A2, name: "Lager Winterthur", firma_id: "f1" },
+    ];
+    const vorlage = tableData.dv_geraete.find((g) => g.id === "g1")!;
+    tableData.dv_geraete = [
+      ...tableData.dv_geraete,
+      { ...vorlage, id: "g-a2", name: "Gerät Winterthur", seriennummer: "WI-0001", standort_id: STANDORT_A2 },
+    ];
+  }
+
+  it("lists only Geräte of Standorte with Zugang, not other Standorte of the same Firma", async () => {
+    seedFirmaMitZweiStandorten();
+
+    const nurA = await getGeraeteList(NUR_A, {});
+    const beide = await getGeraeteList({ firmaId: "f1", standortIds: [STANDORT_A, STANDORT_A2] }, {});
+
+    expect(nurA.items.some((g) => g.id === "g-a2")).toBe(false);
+    expect(nurA.items.length).toBeGreaterThan(0);
+    expect(beide.items.some((g) => g.id === "g-a2")).toBe(true);
+  });
+
+  it("exports only Geräte of Standorte with Zugang", async () => {
+    seedFirmaMitZweiStandorten();
+
+    const items = await getGeraeteExportRows(NUR_A, {});
+
+    expect(items.some((g) => g.id === "g-a2")).toBe(false);
+    expect(items.length).toBeGreaterThan(0);
+  });
+
+  it("treats a device at a Standort without Zugang like an unknown device on the detail page", async () => {
+    seedFirmaMitZweiStandorten();
+
+    expect(await getGeraetById("g-a2", NUR_A)).toBeNull();
+    expect(await getGeraetById("g1", NUR_A)).not.toBeNull();
+  });
+
+  it("shows nothing when the scope has no Standorte at all", async () => {
+    seedFirmaMitZweiStandorten();
+
+    const result = await getGeraeteList({ firmaId: "f1", standortIds: [] }, {});
+
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
   });
 });

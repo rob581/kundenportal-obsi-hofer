@@ -46,6 +46,9 @@ beforeEach(() => {
 });
 
 const STANDORT_A = "st-a";
+// PROJ-15: Firma + freigegebene Standorte (siehe geraete/queries.test.ts).
+const F1 = { firmaId: "f1", standortIds: [STANDORT_A] };
+const F_UNKNOWN = { firmaId: "f-unknown", standortIds: [] as string[] };
 
 function daysAgo(n: number): string {
   const d = new Date();
@@ -65,7 +68,7 @@ describe("getDashboardKennzahlen", () => {
     tableData.dv_geraete = [];
     tableData.dv_pruefberichte = [];
 
-    const result = await getDashboardKennzahlen("f-unknown");
+    const result = await getDashboardKennzahlen(F_UNKNOWN);
 
     expect(result).toEqual({
       totalGeraete: 0,
@@ -82,7 +85,7 @@ describe("getDashboardKennzahlen", () => {
   it("returns all-zero Kennzahlen for a Firma with Standorte but no Geräte", async () => {
     seedFirma([]);
 
-    const result = await getDashboardKennzahlen("f1");
+    const result = await getDashboardKennzahlen(F1);
 
     expect(result.totalGeraete).toBe(0);
     expect(result.letztePruefung).toBeNull();
@@ -98,7 +101,7 @@ describe("getDashboardKennzahlen", () => {
       { id: "g6", standort_id: STANDORT_A, status: null, letzte_pruefung: null },
     ]);
 
-    const result = await getDashboardKennzahlen("f1");
+    const result = await getDashboardKennzahlen(F1);
 
     expect(result.totalGeraete).toBe(6);
     expect(result.statusFreigabe).toBe(2);
@@ -114,7 +117,7 @@ describe("getDashboardKennzahlen", () => {
       { id: "g3", standort_id: STANDORT_A, status: "Freigabe", letzte_pruefung: null },
     ]);
 
-    const result = await getDashboardKennzahlen("f1");
+    const result = await getDashboardKennzahlen(F1);
 
     expect(result.letztePruefung).toBe("2026-08-12");
   });
@@ -125,7 +128,7 @@ describe("getDashboardKennzahlen", () => {
       { id: "g2", standort_id: STANDORT_A, status: "keine Freigabe", letzte_pruefung: null },
     ]);
 
-    const result = await getDashboardKennzahlen("f1");
+    const result = await getDashboardKennzahlen(F1);
 
     expect(result.letztePruefung).toBeNull();
   });
@@ -145,7 +148,7 @@ describe("getDashboardKennzahlen", () => {
       ]
     );
 
-    const result = await getDashboardKennzahlen("f1");
+    const result = await getDashboardKennzahlen(F1);
 
     expect(result.totalPruefberichte).toBe(3);
   });
@@ -164,7 +167,7 @@ describe("getDashboardKennzahlen", () => {
 
     seedFirma(geraete, pruefberichte);
 
-    const result = await getDashboardKennzahlen("f1");
+    const result = await getDashboardKennzahlen(F1);
 
     expect(result.totalGeraete).toBe(250);
     expect(result.totalPruefberichte).toBe(250);
@@ -177,7 +180,7 @@ describe("getDashboardKennzahlen", () => {
       { id: "never", standort_id: STANDORT_A, status: "Freigabe", letzte_pruefung: null },
     ]);
 
-    const result = await getDashboardKennzahlen("f1");
+    const result = await getDashboardKennzahlen(F1);
 
     expect(result.zuPruefen).toBe(2);
   });
@@ -187,8 +190,28 @@ describe("getDashboardKennzahlen", () => {
       { id: "boundary", standort_id: STANDORT_A, status: "Freigabe", letzte_pruefung: daysAgo(360) },
     ]);
 
-    const result = await getDashboardKennzahlen("f1");
+    const result = await getDashboardKennzahlen(F1);
 
     expect(result.zuPruefen).toBe(0);
+  });
+});
+
+// PROJ-15: Dashboard-Zahlen nur über Standorte mit Zugang.
+describe("Standort-Einschränkung (PROJ-15)", () => {
+  it("counts only Geräte at Standorte with Zugang", async () => {
+    tableData.dv_standorte = [
+      { id: STANDORT_A, firma_id: "f1" },
+      { id: "st-a2", firma_id: "f1" },
+    ];
+    tableData.dv_geraete = [
+      { id: "g1", status: "Freigabe", letzte_pruefung: daysAgo(10), standort_id: STANDORT_A },
+      { id: "g2", status: "Freigabe", letzte_pruefung: daysAgo(10), standort_id: "st-a2" },
+      { id: "g3", status: "keine Freigabe", letzte_pruefung: daysAgo(10), standort_id: "st-a2" },
+    ];
+    tableData.dv_pruefberichte = [];
+
+    const result = await getDashboardKennzahlen({ firmaId: "f1", standortIds: [STANDORT_A] });
+
+    expect(result.totalGeraete).toBe(1);
   });
 });

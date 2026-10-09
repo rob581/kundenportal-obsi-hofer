@@ -1,6 +1,6 @@
 # PROJ-15: Portal-Zugang pro Standort
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-10-09
 **Last Updated:** 2026-10-09
 
@@ -181,6 +181,38 @@ Befüllt und bereinigt ausschliesslich durch den Firma-Sync. Gelesen nur servers
 - Eine neue Datenbank-Migration (Tabelle Portalzugänge + Login-Quoten-Funktion)
 - Dataverse-Lesezugriff auf `bmvcc_portalzugang`: bereits geprüft (2026-10-09)
 - Nachgelagert (eigener kleiner Schritt nach dem Deploy): Spalte „Für Kundenportal freigegeben“ aus der Kontakt-Tabelle entfernen
+
+## Implementation Notes (Backend)
+
+Umgesetzt wie im Tech Design. Kein Frontend-Anteil.
+
+**Datenbank**
+- `supabase/migrations/0013_portalzugaenge.sql`: neue Tabelle `dv_portalzugaenge` (`id`, `kontakt_id` nullable, `standort_id`, `synced_at`), Indizes auf beide Verweise, RLS ohne Policies (nur Service-Role). Ersetzt im selben Schritt `erfolgsmessung_login_status()`: Basis = Firmen über Standorte mit Zugang eines aktiven Kontakts. Execute-Rechte erneut nur `service_role`
+- `supabase/queries/erfolgsmessung.sql`: beide Login-Quoten-Abfragen mit derselben Regel
+
+**Sync**
+- `src/lib/sync/jobs.ts`: neuer Job `portalzugaenge` (`bmvcc_portalzugangs`: ID, Kontakt-, Standort-Verweis). Kontakte-Job fragt `bmvcc_kundenportal` nicht mehr ab
+- `src/lib/sync/entities.ts`: Schema für Zugänge (`kontakt_id` darf leer sein), Kontakt-Schema ohne `ist_portal_freigegeben`; neues Flag `ignoreDeleteThreshold`, für Zugänge gesetzt
+- `src/lib/sync/run-sync.ts`: Zugänge direkt nach den Standorten über deren IDs; die 20-%-Schwelle gilt nicht, wenn `ignoreDeleteThreshold` gesetzt ist; Kontakte-Schritt lädt Kontakte aus Relationen und Zugängen (ohne Doppelte). Scheitert der Standorte-Schritt, ist die ID-Liste leer und es wird kein Zugang gelöscht
+- Die Portal-Spalte `dv_kontakte.ist_portal_freigegeben` bleibt vorerst bestehen (wird nicht mehr geschrieben oder gelesen); Entfernen als späterer Aufräumschritt
+
+**Zugriff**
+- `src/lib/auth/access.ts`: `getPortalAccess()` = aktive Kontakte der E-Mail (Dubletten vereinigt) → deren Zugänge → nur Standorte, die im Portal existieren und einer Firma gehören → Firmen dieser Standorte. Liefert zusätzlich `standortIds`. Relationen und Häkchen werden nicht mehr gelesen. Verwaiste Zugänge (ohne Kontakt) können nie treffen
+- `src/lib/auth/current-firma.ts`: neuer Typ `FirmaScope` (Firma + freigegebene Standorte) und `getCurrentFirmaScope()`
+
+**Datenabfragen**
+- `getStandorteFuerFirma(scope)` in `src/lib/geraete/queries.ts` ist die einzige Stelle für „Standorte der Firma“ und liefert nur noch Standorte der Firma **und** mit Zugang. Darauf bauen `getGeraeteList`, `getGeraeteExportRows`, Prüfberichte-Liste und -Export (`src/lib/pruefberichte/queries.ts`) und `getDashboardKennzahlen` auf; alle nehmen jetzt einen `FirmaScope` statt einer Firma-ID
+- `getGeraetById(id, scope)`: Gerät muss an einem Standort mit Zugang **und** in der Firma liegen, sonst `null` → Detailseite 404 (wie fremde Firma)
+- Aufrufer umgestellt: Übersicht, Detailseite, Prüfberichte, Dashboard, beide Export-Routen (`getCurrentFirmaScope()`); Firmenname, Einstellungen und Export-Zählung nutzen weiter die Firma-ID
+
+**Tests**
+- `access.test.ts` neu für die Zugangsregel (11 Fälle: Firmen/Standorte aus Zugängen, nur Teil-Standorte, zwei Firmen, letzter Zugang entzogen, Relation allein reicht nicht, Häkchen wird ignoriert, inaktiv, firmenloser/unbekannter Standort, verwaister Zugang, Dubletten)
+- `jobs.test.ts`: Häkchen wird nicht mehr abgefragt; Mapping der Zugänge inkl. verwaistem Datensatz
+- Neue Standort-Einschränkungs-Tests in `geraete/queries.test.ts` (Liste, Export, Detailseite, leerer Bereich), `pruefberichte/queries.test.ts` (Liste + Export), `dashboard/queries.test.ts`; bestehende Tests auf `FirmaScope` umgestellt, Export-Routen-Tests erwarten den Bereich
+- `vitest.config.ts`: `.claude/worktrees/**` ausgeschlossen. **Korrektur früherer Zahlen:** `npm test` lief bisher auch über 22 Testdateien einer alten Arbeitskopie unter `.claude/worktrees/` (Branch `claude/datenschutz-datenzugriff-5de83e`, Stand 25.09.). Die in PROJ-11/12/13 genannten Gesamtzahlen (z. B. „380/380“) enthielten diese Kopie; die Projekt-eigene Suite umfasst 25 Testdateien
+- `npm test` 212/212 (25 Dateien), Lint, `tsc --noEmit` und Build grün
+
+**Noch nicht ausgeführt:** Migration 0013 in Supabase. Code nur lokal committet; erst **nach** der Migration auf `main` pushen (sonst scheitern Sync und Zugriffsprüfung an der fehlenden Tabelle).
 
 ## QA Test Results
 _To be added by /qa_

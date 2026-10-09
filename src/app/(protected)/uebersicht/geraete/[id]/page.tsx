@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getFirmenNamen } from "@/lib/auth/access";
-import { getCurrentFirmaId } from "@/lib/auth/current-firma";
+import { getCurrentFirmaScope } from "@/lib/auth/current-firma";
 import { getGeraetById } from "@/lib/geraete/queries";
 import { formatArtikelInfo } from "@/lib/geraete/artikel-info";
 import { getFirmaEinstellungen } from "@/lib/firma-einstellungen/queries";
@@ -39,8 +39,9 @@ export default async function GeraetDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const currentFirmaId = await getCurrentFirmaId();
-  const geraet = await getGeraetById(id, currentFirmaId);
+  const scope = await getCurrentFirmaScope();
+  const currentFirmaId = scope.firmaId;
+  const geraet = await getGeraetById(id, scope);
 
   if (!geraet) {
     notFound();

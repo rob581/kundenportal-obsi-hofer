@@ -9,7 +9,11 @@ const logExportEventMock = vi.fn();
 
 vi.mock("@/lib/auth/session", () => ({ getCurrentUserEmail: () => getCurrentUserEmailMock() }));
 vi.mock("@/lib/auth/access", () => ({ getPortalAccess: (email: string) => getPortalAccessMock(email) }));
-vi.mock("@/lib/auth/current-firma", () => ({ getCurrentFirmaId: () => getCurrentFirmaIdMock() }));
+// PROJ-15: Routen holen Firma + freigegebene Standorte über getCurrentFirmaScope.
+vi.mock("@/lib/auth/current-firma", () => ({
+  getCurrentFirmaId: () => getCurrentFirmaIdMock(),
+  getCurrentFirmaScope: async () => ({ firmaId: await getCurrentFirmaIdMock(), standortIds: ["st-a"] }),
+}));
 vi.mock("@/lib/geraete/queries", () => ({
   getGeraeteExportRows: (firmaId: string, filters: unknown) => getGeraeteExportRowsMock(firmaId, filters),
 }));
@@ -99,7 +103,7 @@ describe("GET /api/uebersicht/export", () => {
 
     await GET(makeRequest("?status=Freigabe&suche=Test&zuPruefen=1"));
 
-    expect(getGeraeteExportRowsMock).toHaveBeenCalledWith("f1", {
+    expect(getGeraeteExportRowsMock).toHaveBeenCalledWith({ firmaId: "f1", standortIds: ["st-a"] }, {
       status: "Freigabe",
       suche: "Test",
       zuPruefen: true,
@@ -130,7 +134,7 @@ describe("GET /api/uebersicht/export", () => {
     const res = await GET(makeRequest());
 
     expect(res.status).toBe(200);
-    expect(getGeraeteExportRowsMock).toHaveBeenCalledWith("f1", {
+    expect(getGeraeteExportRowsMock).toHaveBeenCalledWith({ firmaId: "f1", standortIds: ["st-a"] }, {
       status: undefined,
       suche: undefined,
       zuPruefen: false,

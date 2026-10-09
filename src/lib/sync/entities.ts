@@ -31,7 +31,6 @@ const kontaktSchema = z.object({
   telefon: z.string().nullable().optional(),
   mobil: z.string().nullable().optional(),
   ist_aktiv: z.boolean(),
-  ist_portal_freigegeben: z.boolean(),
 });
 
 const artikelSchema = z.object({
@@ -87,10 +86,24 @@ const relationSchema = z.object({
   rolle: z.string().nullable().optional(),
 });
 
+// PROJ-15: kontakt_id darf leer sein (verwaiste Datensätze in Dataverse) —
+// solche Zeilen geben nie Zugang. standort_id ist immer gesetzt, weil der
+// Sync die Zugänge über die Standort-IDs der Firma abruft.
+const portalzugangSchema = z.object({
+  id: z.string().min(1),
+  kontakt_id: z.string().min(1).nullable(),
+  standort_id: z.string().min(1),
+});
+
 export type EntityConfig = {
   table: string;
   schema: z.ZodType<{ id: string }>;
   softDelete: boolean;
+  // PROJ-15: true = Löschungen nie wegen der 20-%-Schwelle überspringen.
+  // Für Zugänge ist ein verpasster Entzug das grössere Risiko als ein
+  // Entzug zu viel; bei wenigen Zugängen pro Firma läge schon ein einzelner
+  // Entzug über der Schwelle.
+  ignoreDeleteThreshold?: boolean;
 };
 
 export const ENTITIES: Record<string, EntityConfig> = {
@@ -105,6 +118,12 @@ export const ENTITIES: Record<string, EntityConfig> = {
     softDelete: true,
   },
   relationen: { table: "dv_relationen", schema: relationSchema, softDelete: false },
+  portalzugaenge: {
+    table: "dv_portalzugaenge",
+    schema: portalzugangSchema,
+    softDelete: false,
+    ignoreDeleteThreshold: true,
+  },
 };
 
 export function getEntityConfig(slug: string): EntityConfig | undefined {

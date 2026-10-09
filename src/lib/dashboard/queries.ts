@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getStandortIdsFuerFirma } from "@/lib/geraete/queries";
 import { getZuPruefenCutoff } from "@/lib/geraete/zu-pruefen";
 import type { DashboardKennzahlen } from "./types";
+import type { FirmaScope } from "@/lib/auth/current-firma";
 
 function normalizeStatus(status: string | null): string | null {
   if (!status) return null;
@@ -40,8 +41,8 @@ const EMPTY_KENNZAHLEN: DashboardKennzahlen = {
 // aggregation (id/status/letzte_pruefung), then reduced in one pass;
 // Prüfberichte use a count-only query (head: true), never loading actual
 // report rows, per the spec's performance requirement.
-export async function getDashboardKennzahlen(firmaId: string): Promise<DashboardKennzahlen> {
-  const standortIds = await getStandortIdsFuerFirma(firmaId);
+export async function getDashboardKennzahlen(scope: FirmaScope): Promise<DashboardKennzahlen> {
+  const standortIds = await getStandortIdsFuerFirma(scope);
   if (standortIds.length === 0) return EMPTY_KENNZAHLEN;
 
   const supabase = getSupabaseAdmin();

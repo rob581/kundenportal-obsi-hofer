@@ -78,7 +78,6 @@ export const SYNC_JOBS: SyncJob[] = [
       "bmvcc_phone_fixed",
       "mobile_phone",
       "statecode",
-      "bmvcc_kundenportal",
     ],
     map: (r) => ({
       id: r.bmvcc_kontaktid as string,
@@ -88,9 +87,9 @@ export const SYNC_JOBS: SyncJob[] = [
       telefon: r.bmvcc_phone_fixed ?? null,
       mobil: r.mobile_phone ?? null,
       ist_aktiv: r.statecode === 0,
-      // PROJ-13: Häkchen "Kundenportal" aus obsi-hofer-admin. Meist leer
-      // (null) statt false — nur ein explizites true gilt als Freigabe.
-      ist_portal_freigegeben: r.bmvcc_kundenportal === true,
+      // PROJ-15: Das Häkchen bmvcc_kundenportal (PROJ-13) wird bewusst nicht
+      // mehr abgefragt — Zugang kommt aus den Portalzugängen. Würde es weiter
+      // abgefragt, bräche der Sync, sobald das Admin-Tool das Feld löscht.
     }),
   },
   {
@@ -171,6 +170,18 @@ export const SYNC_JOBS: SyncJob[] = [
       // Undelete: if a previously soft-deleted Pruefbericht is present
       // again in this full pull, it is active in Dataverse again.
       deleted_at: null,
+    }),
+  },
+  {
+    // PROJ-15: Portalzugang pro Standort (Tabelle aus obsi-hofer-admin).
+    // Ein Datensatz = Kontakt hat Zugang zu Standort; Entzug = gelöscht.
+    slug: "portalzugaenge",
+    entitySet: "bmvcc_portalzugangs",
+    select: ["bmvcc_portalzugangid", "_bmvcc_kontakt_value", "_bmvcc_standort_value"],
+    map: (r) => ({
+      id: r.bmvcc_portalzugangid as string,
+      kontakt_id: r._bmvcc_kontakt_value ?? null,
+      standort_id: r._bmvcc_standort_value ?? null,
     }),
   },
   {
