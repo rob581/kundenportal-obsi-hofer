@@ -1,6 +1,6 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-17
 **Last Updated:** 2026-10-09 (Refinement: Spalte „Bemerkung Prüfung“)
 
@@ -355,3 +355,9 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 - **Production URL:** https://obsi-hoferkundenportal.vercel.app
 - **Deployed:** 2026-09-18
 - **Verifiziert:** `/uebersicht`, Status-Filter (`Freigabe`, `keine Freigabe`, `letzte Freigabe`) und mehrere Geräte-Detailseiten (`/uebersicht/geraete/[id]`) live auf Production aufgerufen — alle 200, Artikel-Info/Lagerort/Suche wie erwartet dargestellt.
+
+**Nachtrag 2026-10-09 — Spalte „Bemerkung Prüfung“:**
+- **Deployed:** 2026-10-09 (automatisch via Vercel bei Push auf `main`, letzter Code-Commit `9a31bba`)
+- **Migration:** keine
+- **Verifiziert:** `npm test` 228/228, `npm run test:e2e` 38/38, Lint, `tsc --noEmit`, Build grün; Smoke-Test `/login` → 200, `/uebersicht` ohne Sitzung → 307. **Live durch den Nutzer:** neue Spalte inkl. Kürzung und Tooltip, „Bemerkungen Gerät“ in Zusatzspalte und Detailseite, CSV-Export mit ungekürzter Spalte nach „Letzte Prüfung“
+- **Tag:** `v1.12.0-PROJ-3`
