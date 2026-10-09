@@ -82,7 +82,7 @@
 - Rückmeldung an das Admin-Tool nach dem Deploy, damit es `bmvcc_kundenportal` als Übergangsfeld behandeln kann
 
 ## Open Questions
-- [ ] Gilt dasselbe Schwellen-Problem auch für andere Daten kleiner Firmen (z. B. Firma mit 3 Standorten, einer wird gelöscht = 33 % -> Löschung übersprungen)? Bestehendes Verhalten seit PROJ-1, nicht Teil von PROJ-15. Bei Bedarf separat prüfen
+- [x] Gilt dasselbe Schwellen-Problem auch für andere Daten kleiner Firmen (z. B. Firma mit 3 Standorten, einer wird gelöscht = 33 % -> Löschung übersprungen)? Bestehendes Verhalten seit PROJ-1, nicht Teil von PROJ-15. Bei Bedarf separat prüfen → Ja; gelöst in PROJ-16 durch eine Mindestmenge (Schwelle greift erst ab mehr als 10 vorher bekannten Einträgen, für alle Läufe) (2026-10-09)
 - [ ] Ab wann darf das Admin-Tool das Häkchen `bmvcc_kundenportal` abbauen? Vorschlag: nach dem Deploy von PROJ-15 und einer Woche Betrieb. Rückmeldung an das Admin-Tool beim `/deploy`
 
 ## Decision Log
