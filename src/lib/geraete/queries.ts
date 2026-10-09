@@ -218,6 +218,15 @@ function toStandortOptions(standorte: { id: string; name: string | null }[]): St
     .sort((a, b) => a.name.localeCompare(b.name, "de"));
 }
 
+// PROJ-3 QA BUG-1 (Nachtrag 2): Die Status-Optionen hängen vom gewählten
+// Standort ab. Ein aktiver Status-Filter, der dort nicht vorkommt, bleibt
+// trotzdem in der Auswahl — sonst sähe das Feld leer aus, obwohl weiter
+// danach gefiltert wird.
+function mitAktivemStatus(options: string[], aktiv: string | undefined): string[] {
+  if (!aktiv || options.some((o) => normalizeStatus(o) === normalizeStatus(aktiv))) return options;
+  return [...options, aktiv];
+}
+
 function filterStandort<T extends { id: string }>(standorte: T[], standortId: string | undefined): T[] {
   return standortId ? standorte.filter((s) => s.id === standortId) : standorte;
 }
@@ -266,7 +275,7 @@ export async function getGeraeteList(scope: FirmaScope, query: GeraeteQuery): Pr
   const page = Math.max(1, query.seite ?? 1);
 
   if (standortIds.length === 0) {
-    return { items: [], total: 0, page, pageSize: PAGE_SIZE, statusOptions: [], standortOptions };
+    return { items: [], total: 0, page, pageSize: PAGE_SIZE, statusOptions: mitAktivemStatus([], query.status), standortOptions };
   }
 
   const supabase = getSupabaseAdmin();
@@ -280,7 +289,10 @@ export async function getGeraeteList(scope: FirmaScope, query: GeraeteQuery): Pr
     .in("standort_id", standortIds);
 
   if (statusError) throw new Error(`Status-Lookup fehlgeschlagen: ${statusError.message}`);
-  const statusOptions = dedupeStatusOptions((statusRows ?? []).map((r) => r.status as string | null));
+  const statusOptions = mitAktivemStatus(
+    dedupeStatusOptions((statusRows ?? []).map((r) => r.status as string | null)),
+    query.status
+  );
 
   let geraeteQuery = supabase
     .from("dv_geraete")

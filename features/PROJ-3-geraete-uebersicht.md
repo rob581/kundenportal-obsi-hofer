@@ -425,6 +425,7 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 - **Tatsächlich:** Die Status-Optionen werden aus dem gewählten Standort gebildet; der aktive Wert steht dort nicht mehr zur Auswahl, das Status-Feld zeigt dann keinen Wert, die Liste ist aber weiter danach gefiltert („Keine Ergebnisse“)
 - **Workaround:** Status auf „Alle Status“ zurücksetzen
 - **Priority:** Nice to have (z. B. aktiven Status immer in der Auswahl behalten)
+- **Status:** ✅ Behoben (2026-10-09): `mitAktivemStatus()` in `src/lib/geraete/queries.ts` behält einen aktiven Status-Filter immer in den Status-Optionen (ohne Duplikat, Gross-/Kleinschreibung egal); +2 Tests, Gegenprobe schlägt ohne Fix fehl; `npm test` 253/253, Lint, `tsc --noEmit`, Build grün
 
 ### Automatisierte Tests
 - `npm test`: 251/251 grün
@@ -432,7 +433,7 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 
 ### Summary
 - **Acceptance Criteria (Nachtrag 2):** 7/7 erfüllt
-- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low)
+- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low), **behoben**
 - **Security:** keine Findings
 - **Production Ready:** **JA**, Status Approved. Live-Prüfung der Darstellung beim Deploy
 

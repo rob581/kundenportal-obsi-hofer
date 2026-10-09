@@ -746,5 +746,25 @@ describe("Standort-Filter (PROJ-3 Nachtrag 2)", () => {
 
     expect(result.standortOptions.find((o) => o.id === STANDORT_A2)?.name).toBe("(ohne Namen)");
   });
+
+  // QA BUG-1 (Nachtrag 2): aktiver Status bleibt in der Auswahl.
+  it("keeps an active status filter in the options even if the chosen Standort has no such status", async () => {
+    seed();
+    tableData.dv_geraete = tableData.dv_geraete.map((g) => (g.id === "g-a2" ? { ...g, status: "Freigabe" } : g));
+
+    const result = await getGeraeteList(BEIDE, { standortId: STANDORT_A2, status: "keine Freigabe" });
+
+    expect(result.items).toEqual([]);
+    expect(result.statusOptions).toContain("keine Freigabe");
+    expect(result.statusOptions).toContain("Freigabe");
+  });
+
+  it("does not duplicate the active status when it is already an option (case-insensitive)", async () => {
+    seed();
+
+    const result = await getGeraeteList(BEIDE, { status: "freigabe" });
+
+    expect(result.statusOptions.filter((o) => o.toLowerCase() === "freigabe")).toHaveLength(1);
+  });
 });
 
