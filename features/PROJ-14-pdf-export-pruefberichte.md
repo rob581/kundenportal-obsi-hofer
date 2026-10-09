@@ -9,6 +9,7 @@
 - Requires: PROJ-7 (Kundenspezifische Spalten): Die Zusatzspalten der Firma erscheinen auch im PDF
 - Requires: PROJ-1 (Dataverse-Sync-Service): Der Sync muss zusätzlich das Feld „Erstgebrauch“ der Geräte übertragen
 - Requires: PROJ-11 (Erfolgsmessung): Der PDF-Export wird als eigene Export-Art gezählt
+- Requires: PROJ-15 (Portal-Zugang pro Standort, geplant 2026-10-09): Das PDF darf nur Geräte der Standorte enthalten, für die der Kunde einen Zugang hat (gleiche Einschränkung wie Übersicht und CSV-Export)
 - Vorbild: PROJ-8 (CSV-Export der Geräte-Übersicht): gleicher Ablauf (Knopf auf der Übersicht, Filter werden übernommen, Fehler inline)
 - **Cross-Repo-Vorlage:** `obsi-hofer-admin` PROJ-7 („PDF-Export Prüfberichte“). Layout, Spaltenlogik und Farben werden von dort übernommen. Ideen-Notiz: `obsi-hofer-admin/docs/kundenportal-pdf-export-idee.md` (2026-10-07)
 
