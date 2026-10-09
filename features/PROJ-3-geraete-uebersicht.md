@@ -1,6 +1,6 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-17
 **Last Updated:** 2026-10-09 (Refinements: Spalte „Bemerkung Prüfung“; Standort-Filter und -Spalte)
 
@@ -385,6 +385,54 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 ### Summary
 - **Acceptance Criteria (Nachtrag):** 7/7 erfüllt
 - **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low), **behoben**
+- **Security:** keine Findings
+- **Production Ready:** **JA**, Status Approved. Live-Prüfung der Darstellung beim Deploy
+
+## QA Test Results — Nachtrag 2: Standort-Filter und Spalte (2026-10-09)
+
+**Tested:** 2026-10-09
+**Tester:** QA Engineer (AI)
+**Testmethode:** Code-Review, Unit- und E2E-Suiten, rein lesende Prüfung mit dem echten Zugang des Testkontakts (Cloudcab GmbH, 2 Standorte). Kein Browser-Test der eingeloggten Übersicht (nur mit Login erreichbar) — Live-Prüfung beim Deploy.
+
+### Datenprüfung (rein lesend, echter Zugang)
+- Auswahl: „bmvtest3“, „Testbmvcc1407“ (alphabetisch, ohne Gross-/Kleinschreibung)
+- Gesamt 9 Geräte; pro Standort Liste = Export (8 bzw. 1), Summe = Gesamt; alle Exportzeilen tragen den gewählten Standort
+- Fremde Standort-ID in der Abfrage → 0 Geräte
+
+### Acceptance Criteria Status (Nachtrag 2)
+- [x] Mehr als ein Standort → Filter „Alle Standorte“ + Spalte vor „Lagerort“: Code-Review `uebersicht/page.tsx`, echte Optionen (2)
+- [x] Genau ein Standort → weder Filter noch Spalte: Code-Review (`standortOptions.length > 1`)
+- [x] Gewählter Standort, UND mit übrigen Filtern, Seite zurück auf 1: Unit-Tests; Filterleiste löscht `seite` bei jeder Änderung; Seitennavigation übernimmt alle Parameter inkl. `standort`
+- [x] Auswahl = freigegebene Standorte der Firma, alphabetisch, „(ohne Namen)“: Unit-Tests + echte Daten
+- [x] CSV-Export mit Standort-Filter: Unit-Test, Routen-Test, echter Export (Liste = Export)
+- [x] Manipulierte Adresse (kein Zugang / andere Firma) → keine Geräte: Unit-Tests, echte Daten (0); Gegenprobe ohne Einschränkung schlägt fehl
+- [x] Firmenwechsel setzt den Filter zurück: Firmen-Auswahl leitet ohne Parameter auf `/dashboard` weiter (Code-Review)
+
+### Edge Cases Status
+- [x] Freigegebener Standort ohne Geräte: erscheint in der Auswahl, ergibt die „Keine Ergebnisse“-Meldung (Leermeldung berücksichtigt den Filter)
+- [x] Zugang zum gewählten Standort entzogen: Wert wird beim nächsten Aufruf nicht mehr angewendet (keine Geräte) und nicht mehr angeboten
+
+### Security Audit
+- [x] Standort-Parameter wird serverseitig nur gegen die freigegebenen Standorte angewendet (Liste und Export); keine Datenfreigabe über die Adresse
+- [x] Keine neue Eingabe ausser einem Auswahlwert; React-Escaping für Standortnamen
+
+### Bugs Found
+
+#### BUG-1: Status-Auswahl kann leer aussehen, obwohl ein Status-Filter aktiv ist
+- **Severity:** Low
+- **Steps to Reproduce:** Status „letzte Freigabe“ wählen (kommt nur an Standort A vor) → danach Standort B wählen
+- **Erwartet:** erkennbar bleibt, dass der Status-Filter weiter aktiv ist
+- **Tatsächlich:** Die Status-Optionen werden aus dem gewählten Standort gebildet; der aktive Wert steht dort nicht mehr zur Auswahl, das Status-Feld zeigt dann keinen Wert, die Liste ist aber weiter danach gefiltert („Keine Ergebnisse“)
+- **Workaround:** Status auf „Alle Status“ zurücksetzen
+- **Priority:** Nice to have (z. B. aktiven Status immer in der Auswahl behalten)
+
+### Automatisierte Tests
+- `npm test`: 251/251 grün
+- `npm run test:e2e`: 38/38 grün (Portal auf Port 3100)
+
+### Summary
+- **Acceptance Criteria (Nachtrag 2):** 7/7 erfüllt
+- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low)
 - **Security:** keine Findings
 - **Production Ready:** **JA**, Status Approved. Live-Prüfung der Darstellung beim Deploy
 
