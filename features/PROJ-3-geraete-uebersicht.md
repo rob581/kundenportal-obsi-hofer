@@ -1,6 +1,6 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-09-17
 **Last Updated:** 2026-10-09 (Refinement: Spalte „Bemerkung Prüfung“)
 
@@ -298,6 +298,57 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 - [x] Alle 61 Vitest-Tests grün (18 davon in `geraete/queries.test.ts` + `artikel-info.test.ts`), alle 14 Playwright-Tests grün (inkl. der 2 PROJ-3-spezifischen Routen-Schutz-Tests) — keine Regressionen durch die nachträglichen Änderungen
 
 **Ergebnis:** Status bleibt **Approved**. Keine neuen Bugs gefunden; BUG-1 von oben (Tabellen-Trunkierung) weiterhin offen und unverändert Low-Priority.
+
+## QA Test Results — Nachtrag: Spalte „Bemerkung Prüfung“ (2026-10-09)
+
+**Tested:** 2026-10-09
+**Tester:** QA Engineer (AI)
+**Testmethode:** Code-Review, Unit- und E2E-Suiten, rein lesende Prüfung der neuen Abfrage gegen die echte Datenbank (unabhängige Nachrechnung für alle Geräte; Export der grössten Firma lokal erzeugt, nicht protokolliert). Kein Browser-Test der eingeloggten Übersicht (nur mit echtem Login erreichbar) — Live-Prüfung beim Deploy.
+
+### Datenprüfung (rein lesend, echte Daten)
+- `getAktuellePruefBemerkungen` für alle 8'235 Geräte mit Prüfbericht gegen eine unabhängige Nachrechnung (neuestes Datum → Bemerkung vorhanden → kleinere ID): **0 Abweichungen bei Geräten**. Die einzige gemeldete Abweichung war die Gruppe der 1'726 Prüfberichte **ohne Gerätezuordnung** in der Nachrechnung — sie gehören zu keinem Gerät und erscheinen nirgends
+- 2'695 Geräte zeigen eine Bemerkung
+- Grösste Firma (492 Geräte): kompletter Export inkl. Bemerkungen in 0,7 s; 142 Zeilen mit Bemerkung; Kopfzeile „… Letzte Prüfung;Bemerkung Prüfung …“ korrekt
+- Abfrage über alle 8'235 Geräte auf einmal: 7,5 s (Obergrenze; die Übersicht fragt nur die 25 Geräte der Seite ab)
+
+### Acceptance Criteria Status (Nachtrag)
+- [x] Neue Spalte nach „Letzte Prüfung“ für alle Firmen: Code-Review `uebersicht/page.tsx`
+- [x] Bemerkung des aktuellen Prüfberichts (neuestes Datum, ohne gelöschte): Unit-Tests + echte Daten (0 Abweichungen)
+- [x] Kein Bericht / keine Bemerkung → leer („—“): Unit-Tests (`null`), Code-Review Anzeige
+- [x] Zwei Zeilen + „…“, voller Text beim Darüberfahren; Detailseite vollständig: Code-Review (`line-clamp-2`, `title`; Detailseite zeigt die Bemerkung jedes Prüfberichts ungekürzt in ihrer Prüfberichte-Tabelle)
+- [x] CSV-Export ungekürzt nach „Letzte Prüfung“, mehrzeilig maskiert: `export-csv.test.ts` + echter Export
+- [x] Zusatzspalte heisst „Bemerkungen Gerät“ in Übersicht und Export: `zusatzspalten.test.ts` (Übersicht und Export lesen dieselbe Beschriftung)
+- [x] Gleicher Tag (Altdaten): genau eine, stabile Bemerkung mit Vorrang der vorhandenen: Unit-Test mit Gegenprobe + echte Daten
+
+### Edge Cases Status
+- [x] Mehrzeilige Bemerkungen: in der Tabelle als Fliesstext (Umbrüche werden zu Leerzeichen), vollständig im CSV und auf der Detailseite
+- [x] Touch-Geräte: voller Text über die Detailseite erreichbar
+- [x] Standort-Einschränkung (PROJ-15): Bemerkungen nur für Geräte aus den bereits eingeschränkten Abfragen (Code-Review)
+- [x] Mehr als 1000 Prüfberichte in einem Block: seitenweises Laden (Unit-Test)
+
+### Security Audit
+- [x] Keine neue Eingabe, kein neuer Endpoint; Geräte-IDs nur aus serverseitig eingeschränkten Abfragen
+- [x] XSS: Bemerkung wird von React als Text bzw. im `title`-Attribut escaped, kein `dangerouslySetInnerHTML`
+- [x] CSV-Injection: Bemerkung läuft durch dasselbe Escaping wie alle Freitextfelder (PROJ-8)
+
+### Bugs Found
+
+#### BUG-1: Detailseite beschriftet die Gerät-Bemerkung weiterhin nur mit „Bemerkungen“
+- **Severity:** Low
+- **Steps to Reproduce:** Detailseite eines Geräts mit Gerät-Bemerkung öffnen → Feld heisst „Bemerkungen“, darunter die Prüfberichte-Tabelle mit der Spalte „Bemerkungen“ (Prüfbericht)
+- **Erwartet:** gleiche Unterscheidung wie in Übersicht und Export („Bemerkungen Gerät“ vs. Prüfbericht-Bemerkung)
+- **Einordnung:** Nicht von den Kriterien verlangt (die nennen nur Übersicht und Export), aber dieselbe Verwechslungsgefahr, die die Umbenennung beheben soll
+- **Priority:** Nice to have
+
+### Automatisierte Tests
+- `npm test`: 228/228 grün
+- `npm run test:e2e`: 38/38 grün (gegen das Portal auf Port 3100; Port 3000 belegt der Dev-Server des Admin-Tools)
+
+### Summary
+- **Acceptance Criteria (Nachtrag):** 7/7 erfüllt
+- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low)
+- **Security:** keine Findings
+- **Production Ready:** **JA**, Status Approved. Live-Prüfung der Darstellung beim Deploy
 
 ## Deployment
 - **Production URL:** https://obsi-hoferkundenportal.vercel.app
