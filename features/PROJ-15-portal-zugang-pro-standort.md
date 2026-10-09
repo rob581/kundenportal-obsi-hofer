@@ -1,6 +1,6 @@
 # PROJ-15: Portal-Zugang pro Standort
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-10-09
 **Last Updated:** 2026-10-09
 
@@ -217,7 +217,90 @@ Umgesetzt wie im Tech Design. Kein Frontend-Anteil.
 **Noch nicht ausgeführt:** Migration 0013 in Supabase. Code nur lokal committet; erst **nach** der Migration auf `main` pushen (sonst scheitern Sync und Zugriffsprüfung an der fehlenden Tabelle).
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-10-09
+**Tester:** QA Engineer (AI)
+**Testmethode:** Code-Review aller Datenpfade gegen Kriterien und Edge Cases, Unit- und E2E-Suiten, rein lesende Prüfungen gegen die echte Supabase-Datenbank und Dataverse (nach Ausführung von Migration 0013 durch den Nutzer). Kein echter Kunden-Login und kein Sync gegen Produktion vor dem Deploy: Ein Sync mit dem neuen Code schreibt in die Produktionsdatenbank, das ist Teil der Inbetriebnahme. Live-Nachweis deshalb beim `/deploy`.
+
+### Datenbank und Daten (rein lesend verifiziert)
+- Migration 0013 ausgeführt: `dv_portalzugaenge` existiert (noch 0 Zeilen, wird beim ersten Sync befüllt); `erfolgsmessung_login_status()` läuft fehlerfrei (aktuell 0 Firmen, siehe Hinweis unten)
+- Öffentlicher (Browser-)Schlüssel: Funktion `42501 permission denied`; RLS-Sperre per Vergleich bestätigt (gleiche Regel wie `dv_kontakte`: Service-Role sieht 596 Zeilen, öffentlicher Schlüssel 0)
+- Genau der Abruf des neuen Syncs (Zugänge über Standort-IDs, gemappt mit dem echten Job) liefert alle 8 Zugänge aus Dataverse in korrekter Form. Betroffen: 3 Firmen, davon eine mit 3 Standorten (geeignet für den Live-Test der Teil-Freigabe)
+
+### Acceptance Criteria Status
+**Sync**
+- [x] Zugänge der Standorte werden übernommen: `run-sync.test.ts` + echter Dataverse-Abruf (8/8)
+- [x] In Dataverse gelöschter Zugang verschwindet: `run-sync.test.ts` (1 von 2, auch letzter Zugang; Gegenprobe ohne Schwellen-Ausnahme schlägt fehl)
+- [x] Kontakt mit Zugang ohne Relation wird synchronisiert: `run-sync.test.ts`
+- [x] Verwaister Zugang: kein Fehler (`run-sync.test.ts`), kein Zugang (`access.test.ts`)
+
+**Zugang zum Portal**
+- [x] Aktiver Kontakt mit Zugang → Zugang, Häkchen irrelevant: `access.test.ts`
+- [x] Kein (verbleibender) Zugang → „Kein Zugang“: `access.test.ts` (auch: Relation allein reicht nicht)
+- [x] Inaktiv mit Zugang → „Kein Zugang“: `access.test.ts`
+- [x] Zugänge bei zwei Firmen → genau diese Firmen: `access.test.ts`
+- [x] Relation ohne Zugang → Firma erscheint nicht: `access.test.ts`
+
+**Sichtbarkeit innerhalb der Firma**
+- [x] Nur Standort A sichtbar (Übersicht, Dashboard, Prüfberichte): Standort-Tests in `geraete`, `dashboard`, `pruefberichte`; Gegenprobe ohne Einschränkung schlägt fehl
+- [x] CSV-Exporte nur Standort A: Standort-Tests (Geräte- und Prüfberichte-Export), Routen-Tests übergeben den Bereich
+- [x] Detailseite eines Geräts an Standort B → keine Daten (404): `geraete/queries.test.ts`; Prüfberichte des Geräts werden erst nach dieser Prüfung geladen (Code-Review)
+- [x] Entzug wirkt nach Sync beim nächsten Seitenaufruf: Zugriffsprüfung läuft bei jedem Request (Code-Review, unverändert seit PROJ-2)
+- [x] Zugang zu allen Standorten → Verhalten wie bisher: bestehende Tests mit vollem Bereich unverändert grün
+- [x] Serverseitig: Code-Review: Alle Abfragen auf Geräte/Prüfberichte laufen über `getStandorteFuerFirma(scope)` oder die Besitzprüfung `getGeraetById(id, scope)`; der Bereich kommt ausschliesslich aus der Sitzung
+
+**Erfolgsmessung**
+- [x] Login-Quote über Zugänge: Migration-SQL-Review (Join Firma → Standorte → Zugänge → aktive Kontakte); Funktion läuft fehlerfrei
+
+### Edge Cases Status
+- [x] Verwaiste Zugänge, Standort ohne Firma/unbekannt: `access.test.ts`, `run-sync.test.ts`
+- [x] Dubletten (gleiche E-Mail): Zugänge vereinigt (`access.test.ts`)
+- [x] Zugänge anderer Firmen bleiben beim Sync einer Firma unberührt; gescheiterter Standorte-Schritt löscht keine Zugänge (`run-sync.test.ts`)
+- [x] Gewählte Firma verliert alle Zugänge: `current-firma.ts` prüft die Auswahl bei jedem Aufruf gegen die Firmen aus den Zugängen
+- [x] Standort wechselt die Firma / wird gelöscht: Standort verschwindet beim Sync der alten Firma aus `dv_standorte` → Zugriffsprüfung ignoriert ihn (fail-closed), bis die neue Firma synchronisiert ist
+- [x] Harter Umstieg: Tabelle leer bis zum ersten Sync (verifiziert)
+
+### Security Audit (Red Team)
+- [x] Kein Weg an der Standort-Einschränkung vorbei: Firmenwahl-Cookie wird gegen Firmen aus Zugängen geprüft; Detailseite prüft Standort und Firma; Exporte nehmen den Bereich aus der Sitzung, nie aus der Anfrage
+- [x] Fail-closed: unbekannter Standort, Standort ohne Firma, verwaister Zugang, leerer Bereich → kein Zugriff
+- [x] Neue Tabelle und Funktion für Browser-Clients gesperrt (verifiziert)
+- [x] Entzug kann nicht durch die Sicherheitsbremse verloren gehen (Ausnahme getestet, Gegenprobe)
+- [x] Portal schreibt nichts nach Dataverse
+
+### Bugs Found
+
+#### BUG-1: Veralteter Kommentar in `src/lib/login-log/log-login.ts`
+- **Severity:** Low
+- **Beschreibung:** Der Kommentar sagt, ein Kontakt sei „mit mehreren Firmen verknüpft (dv_relationen)“. Seit PROJ-15 kommen die Firmen aus den Portalzugängen. Kein Verhaltensfehler, nur irreführend für spätere Entwickler
+- **Priority:** Nice to have
+
+#### BUG-2: Gelöschter Standort bleibt sichtbar, wenn sein Löschen von der 20-%-Schwelle gebremst wird
+- **Severity:** Low
+- **Steps to Reproduce:**
+  1. Firma mit 3 Standorten, Kunde hat Zugang zu allen
+  2. In Dataverse einen Standort löschen (1 von 3 = 33 %)
+  3. Firma synchronisieren
+  4. Erwartet: Standort und seine Geräte sind im Portal weg
+  5. Tatsächlich: Die Löschung der Standorte wird wegen der Schwelle übersprungen (mit Warn-Mail an den Betreiber); der Zugang zu diesem Standort liegt ausserhalb des Sync-Bereichs und bleibt; der Kunde sieht den gelöschten Standort mit dem letzten Datenstand weiter
+- **Einordnung:** Kein Entzug durch einen Freigeber (der wirkt immer), sondern die bestehende Schwellen-Eigenschaft aus PROJ-1 (siehe Open Questions). Der Betreiber wird per Warn-Mail informiert; es sind Daten, auf die der Kunde zuvor berechtigt war
+- **Priority:** Fix in next sprint, zusammen mit der offenen Frage zur Schwelle für kleine Firmen
+
+### Hinweise für die Inbetriebnahme
+- **Wochenreport:** Seit Migration 0013 zählt die Login-Quote über die (noch leere) Zugangs-Tabelle. Bis zum Deploy und Sync der 3 betroffenen Firmen zeigt der Report „Keine Kunden mit Zugang“. Deploy daher vor Montag, 12.10.2026, 06:00 UTC
+- **E2E-Testumgebung:** Auf Port 3000 lief der Entwicklungsserver des Admin-Tools; Playwright verwendet einen laufenden Server wieder (`reuseExistingServer`) und testete deshalb zuerst die falsche App (Fehlalarme). Mit einer temporären Konfiguration auf Port 3100 liefen alle Tests gegen das Portal. Kein Produkt-Bug; bei Bedarf eigener Port für das Portal oder `reuseExistingServer` abschalten
+
+### Automatisierte Tests
+- `npm test`: 218/218 grün (25 Dateien)
+- `npm run test:e2e`: 38/38 grün (Chromium + Mobile Safari, gegen das Portal auf Port 3100)
+- Keine neue E2E-Suite: Der Unterschied zwischen Standorten zeigt sich erst nach einem echten Login; ohne Login ist alles bereits abgedeckt (alle geschützten Seiten und Exporte → `/login`)
+
+### Summary
+- **Acceptance Criteria:** 16/16 erfüllt (per Unit-Tests mit Gegenproben, Code-Review und Datenprüfung; Live-Login-Nachweis folgt beim Deploy)
+- **Bugs Found:** 2 (0 critical, 0 high, 0 medium, 2 low)
+- **Security:** keine Findings
+- **Production Ready:** **JA**, Status Approved. Deploy möglichst vor Montag (siehe Hinweis Wochenreport)
+
+**Live-Test beim Deploy:** Im Admin-Tool bei der Firma mit 3 Standorten einem Testkontakt nur einen Standort freigeben → synchronisieren → im Portal prüfen, dass nur dieser Standort sichtbar ist (Übersicht, Detailseite eines anderen Standorts per Adresse, Exporte); dann den Zugang entziehen → synchronisieren → „Kein Zugang“.
 
 ## Deployment
 _To be added by /deploy_

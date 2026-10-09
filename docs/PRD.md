@@ -24,7 +24,7 @@ Bestehende Kunden der OBSI Hofer GmbH, die den Prüfstatus und die Prüfberichte
 | P1 | Firma-Filter für Dataverse-Sync (Cross-Repo-Abhängigkeit für obsi-hofer-admin) | Deployed |
 | P1 | Kontakt-Freigabe für Kundenportal-Zugang (Häkchen aus obsi-hofer-admin) | Deployed |
 | P2 | PDF-Export der Prüfberichte (Layout wie obsi-hofer-admin) | Planned |
-| P1 | Portal-Zugang pro Standort (Tabelle bmvcc_portalzugang aus obsi-hofer-admin) | In Progress |
+| P1 | Portal-Zugang pro Standort (Tabelle bmvcc_portalzugang aus obsi-hofer-admin) | Approved |
 
 ## Success Metrics
 - Reduktion der internen Zeit für manuelle Excel-Aufbereitung/Versand von Prüfberichten
