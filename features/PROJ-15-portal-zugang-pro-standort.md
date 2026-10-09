@@ -273,6 +273,7 @@ Umgesetzt wie im Tech Design. Kein Frontend-Anteil.
 - **Severity:** Low
 - **Beschreibung:** Der Kommentar sagt, ein Kontakt sei „mit mehreren Firmen verknüpft (dv_relationen)“. Seit PROJ-15 kommen die Firmen aus den Portalzugängen. Kein Verhaltensfehler, nur irreführend für spätere Entwickler
 - **Priority:** Nice to have
+- **Status:** ✅ Behoben (2026-10-09): Kommentar verweist jetzt auf die Portalzugänge (`access.ts`)
 
 #### BUG-2: Gelöschter Standort bleibt sichtbar, wenn sein Löschen von der 20-%-Schwelle gebremst wird
 - **Severity:** Low
@@ -284,19 +285,22 @@ Umgesetzt wie im Tech Design. Kein Frontend-Anteil.
   5. Tatsächlich: Die Löschung der Standorte wird wegen der Schwelle übersprungen (mit Warn-Mail an den Betreiber); der Zugang zu diesem Standort liegt ausserhalb des Sync-Bereichs und bleibt; der Kunde sieht den gelöschten Standort mit dem letzten Datenstand weiter
 - **Einordnung:** Kein Entzug durch einen Freigeber (der wirkt immer), sondern die bestehende Schwellen-Eigenschaft aus PROJ-1 (siehe Open Questions). Der Betreiber wird per Warn-Mail informiert; es sind Daten, auf die der Kunde zuvor berechtigt war
 - **Priority:** Fix in next sprint, zusammen mit der offenen Frage zur Schwelle für kleine Firmen
+- **Status:** ✅ Behoben (2026-10-09, auf Wunsch des Nutzers vor dem Deploy). `src/lib/sync/run-sync.ts`: Der Standorte-Schritt liefert jetzt auch die IDs, die vor dem Lauf im Bereich lagen (`existingIds`). Standorte, die Dataverse nicht mehr liefert, kommen zusätzlich in den Portal-Bereich des Zugangs-Schritts; ihre Zugänge werden dadurch als „fehlt“ gelöscht (ohne Schwelle), auch wenn die Standort-Zeile selbst wegen der Schwelle stehen bleibt. Der Kunde sieht den Standort danach nicht mehr. Scheitert der Standorte-Schritt, bleibt die Liste leer und es wird kein Zugang gelöscht (unverändert). Folge: Wechselt ein Standort die Firma, verliert ein Zugang zu ihm beim Sync der alten Firma seine Wirkung, bis die neue Firma synchronisiert ist (fail-closed). Geräte- und übrige Schritte unverändert
+  - Neuer Test in `run-sync.test.ts` (Standort 1 von 3 gelöscht → Standort-Zeile bleibt wegen Schwelle, Zugang ist weg); Gegenprobe mit altem Bereich schlägt fehl
+  - `npm test` 219/219, Lint, `tsc --noEmit` und Build grün
 
 ### Hinweise für die Inbetriebnahme
 - **Wochenreport:** Seit Migration 0013 zählt die Login-Quote über die (noch leere) Zugangs-Tabelle. Bis zum Deploy und Sync der 3 betroffenen Firmen zeigt der Report „Keine Kunden mit Zugang“. Deploy daher vor Montag, 12.10.2026, 06:00 UTC
 - **E2E-Testumgebung:** Auf Port 3000 lief der Entwicklungsserver des Admin-Tools; Playwright verwendet einen laufenden Server wieder (`reuseExistingServer`) und testete deshalb zuerst die falsche App (Fehlalarme). Mit einer temporären Konfiguration auf Port 3100 liefen alle Tests gegen das Portal. Kein Produkt-Bug; bei Bedarf eigener Port für das Portal oder `reuseExistingServer` abschalten
 
 ### Automatisierte Tests
-- `npm test`: 218/218 grün (25 Dateien)
+- `npm test`: 218/218 grün (25 Dateien); nach den Bug-Fixes 219/219
 - `npm run test:e2e`: 38/38 grün (Chromium + Mobile Safari, gegen das Portal auf Port 3100)
 - Keine neue E2E-Suite: Der Unterschied zwischen Standorten zeigt sich erst nach einem echten Login; ohne Login ist alles bereits abgedeckt (alle geschützten Seiten und Exporte → `/login`)
 
 ### Summary
 - **Acceptance Criteria:** 16/16 erfüllt (per Unit-Tests mit Gegenproben, Code-Review und Datenprüfung; Live-Login-Nachweis folgt beim Deploy)
-- **Bugs Found:** 2 (0 critical, 0 high, 0 medium, 2 low)
+- **Bugs Found:** 2 (0 critical, 0 high, 0 medium, 2 low), **beide behoben**
 - **Security:** keine Findings
 - **Production Ready:** **JA**, Status Approved. Deploy möglichst vor Montag (siehe Hinweis Wochenreport)
 

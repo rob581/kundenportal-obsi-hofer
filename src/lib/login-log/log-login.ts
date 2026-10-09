@@ -2,8 +2,9 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 // Best-effort Login-Zählung, analog zu src/lib/export-log/log-export.ts —
 // ein Fehler hier darf den Login-Vorgang selbst nie beeinträchtigen. Ein
-// Kontakt kann mit mehreren Firmen verknüpft sein (dv_relationen); ein Login
-// zählt dann für jede verknüpfte Firma — dieselbe Semantik wie die
+// Kontakt kann Zugänge bei mehreren Firmen haben (seit PROJ-15 über
+// dv_portalzugaenge, siehe access.ts); ein Login zählt dann für jede dieser
+// Firmen — dieselbe Semantik wie die
 // bestehende Login-Quote, die ebenfalls unabhängig von der später
 // gewählten Firma auswertet.
 export async function logLoginEvent(firmaIds: string[]): Promise<void> {

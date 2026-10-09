@@ -65,7 +65,9 @@ type EntityScope =
   | { kind: "filter"; dataverseFilter: string; supabaseWhereIn: { column: string; values: string[] } }
   | { kind: "idSet"; dataverseIdColumn: string; ids: string[]; supabaseWhereIn: { column: string; values: string[] } };
 
-type EntitySyncOutcome = { summary: EntitySyncSummary; mappedRecords: MappedRecord[] };
+// existingIds: IDs, die vor diesem Lauf im Bereich lagen (PROJ-15 QA BUG-2:
+// die Zugänge brauchen auch die Standorte, die nicht mehr aus Dataverse kommen).
+type EntitySyncOutcome = { summary: EntitySyncSummary; mappedRecords: MappedRecord[]; existingIds: string[] };
 
 // Each entity is independent (its own table, its own Dataverse entity set),
 // so one entity's failure must not prevent the others from syncing. Errors
@@ -134,6 +136,7 @@ async function syncOneEntity(job: SyncJob, scope?: EntityScope): Promise<EntityS
   return {
     summary: { slug: job.slug, fetched: mappedRecords.length, added, updated, deleted, skippedDueToThreshold },
     mappedRecords,
+    existingIds,
   };
 }
 
@@ -205,6 +208,12 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
   }
 
   let standortIds: string[] = [];
+  // PROJ-15 QA BUG-2: Standorte, die die Firma vor diesem Lauf im Portal
+  // hatte, aber die Dataverse nicht mehr liefert. Ihre Zeilen können wegen
+  // der 20-%-Schwelle stehen bleiben — ihre Zugänge dürfen das nicht, sonst
+  // bliebe ein gelöschter Standort für den Kunden sichtbar. Bleibt leer,
+  // wenn der Standorte-Schritt scheitert (dann wird kein Zugang gelöscht).
+  let verschwundeneStandortIds: string[] = [];
   try {
     const outcome = await syncOneEntity(findJob("standorte"), {
       kind: "filter",
@@ -213,6 +222,8 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
     });
     record(outcome);
     standortIds = outcome.mappedRecords.map((r) => r.id);
+    const geliefert = new Set(standortIds);
+    verschwundeneStandortIds = outcome.existingIds.filter((id) => !geliefert.has(id));
   } catch (error) {
     recordError("standorte", error);
   }
@@ -222,11 +233,14 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
   // ein Kontakt mit Zugang auch ohne Relation zur Firma anmelden kann.
   let zugangKontaktIds: string[] = [];
   try {
+    // Dataverse: nur die aktuell gelieferten Standorte abfragen; Portal-Seite:
+    // zusätzlich die verschwundenen, damit deren Zugänge als "fehlt" gelöscht
+    // werden.
     const outcome = await syncOneEntity(findJob("portalzugaenge"), {
       kind: "idSet",
       dataverseIdColumn: "_bmvcc_standort_value",
       ids: standortIds,
-      supabaseWhereIn: { column: "standort_id", values: standortIds },
+      supabaseWhereIn: { column: "standort_id", values: [...standortIds, ...verschwundeneStandortIds] },
     });
     record(outcome);
     zugangKontaktIds = outcome.mappedRecords

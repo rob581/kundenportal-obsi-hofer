@@ -404,6 +404,43 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
       expect(tables["dv_portalzugaenge"].has("pz-fremd")).toBe(true);
     });
 
+    // QA BUG-2: Standort in Dataverse gelöscht, seine Löschung im Portal von
+    // der 20-%-Schwelle gebremst — der Zugang darf trotzdem nicht bleiben.
+    it("removes the Zugänge of a Standort that vanished from Dataverse, even if the Standort row is kept by the threshold", async () => {
+      resetTable("dv_standorte", [
+        { id: "s1", firma_id: FIRMA_ID },
+        { id: "s2", firma_id: FIRMA_ID },
+        { id: "s3", firma_id: FIRMA_ID },
+      ]);
+      resetTable("dv_portalzugaenge", [
+        { id: "pz1", kontakt_id: "k1", standort_id: "s1" },
+        { id: "pz3", kontakt_id: "k1", standort_id: "s3" },
+      ]);
+      fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
+        if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
+        if (entitySet === "bmvcc_organizationlocations") {
+          // s3 was deleted in Dataverse: 1 of 3 = 33% > threshold
+          return [
+            { bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: FIRMA_ID },
+            { bmvcc_organizationlocationid: "s2", _bmvcc_bexiofirma_value: FIRMA_ID },
+          ];
+        }
+        return [];
+      });
+      fetchAllDataverseRecordsForIdsMock.mockImplementation(async (entitySet: string, _select: string[], _col: string, ids: string[]) =>
+        entitySet === "bmvcc_portalzugangs" && ids.includes("s1")
+          ? [{ bmvcc_portalzugangid: "pz1", _bmvcc_kontakt_value: "k1", _bmvcc_standort_value: "s1" }]
+          : []
+      );
+
+      const result = await runDataverseSync(FIRMA_ID);
+
+      expect(tables["dv_standorte"].has("s3")).toBe(true); // kept by the threshold (pre-existing PROJ-1 behaviour)
+      expect(result.entities.find((e) => e.slug === "standorte")?.skippedDueToThreshold).toBe(true);
+      expect(tables["dv_portalzugaenge"].has("pz3")).toBe(false); // but the Zugang is gone
+      expect(tables["dv_portalzugaenge"].has("pz1")).toBe(true);
+    });
+
     it("deletes no Zugang when the Standorte step fails (empty id list)", async () => {
       resetTable("dv_portalzugaenge", [{ id: "pz1", kontakt_id: "k1", standort_id: "s1" }]);
       fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
