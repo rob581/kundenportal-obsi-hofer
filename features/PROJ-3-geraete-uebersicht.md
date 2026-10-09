@@ -339,6 +339,7 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 - **Erwartet:** gleiche Unterscheidung wie in Übersicht und Export („Bemerkungen Gerät“ vs. Prüfbericht-Bemerkung)
 - **Einordnung:** Nicht von den Kriterien verlangt (die nennen nur Übersicht und Export), aber dieselbe Verwechslungsgefahr, die die Umbenennung beheben soll
 - **Priority:** Nice to have
+- **Status:** ✅ Behoben (2026-10-09): Feld auf der Detailseite heisst jetzt „Bemerkungen Gerät“ (`uebersicht/geraete/[id]/page.tsx`); `npm test` 228/228, Lint, `tsc --noEmit`, Build grün
 
 ### Automatisierte Tests
 - `npm test`: 228/228 grün
@@ -346,7 +347,7 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 
 ### Summary
 - **Acceptance Criteria (Nachtrag):** 7/7 erfüllt
-- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low)
+- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low), **behoben**
 - **Security:** keine Findings
 - **Production Ready:** **JA**, Status Approved. Live-Prüfung der Darstellung beim Deploy
 

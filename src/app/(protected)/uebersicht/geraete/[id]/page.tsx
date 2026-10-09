@@ -110,7 +110,10 @@ export default async function GeraetDetailPage({
         {geraet.bemerkungen && (
           <Card className="mt-4">
             <CardContent className="py-4">
-              <dt className="mb-1 text-xs text-muted-foreground">Bemerkungen</dt>
+              {/* "Bemerkungen Gerät" wie in Übersicht/Export (PROJ-3 Nachtrag
+                  2026-10-09, QA BUG-1) — Abgrenzung zur Prüfbericht-Bemerkung
+                  in der Tabelle unten. */}
+              <dt className="mb-1 text-xs text-muted-foreground">Bemerkungen Gerät</dt>
               <dd className="text-sm">{geraet.bemerkungen}</dd>
             </CardContent>
           </Card>
