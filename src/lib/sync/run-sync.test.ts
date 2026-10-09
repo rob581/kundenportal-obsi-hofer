@@ -313,4 +313,110 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
     expect(geraeteSummary?.skippedDueToThreshold).toBe(true);
     expect(result.warnings).toHaveLength(1);
   });
+
+  // PROJ-15: Portal-Zugang pro Standort.
+  describe("Portalzugänge (PROJ-15)", () => {
+    function mockFirmaMitStandort() {
+      fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
+        if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
+        if (entitySet === "bmvcc_organizationlocations") {
+          return filter?.includes(FIRMA_ID)
+            ? [{ bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: FIRMA_ID }]
+            : [];
+        }
+        return [];
+      });
+    }
+
+    it("syncs the Zugänge of the Firma's Standorte and the Kontakte that only have a Zugang (no Relation)", async () => {
+      mockFirmaMitStandort();
+      fetchAllDataverseRecordsForIdsMock.mockImplementation(
+        async (entitySet: string, _select: string[], filterColumn: string, ids: string[]) => {
+          if (entitySet === "bmvcc_portalzugangs" && filterColumn === "_bmvcc_standort_value" && ids.includes("s1")) {
+            return [{ bmvcc_portalzugangid: "pz1", _bmvcc_kontakt_value: "k-ohne-relation", _bmvcc_standort_value: "s1" }];
+          }
+          if (entitySet === "bmvcc_kontakts" && ids.includes("k-ohne-relation")) {
+            return [{ bmvcc_kontaktid: "k-ohne-relation", statecode: 0 }];
+          }
+          return [];
+        }
+      );
+
+      const result = await runDataverseSync(FIRMA_ID);
+
+      expect(tables["dv_portalzugaenge"]?.get("pz1")).toMatchObject({ kontakt_id: "k-ohne-relation", standort_id: "s1" });
+      expect(tables["dv_kontakte"]?.has("k-ohne-relation")).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it("removes a revoked Zugang even when that is far above the 20% threshold (1 of 2)", async () => {
+      resetTable("dv_portalzugaenge", [
+        { id: "pz1", kontakt_id: "k1", standort_id: "s1" },
+        { id: "pz2", kontakt_id: "k2", standort_id: "s1" },
+      ]);
+      mockFirmaMitStandort();
+      fetchAllDataverseRecordsForIdsMock.mockImplementation(async (entitySet: string) =>
+        entitySet === "bmvcc_portalzugangs"
+          ? [{ bmvcc_portalzugangid: "pz1", _bmvcc_kontakt_value: "k1", _bmvcc_standort_value: "s1" }]
+          : []
+      );
+
+      const result = await runDataverseSync(FIRMA_ID);
+
+      expect(tables["dv_portalzugaenge"].has("pz2")).toBe(false);
+      expect(tables["dv_portalzugaenge"].has("pz1")).toBe(true);
+      const summary = result.entities.find((e) => e.slug === "portalzugaenge");
+      expect(summary).toMatchObject({ deleted: 1, skippedDueToThreshold: false });
+      expect(result.warnings).toEqual([]);
+    });
+
+    it("removes the last remaining Zugang of the Firma (100% missing)", async () => {
+      resetTable("dv_portalzugaenge", [{ id: "pz1", kontakt_id: "k1", standort_id: "s1" }]);
+      mockFirmaMitStandort();
+      fetchAllDataverseRecordsForIdsMock.mockResolvedValue([]);
+
+      await runDataverseSync(FIRMA_ID);
+
+      expect(tables["dv_portalzugaenge"].size).toBe(0);
+    });
+
+    it("keeps an orphaned Zugang (no Kontakt) without failing the sync", async () => {
+      mockFirmaMitStandort();
+      fetchAllDataverseRecordsForIdsMock.mockImplementation(async (entitySet: string) =>
+        entitySet === "bmvcc_portalzugangs"
+          ? [{ bmvcc_portalzugangid: "pz-verwaist", _bmvcc_kontakt_value: null, _bmvcc_standort_value: "s1" }]
+          : []
+      );
+
+      const result = await runDataverseSync(FIRMA_ID);
+
+      expect(tables["dv_portalzugaenge"]?.get("pz-verwaist")?.kontakt_id).toBeNull();
+      expect(result.errors).toEqual([]);
+    });
+
+    it("never touches Zugänge of another Firma's Standorte", async () => {
+      resetTable("dv_portalzugaenge", [{ id: "pz-fremd", kontakt_id: "k9", standort_id: "s-fremd" }]);
+      mockFirmaMitStandort();
+      fetchAllDataverseRecordsForIdsMock.mockResolvedValue([]);
+
+      await runDataverseSync(FIRMA_ID);
+
+      expect(tables["dv_portalzugaenge"].has("pz-fremd")).toBe(true);
+    });
+
+    it("deletes no Zugang when the Standorte step fails (empty id list)", async () => {
+      resetTable("dv_portalzugaenge", [{ id: "pz1", kontakt_id: "k1", standort_id: "s1" }]);
+      fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
+        if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
+        if (entitySet === "bmvcc_organizationlocations") throw new Error("Standorte-Abruf fehlgeschlagen");
+        return [];
+      });
+
+      const result = await runDataverseSync(FIRMA_ID);
+
+      expect(tables["dv_portalzugaenge"].has("pz1")).toBe(true);
+      expect(result.errors.some((e) => e.includes("standorte"))).toBe(true);
+    });
+  });
 });
+

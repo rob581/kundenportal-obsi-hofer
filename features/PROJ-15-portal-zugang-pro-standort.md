@@ -210,7 +210,9 @@ Umgesetzt wie im Tech Design. Kein Frontend-Anteil.
 - `jobs.test.ts`: Häkchen wird nicht mehr abgefragt; Mapping der Zugänge inkl. verwaistem Datensatz
 - Neue Standort-Einschränkungs-Tests in `geraete/queries.test.ts` (Liste, Export, Detailseite, leerer Bereich), `pruefberichte/queries.test.ts` (Liste + Export), `dashboard/queries.test.ts`; bestehende Tests auf `FirmaScope` umgestellt, Export-Routen-Tests erwarten den Bereich
 - `vitest.config.ts`: `.claude/worktrees/**` ausgeschlossen. **Korrektur früherer Zahlen:** `npm test` lief bisher auch über 22 Testdateien einer alten Arbeitskopie unter `.claude/worktrees/` (Branch `claude/datenschutz-datenzugriff-5de83e`, Stand 25.09.). Die in PROJ-11/12/13 genannten Gesamtzahlen (z. B. „380/380“) enthielten diese Kopie; die Projekt-eigene Suite umfasst 25 Testdateien
-- `npm test` 212/212 (25 Dateien), Lint, `tsc --noEmit` und Build grün
+- `run-sync.test.ts` +6 (Zugänge über Standort-IDs, Kontakt nur mit Zugang wird synchronisiert, Entzug 1 von 2 trotz Schwelle, letzter Zugang, verwaister Zugang, fremde Firma unberührt, kein Löschen bei gescheitertem Standorte-Schritt)
+- Gegenproben: ohne Schwellen-Ausnahme schlagen die 2 Entzugs-Tests fehl; ohne Standort-Einschränkung in `getStandorteFuerFirma`/`getGeraetById` schlagen alle 5 Standort-Tests fehl
+- `npm test` 218/218 (25 Dateien), Lint, `tsc --noEmit` und Build grün
 
 **Noch nicht ausgeführt:** Migration 0013 in Supabase. Code nur lokal committet; erst **nach** der Migration auf `main` pushen (sonst scheitern Sync und Zugriffsprüfung an der fehlenden Tabelle).
 
