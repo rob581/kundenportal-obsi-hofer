@@ -1,6 +1,6 @@
 # PROJ-15: Portal-Zugang pro Standort
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-10-09
 **Last Updated:** 2026-10-09
 
@@ -82,6 +82,7 @@
 - Rückmeldung an das Admin-Tool nach dem Deploy, damit es `bmvcc_kundenportal` als Übergangsfeld behandeln kann
 
 ## Open Questions
+- [ ] Gilt dasselbe Schwellen-Problem auch für andere Daten kleiner Firmen (z. B. Firma mit 3 Standorten, einer wird gelöscht = 33 % -> Löschung übersprungen)? Bestehendes Verhalten seit PROJ-1, nicht Teil von PROJ-15. Bei Bedarf separat prüfen
 - [ ] Ab wann darf das Admin-Tool das Häkchen `bmvcc_kundenportal` abbauen? Vorschlag: nach dem Deploy von PROJ-15 und einer Woche Betrieb. Rückmeldung an das Admin-Tool beim `/deploy`
 
 ## Decision Log
@@ -102,12 +103,84 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Neue Portal-Tabelle für die Zugänge (je Zugang: Kontakt, Standort), befüllt nur durch den Sync, wie alle anderen Dataverse-Spiegeltabellen nur serverseitig lesbar | Gleiches Muster wie alle bisherigen Spiegeltabellen (PROJ-1); keine neue Zugriffsart | 2026-10-09 |
+| Zugänge werden im Firma-Sync direkt nach den Standorten geladen, über die Standort-IDs der Firma | Die Standort-IDs liegen an dieser Stelle schon vor (gleiche ID-Verkettung wie Geräte, PROJ-12); ein entzogener Zugang fällt dabei automatisch als „fehlt“ auf und wird gelöscht | 2026-10-09 |
+| **Zugänge sind von der 20-%-Lösch-Schwelle ausgenommen** | Die Schwelle (PROJ-1) schützt vor halben Abrufen, indem Löschungen über 20 % übersprungen werden. Bei wenigen Zugängen pro Firma wäre schon ein einzelner Entzug „über 20 %“ und würde ignoriert, der letzte Zugang (100 %) nie entzogen. Für Zugänge ist die sichere Richtung umgekehrt: lieber einmal zu viel entziehen als einen Entzug verpassen. Ein fehlgeschlagener Abruf bricht ohnehin mit Fehler ab, statt leer zu antworten | 2026-10-09 |
+| Kontakte-Schritt im Sync lädt Kontakte aus Relationen **und** aus Zugängen | Ein Kontakt mit Zugang, aber ohne Relation zur Firma, muss im Portal vorhanden sein, sonst könnte er sich nicht anmelden (Product Decision) | 2026-10-09 |
+| Verwaiste Zugänge (leerer Kontakt- oder Standort-Verweis) werden ignoriert: ohne Standort tauchen sie im Abruf gar nicht auf, ohne Kontakt werden sie gespeichert, aber von der Zugriffsprüfung nie berücksichtigt | Kein Sonderweg im Sync nötig; wird der verwaiste Datensatz in Dataverse gelöscht, verschwindet er beim nächsten Sync auch im Portal | 2026-10-09 |
+| Die zentrale Zugriffsprüfung liefert künftig neben den Firmen auch die freigegebenen Standorte; Firmen = Firmen dieser Standorte | Eine Stelle bestimmt, wer was sieht. Relationen und Häkchen werden dafür nicht mehr gelesen | 2026-10-09 |
+| Alle Datenabfragen ermitteln „die Standorte der Firma“ an genau einer gemeinsamen Stelle; diese liefert künftig nur noch die freigegebenen Standorte. Die Besitzprüfung der Gerät-Detailseite prüft auf freigegebenen Standort statt nur auf Firma | Übersicht, CSV-Exporte, Prüfberichte, Dashboard und Detailseite laufen heute schon über diese gemeinsame Stelle bzw. die Besitzprüfung. Damit wirkt die Einschränkung überall gleichzeitig, und neue Seiten (z. B. PDF-Export PROJ-14) erben sie automatisch | 2026-10-09 |
+| Das Häkchen `bmvcc_kundenportal` wird nicht mehr aus Dataverse abgerufen; die Portal-Spalte dafür bleibt vorerst bestehen und wird später entfernt | Würde der Sync das Feld weiter abfragen, bräche er, sobald das Admin-Tool das Feld in Dataverse löscht. Die Spalte selbst stört nicht und kann nach dem Deploy gefahrlos entfernt werden | 2026-10-09 |
+| Login-Quote (PROJ-11) über dieselbe Datenbank-Funktion, neu auf Zugänge statt Relationen + Häkchen | Ergebnisform unverändert, Report-Code bleibt gleich (wie beim PROJ-11-Nachtrag vom 2026-10-07) | 2026-10-09 |
+| Eine Migration für Tabelle und Login-Quote; Reihenfolge Migration → Code-Deploy → Sync der betroffenen Firmen | Ohne die Tabelle scheitern neuer Sync und neue Zugriffsprüfung. Die Migration allein stört den laufenden alten Code nicht | 2026-10-09 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### A) Component Structure
+Keine neue oder geänderte Oberfläche. Geändert werden Bausteine im Hintergrund:
+
+```
+Firma-Sync (über Admin-Tool ausgelöst)
++-- Firma
++-- Standorte der Firma
+|   +-- Portalzugänge dieser Standorte        <- NEU (ohne 20-%-Schwelle)
+|   +-- Geräte -> Prüfberichte (unverändert)
++-- Relationen der Firma
++-- Kontakte aus Relationen UND Zugängen       <- erweitert
++-- Artikel (unverändert)
+
+Zentrale Zugriffsprüfung (bei jedem Seitenaufruf)
++-- E-Mail passt zu aktivem Kontakt (Dubletten zusammengefasst, wie bisher)
++-- dessen Zugänge -> freigegebene Standorte   <- NEU (statt Häkchen + Relationen)
++-- Firmen = Firmen dieser Standorte
+    +-- keine -> "Kein Zugang"
+    +-- eine -> direkt zur Firma; mehrere -> Firmen-Auswahl (unverändert)
+
+Gemeinsame Stelle "Standorte der aktuellen Firma"  <- liefert nur noch freigegebene
++-- Geräte-Übersicht, Filter-Optionen
++-- CSV-Export Geräte (PROJ-8), CSV-Export Prüfberichte (PROJ-10)
++-- Prüfberichte-Übersicht (PROJ-9)
++-- Dashboard-Zahlen (PROJ-5)
++-- künftig: PDF-Export (PROJ-14)
+
+Besitzprüfung Gerät-Detailseite                    <- prüft freigegebenen Standort
++-- Gerät eines nicht freigegebenen Standorts -> "nicht gefunden" (wie fremde Firma)
+
+Login-Quote im Wochenreport (PROJ-11)              <- zählt über Zugänge
+```
+
+### B) Data Model (plain language)
+**Neu: Portalzugänge** (Spiegel der Dataverse-Tabelle `bmvcc_portalzugang`). Jeder Eintrag hat:
+- ID (aus Dataverse)
+- Kontakt (Verweis, kann bei verwaisten Datensätzen leer sein)
+- Standort (Verweis)
+
+Befüllt und bereinigt ausschliesslich durch den Firma-Sync. Gelesen nur serverseitig, wie alle Spiegeltabellen.
+
+**Unverändert, aber nicht mehr für den Zugang genutzt:** Relationen Kontakt–Firma (werden weiter synchronisiert) und das Feld „Für Kundenportal freigegeben“ an den Kontakten (wird nicht mehr abgerufen, Spalte bleibt vorerst bestehen).
+
+**Login-Quote:** Basis = Firmen, für deren Standorte mindestens ein aktiver Kontakt einen Zugang hat; eingeloggt = Login eines dieser Kontakte.
+
+### C) Tech Decisions (für PM erklärt)
+- **Eine Stelle entscheidet, welche Standorte jemand sieht.** Alle Seiten und Exporte fragen heute schon an einer gemeinsamen Stelle „welche Standorte gehören zur Firma?“. Diese Stelle liefert künftig nur noch die Standorte, für die der Kunde einen Zugang hat. Damit gilt die Einschränkung automatisch überall, auch für den künftigen PDF-Export.
+- **Detailseite:** Ruft jemand ein Gerät eines nicht freigegebenen Standorts direkt über die Adresse auf, verhält sich das Portal wie bei einem Gerät einer fremden Firma (Seite nicht gefunden).
+- **Entzug muss immer greifen:** Der Sync hat eine Sicherheitsbremse, die grössere Löschungen auf einmal überspringt. Für Zugänge wird sie abgeschaltet, sonst würde schon das Entziehen eines von zwei Zugängen ignoriert.
+- **Kein Bruch beim Abbau des Häkchens:** Das Portal fragt das alte Häkchen nicht mehr ab. Das Admin-Tool kann es danach jederzeit in Dataverse löschen.
+
+**Inbetriebnahme (in dieser Reihenfolge):**
+1. Datenbank-Migration in Supabase ausführen (neue Tabelle + angepasste Login-Quote; stört den laufenden Code nicht)
+2. Code deployen. Ab hier hat niemand Zugang, bis Schritt 3 gelaufen ist
+3. Im Admin-Tool die Firmen der 4 Kontakte mit Zugang synchronisieren
+4. Rückmeldung an das Admin-Tool
+
+### D) Dependencies
+- Keine neuen Pakete
+- Eine neue Datenbank-Migration (Tabelle Portalzugänge + Login-Quoten-Funktion)
+- Dataverse-Lesezugriff auf `bmvcc_portalzugang`: bereits geprüft (2026-10-09)
+- Nachgelagert (eigener kleiner Schritt nach dem Deploy): Spalte „Für Kundenportal freigegeben“ aus der Kontakt-Tabelle entfernen
 
 ## QA Test Results
 _To be added by /qa_

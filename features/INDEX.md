@@ -29,7 +29,7 @@
 | PROJ-12 | Firma-Filter für Dataverse-Sync | Deployed | [Spec](../features/PROJ-12-firma-filter-dataverse-sync.md) | 2026-09-25 |
 | PROJ-13 | Kontakt-Freigabe für Kundenportal-Zugang | Deployed | [Spec](../features/PROJ-13-kontakt-freigabe-kundenportal-zugang.md) | 2026-10-06 |
 | PROJ-14 | PDF-Export der Prüfberichte | Planned | [Spec](../features/PROJ-14-pdf-export-pruefberichte.md) | 2026-10-07 |
-| PROJ-15 | Portal-Zugang pro Standort | Planned | [Spec](../features/PROJ-15-portal-zugang-pro-standort.md) | 2026-10-09 |
+| PROJ-15 | Portal-Zugang pro Standort | Architected | [Spec](../features/PROJ-15-portal-zugang-pro-standort.md) | 2026-10-09 |
 
 <!-- Add features above this line -->
 
