@@ -23,7 +23,9 @@ export const ZUSATZSPALTEN_POOL: Zusatzspalte[] = [
   { key: "barcode", label: "Barcode", getValue: (g) => g.barcode },
   { key: "kundenId", label: "KundenID", getValue: (g) => g.kundenId },
   { key: "zubehoer", label: "Zubehör", getValue: (g) => g.zubehoer },
-  { key: "bemerkungen", label: "Bemerkungen", getValue: (g) => g.bemerkungen },
+  // Beschriftung seit PROJ-3 Nachtrag 2026-10-09 "Bemerkungen Gerät", zur
+  // Abgrenzung von der Standardspalte "Bemerkung Prüfung"; Schlüssel unverändert.
+  { key: "bemerkungen", label: "Bemerkungen Gerät", getValue: (g) => g.bemerkungen },
   { key: "artikelTyp", label: "Typ", getValue: (g) => g.artikelTyp },
   { key: "artikelDimension", label: "Dimension", getValue: (g) => g.artikelDimension },
 ];

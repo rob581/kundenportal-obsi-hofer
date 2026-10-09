@@ -1,6 +1,6 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-17
 **Last Updated:** 2026-10-09 (Refinement: Spalte „Bemerkung Prüfung“)
 
@@ -161,6 +161,16 @@ Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842)
 - **Überholt durch PROJ-5 (2026-09-18):** Der "Firma wechseln"-Button lebt nicht mehr auf `/uebersicht` selbst, sondern wurde in den gemeinsamen `AppHeader` verschoben (siehe PROJ-5 Implementation Notes) — Verhalten unverändert, nur die Position (jetzt im Header neben "Abmelden", auf allen Seiten einheitlich).
 - **Nachträglich ergänzt (2026-09-18, `/design`-Nachtrag):** Geräte-Status wird jetzt farblich markiert (Freigabe=Grün, keine Freigabe=Rot, letzte Freigabe=Amber) statt neutralem Text/Grau-Badge, auf der Übersicht-Tabelle und der Detailseite — siehe `docs/design-system.md` Component Conventions und `src/lib/status-badge.ts`.
 - **Nachträglich geändert (2026-09-18, Nutzerwunsch):** Die "Gerät"-Spalte in der Übersicht-Tabelle und der Titel auf der Detailseite zeigen jetzt eine kombinierte Artikel-Info statt des Gerätenamens — Formel vom Nutzer vorgegeben: `Modellartikel & " " & ArtikelENNorm & " " & ArtikelTyp & " " & ArtikelDimension & " " & HerstellerName` (= `bezeichnung norm artikeltyp dimension hersteller`, leere Teile werden übersprungen). Neuer shared Helper `src/lib/geraete/artikel-info.ts` (`formatArtikelInfo`), fällt auf den Gerätenamen zurück, wenn kein Artikel verknüpft ist bzw. auf "(ohne Angaben)", wenn auch der Gerätename fehlt. Spaltenkopf bleibt bewusst "Gerät" (Nutzerentscheidung), der Link zur Detailseite bleibt unverändert erhalten. Detailseite zeigt zusätzlich zwei neue Felder "Typ" und "Dimension" in der Detail-Karte.
+
+### Nachtrag 2026-10-09 — Spalte „Bemerkung Prüfung“ (Umsetzung, Frontend + Abfrage in einem Durchgang)
+- `src/lib/geraete/queries.ts`: neue Funktion `getAktuellePruefBemerkungen(geraetIds)` — nicht gelöschte Prüfberichte der übergebenen Geräte, in Blöcken à 100 Geräte und seitenweise à 1000 Zeilen (Supabase-Limit); pro Gerät gewinnt das neueste Prüfdatum, bei gleichem Datum ein Bericht mit nicht-leerer Bemerkung, sonst die kleinere ID. Leere/nur-Leerzeichen-Bemerkung → `null`. Wird in `getGeraeteList` (nur für die angezeigte Seite), `getGeraeteExportRows` (alle Exportzeilen) und `getGeraetById` parallel zum Artikel-Lookup aufgerufen. Die Geräte-IDs stammen immer aus den bereits auf Firma + freigegebene Standorte (PROJ-15) eingeschränkten Abfragen
+- `src/lib/geraete/types.ts`: neues Feld `pruefBemerkung` (getrennt von `bemerkungen` = Gerät)
+- `src/app/(protected)/uebersicht/page.tsx`: neue Spalte „Bemerkung Prüfung“ nach „Letzte Prüfung“; `line-clamp-2`, `max-w-xs`, voller Text im `title`-Attribut (keine neue Komponente; shadcn-Tooltip ist nicht installiert und für einen reinen Hover-Text nicht nötig). Fehlender Wert → „—“
+- `src/lib/geraete/export-csv.ts`: Standardspalte „Bemerkung Prüfung“ nach „Letzte Prüfung“, ungekürzt, gleiches Escaping wie alle Freitextfelder
+- `src/lib/geraete/zusatzspalten.ts`: Beschriftung der Zusatzspalte `bemerkungen` → „Bemerkungen Gerät“ (Schlüssel unverändert, keine Datenmigration)
+- **Tests:** `queries.test.ts` +7 (`getAktuellePruefBemerkungen`: neuestes Datum, gelöschte ignoriert, leere Bemerkung des aktuellen Berichts → null, kein Bericht, gleicher Tag deterministisch mit Vorrang der Bemerkung, mehr als 1000 Zeilen, Befüllung in Liste und Export; Mock um `.is()` erweitert); `export-csv.test.ts` Kopfzeile/Zeile angepasst + Test für ungekürzte, mehrzeilige Bemerkung direkt nach „Letzte Prüfung“; `zusatzspalten.test.ts` Test für „Bemerkungen Gerät“. Gegenprobe: ohne die Vorrangregel bei gleichem Tag schlägt der entsprechende Test fehl (der Test wurde dafür so angelegt, dass die ID-Regel allein nicht reicht)
+- `npm test` 228/228, Lint, `tsc --noEmit` und Build grün
+- **Nicht lokal im Browser geprüft:** Die Übersicht ist nur mit echtem Login erreichbar; die Darstellung wird beim Deploy live geprüft
 
 ## Implementation Notes (Backend)
 

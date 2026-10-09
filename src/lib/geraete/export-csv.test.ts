@@ -23,6 +23,7 @@ function makeGeraet(overrides: Partial<Geraet> = {}): Geraet {
     artikelTyp: "Typ A",
     artikelDimension: "10mm",
     kundenId: "KD-1",
+    pruefBemerkung: null,
     ...overrides,
   };
 }
@@ -70,7 +71,7 @@ describe("buildGeraeteExportCsv", () => {
     const csv = buildGeraeteExportCsv([], []);
     const header = csv.replace("﻿", "").split("\r\n")[0];
     expect(header).toBe(
-      "Gerätename;Gerät;Status;Lagerort;Letzte Prüfung;Standort;Ablegereife;Prüfer;Herstelljahr;Hersteller;Norm"
+      "Gerätename;Gerät;Status;Lagerort;Letzte Prüfung;Bemerkung Prüfung;Standort;Ablegereife;Prüfer;Herstelljahr;Hersteller;Norm"
     );
   });
 
@@ -86,7 +87,7 @@ describe("buildGeraeteExportCsv", () => {
     const [, row] = csv.replace("﻿", "").split("\r\n");
 
     expect(row).toBe(
-      "Testgerät;Feuerlöscher 6kg ABC EN 3 Typ A 10mm GLORIA;Freigabe;Regal 3;2026-01-15;Hauptlager Zürich;2030-01-15;M. Muster;2019;GLORIA;EN 3"
+      "Testgerät;Feuerlöscher 6kg ABC EN 3 Typ A 10mm GLORIA;Freigabe;Regal 3;2026-01-15;;Hauptlager Zürich;2030-01-15;M. Muster;2019;GLORIA;EN 3"
     );
   });
 
@@ -97,6 +98,18 @@ describe("buildGeraeteExportCsv", () => {
     const cells = row.split(";");
 
     expect(cells[3]).toBe(""); // Lagerort
-    expect(cells[7]).toBe(""); // Prüfer
+    expect(cells[8]).toBe(""); // Prüfer
+  });
+
+  // PROJ-3 Nachtrag 2026-10-09: Bemerkung des aktuellen Prüfberichts,
+  // ungekürzt, mehrzeilig korrekt maskiert.
+  it("exports the full Prüfbericht remark right after 'Letzte Prüfung', quoting line breaks", () => {
+    const bemerkung = "Gurt leicht ausgefranst; beobachten\nNächste Prüfung vorziehen";
+    const geraet = makeGeraet({ pruefBemerkung: bemerkung });
+    const csv = buildGeraeteExportCsv([geraet], []).replace("﻿", "");
+
+    const header = csv.split("\r\n")[0].split(";");
+    expect(header.indexOf("Bemerkung Prüfung")).toBe(header.indexOf("Letzte Prüfung") + 1);
+    expect(csv).toContain('"Gurt leicht ausgefranst; beobachten\nNächste Prüfung vorziehen"');
   });
 });

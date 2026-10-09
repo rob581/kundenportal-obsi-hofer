@@ -11,6 +11,8 @@ const ALWAYS_COLUMNS: Spalte[] = [
   { label: "Status", getValue: (g) => g.status },
   { label: "Lagerort", getValue: (g) => g.lagerort },
   { label: "Letzte Prüfung", getValue: (g) => g.letztePruefung },
+  // PROJ-3 Nachtrag 2026-10-09: ungekürzt, Escaping wie alle Freitextfelder.
+  { label: "Bemerkung Prüfung", getValue: (g) => g.pruefBemerkung },
   { label: "Standort", getValue: (g) => g.standortName },
   { label: "Ablegereife", getValue: (g) => g.ablegereife },
   { label: "Prüfer", getValue: (g) => g.pruefer },

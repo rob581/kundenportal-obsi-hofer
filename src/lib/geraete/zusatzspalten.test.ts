@@ -22,6 +22,7 @@ const BASE_GERAET: Geraet = {
   artikelTyp: "Typ A",
   artikelDimension: "10mm",
   kundenId: "KD-1",
+  pruefBemerkung: "Prüfbemerkung",
 };
 
 describe("resolveZusatzspalten", () => {
@@ -47,6 +48,13 @@ describe("resolveZusatzspalten", () => {
   it("deduplicates a key listed more than once in the config", () => {
     const result = resolveZusatzspalten(["seriennummer", "seriennummer"]);
     expect(result.map((s) => s.key)).toEqual(["seriennummer"]);
+  });
+
+  // PROJ-3 Nachtrag 2026-10-09: Abgrenzung zur Standardspalte "Bemerkung Prüfung".
+  it("labels the device remark column \"Bemerkungen Gerät\" (key unchanged)", () => {
+    const spalte = ZUSATZSPALTEN_POOL.find((s) => s.key === "bemerkungen");
+    expect(spalte?.label).toBe("Bemerkungen Gerät");
+    expect(spalte?.getValue(BASE_GERAET)).toBe(BASE_GERAET.bemerkungen);
   });
 
   it("labels the KundenID column exactly \"KundenID\"", () => {

@@ -133,6 +133,7 @@ export default async function UebersichtPage({
                           <TableHead>Status</TableHead>
                           <TableHead>Lagerort</TableHead>
                           <TableHead>Letzte Prüfung</TableHead>
+                          <TableHead>Bemerkung Prüfung</TableHead>
                           {zusatzspalten.map((spalte) => (
                             <TableHead key={spalte.key}>{spalte.label}</TableHead>
                           ))}
@@ -160,6 +161,16 @@ export default async function UebersichtPage({
                             </TableCell>
                             <TableCell>{geraet.lagerort ?? "—"}</TableCell>
                             <TableCell>{formatDatum(geraet.letztePruefung)}</TableCell>
+                            {/* PROJ-3 Nachtrag: max. zwei Zeilen, voller Text als Tooltip */}
+                            <TableCell className="max-w-xs whitespace-normal">
+                              {geraet.pruefBemerkung ? (
+                                <span className="line-clamp-2" title={geraet.pruefBemerkung}>
+                                  {geraet.pruefBemerkung}
+                                </span>
+                              ) : (
+                                "—"
+                              )}
+                            </TableCell>
                             {zusatzspalten.map((spalte) => (
                               <TableCell key={spalte.key}>{spalte.getValue(geraet) ?? "—"}</TableCell>
                             ))}

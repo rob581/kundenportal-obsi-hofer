@@ -19,6 +19,10 @@ export type Geraet = {
   artikelDimension: string | null;
   // Kunden-eigene Gerätebezeichnung (Dataverse bmvcc_KundenID) — siehe PROJ-7.
   kundenId: string | null;
+  // PROJ-3 Nachtrag 2026-10-09: Bemerkung des aktuellen Prüfberichts
+  // (neuestes Prüfdatum, gelöschte ausgenommen) — nicht zu verwechseln mit
+  // `bemerkungen` (Bemerkung am Gerät, PROJ-7-Zusatzspalte).
+  pruefBemerkung: string | null;
 };
 
 export type GeraeteQuery = {

@@ -24,6 +24,11 @@ function makeQuery(table: string) {
       rows = rows.filter((r) => values.includes(r[column]));
       return builder;
     },
+    // PROJ-3 Nachtrag: .is("deleted_at", null) für die Prüfbericht-Bemerkungen.
+    is: (column: string, value: null) => {
+      rows = rows.filter((r) => (value === null ? r[column] == null : r[column] === value));
+      return builder;
+    },
     ilike: (column: string, value: string) => {
       const needle = value.replace(/^%|%$/g, "").toLowerCase();
       const wildcard = value.includes("%");
@@ -81,7 +86,7 @@ vi.mock("@/lib/supabase-admin", () => ({
   getSupabaseAdmin: () => ({ from: (table: string) => makeQuery(table) }),
 }));
 
-import { getGeraeteList, getGeraetById, getGeraeteExportRows } from "./queries";
+import { getAktuellePruefBemerkungen, getGeraeteList, getGeraetById, getGeraeteExportRows } from "./queries";
 
 beforeEach(() => {
   for (const key of Object.keys(tableData)) delete tableData[key];
@@ -582,5 +587,84 @@ describe("Standort-Einschränkung (PROJ-15)", () => {
 
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
+  });
+});
+
+// PROJ-3 Nachtrag 2026-10-09: Bemerkung des aktuellen Prüfberichts.
+describe("getAktuellePruefBemerkungen", () => {
+  function pb(id: string, geraet_id: string, pruefdatum: string | null, bemerkungen: string | null, deleted_at: string | null = null) {
+    return { id, geraet_id, pruefdatum, bemerkungen, deleted_at };
+  }
+
+  it("takes the remark of the report with the newest Prüfdatum", async () => {
+    tableData.dv_pruefberichte = [
+      pb("p1", "g1", "2025-03-01", "alt"),
+      pb("p2", "g1", "2026-03-01", "neu"),
+      pb("p3", "g1", null, "undatiert"),
+    ];
+
+    const result = await getAktuellePruefBemerkungen(["g1"]);
+
+    expect(result.get("g1")).toBe("neu");
+  });
+
+  it("ignores deleted reports", async () => {
+    tableData.dv_pruefberichte = [
+      pb("p1", "g1", "2025-03-01", "gültig"),
+      pb("p2", "g1", "2026-03-01", "gelöscht", "2026-04-01T00:00:00Z"),
+    ];
+
+    expect((await getAktuellePruefBemerkungen(["g1"])).get("g1")).toBe("gültig");
+  });
+
+  it("returns null when the current report has no (or only blank) remark, even if an older one has one", async () => {
+    tableData.dv_pruefberichte = [pb("p1", "g1", "2025-03-01", "alt"), pb("p2", "g1", "2026-03-01", "   ")];
+
+    const result = await getAktuellePruefBemerkungen(["g1"]);
+
+    expect(result.get("g1")).toBeNull();
+  });
+
+  it("returns no entry for a device without reports", async () => {
+    tableData.dv_pruefberichte = [];
+
+    expect((await getAktuellePruefBemerkungen(["g1"])).has("g1")).toBe(false);
+  });
+
+  it("picks one remark deterministically for two reports on the same newest day, preferring one with a remark", async () => {
+    tableData.dv_pruefberichte = [
+      // The report WITH a remark has the larger ID, so only the
+      // "prefer a remark" rule (not the ID fallback) can pick it.
+      pb("p-a", "g1", "2026-03-01", null),
+      pb("p-b", "g1", "2026-03-01", "mit Bemerkung"),
+      pb("p-d", "g2", "2026-03-01", "zweite"),
+      pb("p-c", "g2", "2026-03-01", "erste"),
+    ];
+
+    const result = await getAktuellePruefBemerkungen(["g1", "g2"]);
+
+    expect(result.get("g1")).toBe("mit Bemerkung");
+    expect(result.get("g2")).toBe("erste"); // both have one → smaller ID
+  });
+
+  it("reads past the 1000-row page limit", async () => {
+    tableData.dv_pruefberichte = [
+      ...Array.from({ length: 1200 }, (_, i) => pb(`p${String(i).padStart(5, "0")}`, "g1", "2020-01-01", "alt")),
+      pb("p99999", "g1", "2026-03-01", "neueste"),
+    ];
+
+    expect((await getAktuellePruefBemerkungen(["g1"])).get("g1")).toBe("neueste");
+  });
+
+  it("is filled in the Übersicht and in the export rows", async () => {
+    seedZweiFirmen();
+    tableData.dv_pruefberichte = [pb("p1", "g1", "2026-03-01", "Gurt prüfen")];
+
+    const liste = await getGeraeteList(F1, {});
+    const exportRows = await getGeraeteExportRows(F1, {});
+
+    expect(liste.items.find((g) => g.id === "g1")?.pruefBemerkung).toBe("Gurt prüfen");
+    expect(exportRows.find((g) => g.id === "g1")?.pruefBemerkung).toBe("Gurt prüfen");
+    expect(liste.items.find((g) => g.id === "g2")?.pruefBemerkung).toBeNull();
   });
 });

@@ -73,7 +73,12 @@ type ArtikelInfo = {
   dimension: string | null;
 };
 
-function mapGeraetRow(row: GeraetRow, standortName: string | null, artikel: ArtikelInfo | null): Geraet {
+function mapGeraetRow(
+  row: GeraetRow,
+  standortName: string | null,
+  artikel: ArtikelInfo | null,
+  pruefBemerkung: string | null
+): Geraet {
   return {
     id: row.id,
     name: row.name,
@@ -94,7 +99,61 @@ function mapGeraetRow(row: GeraetRow, standortName: string | null, artikel: Arti
     artikelTyp: artikel?.artikeltyp ?? null,
     artikelDimension: artikel?.dimension ?? null,
     kundenId: row.kunden_id,
+    pruefBemerkung,
   };
+}
+
+const PRUEFBERICHT_GERAET_CHUNK_SIZE = 100;
+const PAGE_ROWS = 1000;
+
+type PruefBemerkungRow = { id: string; geraet_id: string; pruefdatum: string | null; bemerkungen: string | null };
+
+// Ist `a` "aktueller" als `b`? Neuestes Prüfdatum gewinnt (undatiert zählt
+// als ältestes). Bei gleichem Datum (Altdaten, künftig max. ein Bericht pro
+// Tag) gewinnt einer mit Bemerkung, sonst die kleinere ID — damit das
+// Ergebnis bei jedem Aufruf gleich ist (PROJ-3 Nachtrag 2026-10-09).
+function istAktueller(a: PruefBemerkungRow, b: PruefBemerkungRow): boolean {
+  const da = a.pruefdatum ?? "";
+  const db = b.pruefdatum ?? "";
+  if (da !== db) return da > db;
+  const ha = !!a.bemerkungen?.trim();
+  const hb = !!b.bemerkungen?.trim();
+  if (ha !== hb) return ha;
+  return a.id < b.id;
+}
+
+// PROJ-3 Nachtrag 2026-10-09: Bemerkung des aktuellen Prüfberichts je Gerät.
+// Nur für die übergebenen (bereits auf Firma + freigegebene Standorte
+// eingeschränkten) Geräte-IDs; blockweise und seitenweise, weil Supabase pro
+// Abfrage höchstens 1000 Zeilen liefert.
+export async function getAktuellePruefBemerkungen(geraetIds: string[]): Promise<Map<string, string | null>> {
+  const aktuell = new Map<string, PruefBemerkungRow>();
+  if (geraetIds.length === 0) return new Map();
+  const supabase = getSupabaseAdmin();
+
+  for (const idChunk of chunk(geraetIds, PRUEFBERICHT_GERAET_CHUNK_SIZE)) {
+    for (let from = 0; ; from += PAGE_ROWS) {
+      const { data, error } = await supabase
+        .from("dv_pruefberichte")
+        .select("id, geraet_id, pruefdatum, bemerkungen")
+        .in("geraet_id", idChunk)
+        .is("deleted_at", null)
+        .order("id", { ascending: true })
+        .range(from, from + PAGE_ROWS - 1);
+
+      if (error) throw new Error(`Prüfbericht-Bemerkungen-Lookup fehlgeschlagen: ${error.message}`);
+      const rows = (data ?? []) as PruefBemerkungRow[];
+      for (const row of rows) {
+        const bisher = aktuell.get(row.geraet_id);
+        if (!bisher || istAktueller(row, bisher)) aktuell.set(row.geraet_id, row);
+      }
+      if (rows.length < PAGE_ROWS) break;
+    }
+  }
+
+  return new Map(
+    [...aktuell.entries()].map(([geraetId, row]) => [geraetId, row.bemerkungen?.trim() ? row.bemerkungen : null])
+  );
 }
 
 // Exportiert seit PROJ-9 — auch die firmenweite Prüfberichte-Übersicht
@@ -232,13 +291,17 @@ export async function getGeraeteList(scope: FirmaScope, query: GeraeteQuery): Pr
   // distinct Artikel-IDs der aktuellen Seite, kein Lookup pro Zeile.
   const rows = (data ?? []) as GeraetRow[];
   const artikelIds = [...new Set(rows.map((row) => row.artikel_id).filter((id): id is string => !!id))];
-  const artikelMap = await getArtikelMapFuerIds(artikelIds);
+  const [artikelMap, pruefBemerkungen] = await Promise.all([
+    getArtikelMapFuerIds(artikelIds),
+    getAktuellePruefBemerkungen(rows.map((row) => row.id)),
+  ]);
 
   const items = rows.map((row) =>
     mapGeraetRow(
       row,
       standortNamen.get(row.standort_id ?? "") ?? null,
-      row.artikel_id ? artikelMap.get(row.artikel_id) ?? null : null
+      row.artikel_id ? artikelMap.get(row.artikel_id) ?? null : null,
+      pruefBemerkungen.get(row.id) ?? null
     )
   );
 
@@ -288,7 +351,8 @@ export async function getGeraetById(id: string, scope: FirmaScope): Promise<Gera
     artikel = artikelRow as ArtikelInfo | null;
   }
 
-  return mapGeraetRow(row, standort.name as string | null, artikel);
+  const pruefBemerkungen = await getAktuellePruefBemerkungen([row.id]);
+  return mapGeraetRow(row, standort.name as string | null, artikel, pruefBemerkungen.get(row.id) ?? null);
 }
 
 // PROJ-8: liefert ALLE zu den Filtern passenden Geräte einer Firma, ohne
@@ -323,13 +387,17 @@ export async function getGeraeteExportRows(
 
   const rows = (data ?? []) as GeraetRow[];
   const artikelIds = [...new Set(rows.map((row) => row.artikel_id).filter((id): id is string => !!id))];
-  const artikelMap = await getArtikelMapFuerIds(artikelIds);
+  const [artikelMap, pruefBemerkungen] = await Promise.all([
+    getArtikelMapFuerIds(artikelIds),
+    getAktuellePruefBemerkungen(rows.map((row) => row.id)),
+  ]);
 
   return rows.map((row) =>
     mapGeraetRow(
       row,
       standortNamen.get(row.standort_id ?? "") ?? null,
-      row.artikel_id ? artikelMap.get(row.artikel_id) ?? null : null
+      row.artikel_id ? artikelMap.get(row.artikel_id) ?? null : null,
+      pruefBemerkungen.get(row.id) ?? null
     )
   );
 }
