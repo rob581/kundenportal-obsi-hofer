@@ -16,21 +16,36 @@ vi.mock("@/lib/sync/run-sync", () => {
       this.name = "InvalidFirmaIdError";
     }
   }
+  class InvalidStandortIdError extends Error {
+    constructor(standortId: string) {
+      super(`Ungültige standortId: "${standortId}" ist keine gültige GUID.`);
+      this.name = "InvalidStandortIdError";
+    }
+  }
+  class StandortNotFoundError extends Error {
+    constructor(standortId: string) {
+      super(`Standort mit ID "${standortId}" wurde in Dataverse nicht gefunden.`);
+      this.name = "StandortNotFoundError";
+    }
+  }
   return {
-    runDataverseSync: (firmaId: string) => runDataverseSyncMock(firmaId),
+    runDataverseSync: (firmaId: string, standortId?: string) => runDataverseSyncMock(firmaId, standortId),
     FirmaNotFoundError,
     InvalidFirmaIdError,
+    InvalidStandortIdError,
+    StandortNotFoundError,
   };
 });
 vi.mock("@/lib/notify/send-email", () => ({ sendOpsEmail: (subject: string, body: string) => sendOpsEmailMock(subject, body) }));
 
 import { GET } from "./route";
-import { FirmaNotFoundError, InvalidFirmaIdError } from "@/lib/sync/run-sync";
+import { FirmaNotFoundError, InvalidFirmaIdError, InvalidStandortIdError, StandortNotFoundError } from "@/lib/sync/run-sync";
 
 // firmaId ist Pflicht (kein Vollsync mehr) — null lässt den Parameter weg.
-function makeRequest(secret?: string, firmaId: string | null = "firma-1") {
+function makeRequest(secret?: string, firmaId: string | null = "firma-1", standortId?: string) {
   const url = new URL("http://localhost/api/cron/sync-dataverse");
   if (firmaId !== null) url.searchParams.set("firmaId", firmaId);
+  if (standortId !== undefined) url.searchParams.set("standortId", standortId);
   return new Request(url, {
     headers: secret !== undefined ? { authorization: `Bearer ${secret}` } : {},
   });
@@ -148,7 +163,7 @@ describe("GET /api/cron/sync-dataverse", () => {
 
     await GET(makeRequest("test-cron-secret", "firma-1"));
 
-    expect(runDataverseSyncMock).toHaveBeenCalledWith("firma-1");
+    expect(runDataverseSyncMock).toHaveBeenCalledWith("firma-1", undefined);
   });
 
   // Decision Log 2026-10-07: kein Vollsync mehr — ohne firmaId wird gar
@@ -191,4 +206,55 @@ describe("GET /api/cron/sync-dataverse", () => {
     expect(body.error).toContain("Ungültige firmaId");
     expect(sendOpsEmailMock).not.toHaveBeenCalled();
   });
+
+  // PROJ-16: Sync pro Standort.
+  it("passes standortId through to runDataverseSync and returns the scope", async () => {
+    runDataverseSyncMock.mockResolvedValue({
+      scope: { firmaId: "firma-1", standortId: "standort-1" },
+      entities: [{ slug: "standorte", fetched: 1, added: 0, updated: 1, deleted: 0, skippedDueToThreshold: false }],
+      warnings: [],
+      errors: [],
+    });
+
+    const res = await GET(makeRequest("test-cron-secret", "firma-1", "standort-1"));
+
+    expect(runDataverseSyncMock).toHaveBeenCalledWith("firma-1", "standort-1");
+    expect(res.status).toBe(200);
+    expect((await res.json()).scope).toEqual({ firmaId: "firma-1", standortId: "standort-1" });
+  });
+
+  it("passes an empty standortId on (rejected there), instead of silently running the whole Firma", async () => {
+    runDataverseSyncMock.mockRejectedValue(new InvalidStandortIdError(""));
+
+    const res = await GET(makeRequest("test-cron-secret", "firma-1", ""));
+
+    expect(runDataverseSyncMock).toHaveBeenCalledWith("firma-1", "");
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 404 without an ops email when the Standort does not belong to the Firma", async () => {
+    runDataverseSyncMock.mockRejectedValue(new StandortNotFoundError("standort-x", "firma-1"));
+
+    const res = await GET(makeRequest("test-cron-secret", "firma-1", "standort-x"));
+
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toContain("standort-x");
+    expect(sendOpsEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 without an ops email for a non-GUID standortId", async () => {
+    runDataverseSyncMock.mockRejectedValue(new InvalidStandortIdError("kaputt"));
+
+    const res = await GET(makeRequest("test-cron-secret", "firma-1", "kaputt"));
+
+    expect(res.status).toBe(400);
+    expect(sendOpsEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("still requires the cron secret with a standortId", async () => {
+    const res = await GET(makeRequest(undefined, "firma-1", "standort-1"));
+    expect(res.status).toBe(401);
+    expect(runDataverseSyncMock).not.toHaveBeenCalled();
+  });
 });
+

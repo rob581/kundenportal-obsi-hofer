@@ -14,7 +14,14 @@ export function computeMissingIds(existingIds: string[], fetchedIds: Set<string>
   return existingIds.filter((id) => !fetchedIds.has(id));
 }
 
+// PROJ-16: Bei kleinen Mengen (einzelne Standorte, kleine Firmen) wäre schon
+// das Löschen weniger Einträge "über 20 %" und würde nie übernommen. Die
+// Schwelle greift deshalb erst, wenn vorher MEHR als diese Anzahl bekannt war;
+// bis dahin wird normal gelöscht. Grosse Mengen bleiben gegen halbe Abrufe
+// geschützt.
+export const DELETE_SAFETY_MIN_ROWS = 10;
+
 export function exceedsSafetyThreshold(existingCount: number, missingCount: number): boolean {
-  if (existingCount === 0) return false;
+  if (existingCount <= DELETE_SAFETY_MIN_ROWS) return false;
   return missingCount / existingCount > DELETE_SAFETY_THRESHOLD;
 }

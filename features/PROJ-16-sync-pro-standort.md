@@ -1,6 +1,6 @@
 # PROJ-16: Sync pro Standort
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-10-09
 **Last Updated:** 2026-10-09
 
@@ -148,6 +148,21 @@ Keine neuen Tabellen, keine Migration. Unverändert gespeichert werden Firma, St
 ### D) Dependencies
 - Keine neuen Pakete
 - Keine Migration
+
+## Implementation Notes (Backend)
+
+Umgesetzt wie im Tech Design. Keine Migration, keine neuen Pakete, keine Oberfläche.
+
+- `src/lib/sync/run-sync.ts`: `runDataverseSync(firmaId, standortId?)`. Neue Fehlerklassen `InvalidStandortIdError` (GUID-Prüfung, auch leerer Wert) und `StandortNotFoundError`. Prüfungsreihenfolge: GUIDs → Firma existiert → Standort existiert **und** gehört in Dataverse zur Firma (ein Filter auf Standort-ID und Firma) — alles vor dem ersten Schreibvorgang. Im Standort-Lauf: Standorte-Schritt mit diesem Filter und Portal-Bereich „nur diese Standort-ID“ (nicht „Standorte der Firma“, damit ein Standort beim Firmenwechsel umgeschrieben wird); Zugänge, Geräte und Prüfberichte folgen automatisch der dann nur noch einen Standort-ID; Relationen-Schritt entfällt; Kontakte nur aus den Zugängen. Ergebnis enthält neu `scope` (`firmaId`, `standortId` bzw. `null`), vom Sync selbst gesetzt
+- `src/lib/sync/reconcile.ts`: `DELETE_SAFETY_MIN_ROWS = 10`; die 20-%-Schwelle greift erst bei mehr als 10 vorher bekannten Zeilen. Gilt für alle Schritte und Läufe; Zugänge bleiben über `ignoreDeleteThreshold` ganz ohne Schwelle
+- `src/app/api/cron/sync-dataverse/route.ts`: liest optional `standortId` (vorhanden, aber leer → wird weitergegeben und als ungültig abgelehnt); `StandortNotFoundError` → 404, `InvalidStandortIdError` → 400, jeweils ohne Ops-Mail; Antwort enthält `scope` aus dem Sync-Ergebnis
+
+**Tests**
+- `run-sync.test.ts` +8 (Standort-Lauf): nur A synchronisiert, verschwundenes Gerät von A gelöscht (dank Mindestmenge), B unberührt; entzogener Zugang zu A weg, Zugang desselben Kontakts zu B bleibt; Kontakte aus Zugängen, Relationen unberührt (kein Abruf); `scope` + `standorte.fetched = 1`, Artikel wie bisher; Firmen-Lauf meldet `standortId: null` und alle Standorte; ungültige/leere `standortId` ohne jeden Dataverse-Abruf abgelehnt; fremder Standort → `StandortNotFoundError`, nichts geschrieben (auch nicht die Firma); Firmenwechsel: Standort-Lauf bei der neuen Firma schreibt den Standort um
+- Zwei bestehende Schwellen-Tests auf Mengen über der Mindestmenge angehoben (20 Geräte bzw. 12 Standorte), damit sie weiter die 20-%-Regel prüfen
+- `reconcile.test.ts` +2 (Mindestmenge, Grenze 10/11); `route.test.ts` +5 (Weitergabe + `scope`, leere `standortId`, 404/400 ohne Ops-Mail, 401 auch mit `standortId`)
+- Gegenproben: ohne verengten Standort-Bereich, ohne Standort-Prüfung und ohne Mindestmenge schlagen jeweils die zugehörigen Tests fehl
+- `npm test` 243/243, Lint, `tsc --noEmit` und Build grün
 
 ## QA Test Results
 _To be added by /qa_

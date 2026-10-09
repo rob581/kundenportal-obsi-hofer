@@ -1,6 +1,12 @@
 import { NextResponse } from "next/server";
 import { sendOpsEmail } from "@/lib/notify/send-email";
-import { runDataverseSync, FirmaNotFoundError, InvalidFirmaIdError } from "@/lib/sync/run-sync";
+import {
+  runDataverseSync,
+  FirmaNotFoundError,
+  InvalidFirmaIdError,
+  InvalidStandortIdError,
+  StandortNotFoundError,
+} from "@/lib/sync/run-sync";
 
 // Batched upserts over ~30k records comfortably fit in a few minutes;
 // 300s requires a Vercel plan that supports extended function duration
@@ -26,19 +32,23 @@ export async function GET(request: Request) {
     // nicht mehr (Decision Log 2026-10-07). Eine fehlende, ungültige oder
     // unbekannte firmaId ist ein Fehler im aufrufenden Admin-Tool, kein
     // Sync-Infrastruktur-Problem — dafür wird bewusst keine Ops-Mail verschickt.
-    const firmaId = new URL(request.url).searchParams.get("firmaId");
+    const params = new URL(request.url).searchParams;
+    const firmaId = params.get("firmaId");
     if (firmaId === null) {
       return NextResponse.json({ error: "Parameter firmaId fehlt." }, { status: 400 });
     }
+    // PROJ-16: optional; ein vorhandener, aber leerer Wert wird als ungültig
+    // abgelehnt (nicht als "kein Standort" behandelt).
+    const standortId = params.get("standortId") ?? undefined;
 
     let result;
     try {
-      result = await runDataverseSync(firmaId);
+      result = await runDataverseSync(firmaId, standortId);
     } catch (error) {
-      if (error instanceof FirmaNotFoundError) {
+      if (error instanceof FirmaNotFoundError || error instanceof StandortNotFoundError) {
         return NextResponse.json({ error: error.message }, { status: 404 });
       }
-      if (error instanceof InvalidFirmaIdError) {
+      if (error instanceof InvalidFirmaIdError || error instanceof InvalidStandortIdError) {
         return NextResponse.json({ error: error.message }, { status: 400 });
       }
       throw error;

@@ -14,6 +14,10 @@ export type EntitySyncSummary = {
 };
 
 export type SyncRunResult = {
+  // PROJ-16: wofür tatsächlich übertragen wurde (vom Sync selbst gesetzt,
+  // nicht aus der Anfrage übernommen) — das Admin-Tool prüft das als zweite
+  // Absicherung, dass der Standort-Filter gewirkt hat.
+  scope: { firmaId: string; standortId: string | null };
   entities: EntitySyncSummary[];
   warnings: string[];
   errors: string[];
@@ -49,6 +53,30 @@ const GUID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{
 function requireValidFirmaId(firmaId: string): void {
   if (!GUID_PATTERN.test(firmaId)) {
     throw new InvalidFirmaIdError(firmaId);
+  }
+}
+
+// PROJ-16: gleiche Absicherung für die optionale standortId, bevor sie in
+// einen Dataverse-$filter eingesetzt wird (vgl. QA BUG-1 bei firmaId).
+export class InvalidStandortIdError extends Error {
+  constructor(standortId: string) {
+    super(`Ungültige standortId: "${standortId}" ist keine gültige GUID.`);
+    this.name = "InvalidStandortIdError";
+  }
+}
+
+// PROJ-16: Standort existiert in Dataverse nicht oder gehört dort nicht zur
+// übergebenen Firma — der Lauf wird abgelehnt, bevor irgendetwas geschrieben wird.
+export class StandortNotFoundError extends Error {
+  constructor(standortId: string, firmaId: string) {
+    super(`Standort mit ID "${standortId}" wurde in Dataverse bei der Firma "${firmaId}" nicht gefunden.`);
+    this.name = "StandortNotFoundError";
+  }
+}
+
+function requireValidStandortId(standortId: string): void {
+  if (!GUID_PATTERN.test(standortId)) {
+    throw new InvalidStandortIdError(standortId);
   }
 }
 
@@ -161,10 +189,20 @@ const THRESHOLD_WARNING = (slug: string) =>
 // Es gibt bewusst keinen Vollsync über alle Firmen mehr (Decision Log,
 // 2026-10-07): firmaId ist Pflicht, damit ein Aufruf, dem sie versehentlich
 // fehlt, nicht still alle Firmen synchronisiert.
-export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> {
-  // Vor jeder anderen Aktion: firmaId muss eine wohlgeformte GUID sein, bevor
-  // sie irgendwo in einen Dataverse-$filter eingesetzt wird (siehe QA BUG-1).
+//
+// PROJ-16: Mit standortId läuft derselbe Ablauf, aber jeder Schritt ist auf
+// diesen einen Standort verengt (Standorte, Zugänge, Geräte, Prüfberichte);
+// die Lösch-Erkennung vergleicht nur innerhalb dieses Bereichs, andere
+// Standorte der Firma bleiben unberührt. Relationen entfallen, Kontakte kommen
+// nur aus den Zugängen. Ohne standortId: unverändert die ganze Firma.
+export async function runDataverseSync(firmaId: string, standortId?: string): Promise<SyncRunResult> {
+  // Vor jeder anderen Aktion: IDs müssen wohlgeformte GUIDs sein, bevor sie
+  // irgendwo in einen Dataverse-$filter eingesetzt werden (siehe QA BUG-1).
+  // Strikt auf undefined geprüft: eine leere standortId ist ungültig, nicht
+  // "keine" (sonst fiele ein kaputter Aufruf still auf die ganze Firma zurück).
   requireValidFirmaId(firmaId);
+  const standortLauf = standortId !== undefined;
+  if (standortLauf) requireValidStandortId(standortId);
 
   const entities: EntitySyncSummary[] = [];
   const warnings: string[] = [];
@@ -187,6 +225,18 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
   const firmenJob = findJob("firmen");
   const firmaRaw = await fetchAllDataverseRecords(firmenJob.entitySet, firmenJob.select, `bmvcc_firmaid eq ${firmaId}`);
   if (firmaRaw.length === 0) throw new FirmaNotFoundError(firmaId);
+
+  // PROJ-16: Standort muss in Dataverse existieren UND zur Firma gehören —
+  // geprüft vor dem ersten Schreibvorgang, damit ein abgelehnter Aufruf nichts
+  // verändert. Derselbe Filter dient unten dem Standorte-Schritt.
+  const standorteJob = findJob("standorte");
+  const standortFilter = standortLauf
+    ? `bmvcc_organizationlocationid eq ${standortId} and _bmvcc_bexiofirma_value eq ${firmaId}`
+    : `_bmvcc_bexiofirma_value eq ${firmaId}`;
+  if (standortLauf) {
+    const standortRaw = await fetchAllDataverseRecords(standorteJob.entitySet, standorteJob.select, standortFilter);
+    if (standortRaw.length === 0) throw new StandortNotFoundError(standortId, firmaId);
+  }
 
   try {
     const firmenConfig = getEntityConfig("firmen")!;
@@ -215,10 +265,15 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
   // wenn der Standorte-Schritt scheitert (dann wird kein Zugang gelöscht).
   let verschwundeneStandortIds: string[] = [];
   try {
-    const outcome = await syncOneEntity(findJob("standorte"), {
+    // Standort-Lauf: Bereich ist nur dieser eine Standort (über seine ID, nicht
+    // über die Firma — so wird ein Standort, der im Portal noch bei einer
+    // anderen Firma steht, beim Firmenwechsel korrekt umgeschrieben).
+    const outcome = await syncOneEntity(standorteJob, {
       kind: "filter",
-      dataverseFilter: `_bmvcc_bexiofirma_value eq ${firmaId}`,
-      supabaseWhereIn: { column: "firma_id", values: [firmaId] },
+      dataverseFilter: standortFilter,
+      supabaseWhereIn: standortLauf
+        ? { column: "id", values: [standortId] }
+        : { column: "firma_id", values: [firmaId] },
     });
     record(outcome);
     standortIds = outcome.mappedRecords.map((r) => r.id);
@@ -277,18 +332,22 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
   }
 
   let kontaktIds: string[] = [];
-  try {
-    const outcome = await syncOneEntity(findJob("relationen"), {
-      kind: "filter",
-      dataverseFilter: `_bmvcc_firma_value eq ${firmaId}`,
-      supabaseWhereIn: { column: "firma_id", values: [firmaId] },
-    });
-    record(outcome);
-    kontaktIds = outcome.mappedRecords
-      .map((r) => r.kontakt_id)
-      .filter((v): v is string => typeof v === "string");
-  } catch (error) {
-    recordError("relationen", error);
+  // PROJ-16: Relationen hängen an der Firma, nicht am Standort — im
+  // Standort-Lauf bleiben sie unverändert (nächster Firmen-Lauf).
+  if (!standortLauf) {
+    try {
+      const outcome = await syncOneEntity(findJob("relationen"), {
+        kind: "filter",
+        dataverseFilter: `_bmvcc_firma_value eq ${firmaId}`,
+        supabaseWhereIn: { column: "firma_id", values: [firmaId] },
+      });
+      record(outcome);
+      kontaktIds = outcome.mappedRecords
+        .map((r) => r.kontakt_id)
+        .filter((v): v is string => typeof v === "string");
+    } catch (error) {
+      recordError("relationen", error);
+    }
   }
 
   // Kontakte aus Relationen UND Portalzugängen (PROJ-15), ohne Doppelte.
@@ -312,5 +371,5 @@ export async function runDataverseSync(firmaId: string): Promise<SyncRunResult> 
     recordError("artikel", error);
   }
 
-  return { entities, warnings, errors };
+  return { scope: { firmaId, standortId: standortLauf ? standortId : null }, entities, warnings, errors };
 }

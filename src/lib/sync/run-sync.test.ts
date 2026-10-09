@@ -48,7 +48,13 @@ vi.mock("@/lib/sync/batch", () => ({
   },
 }));
 
-import { runDataverseSync, FirmaNotFoundError, InvalidFirmaIdError } from "./run-sync";
+import {
+  runDataverseSync,
+  FirmaNotFoundError,
+  InvalidFirmaIdError,
+  InvalidStandortIdError,
+  StandortNotFoundError,
+} from "./run-sync";
 
 beforeEach(() => {
   fetchAllDataverseRecordsMock.mockReset();
@@ -286,9 +292,10 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
   });
 
   it("skips deletion and warns when more than 20% of this Firma's rows go missing at once", async () => {
+    // 20 known rows: above the PROJ-16 minimum of 10, so the 20% rule applies.
     resetTable(
       "dv_geraete",
-      Array.from({ length: 10 }, (_, i) => ({ id: `g-${i}`, standort_id: "s1" }))
+      Array.from({ length: 20 }, (_, i) => ({ id: `g-${i}`, standort_id: "s1" }))
     );
     fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
       if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
@@ -300,15 +307,15 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
       return [];
     });
     fetchAllDataverseRecordsForIdsMock.mockImplementation(async (entitySet: string) =>
-      // Only 5 of 10 come back — 50% missing, well above the 20% threshold.
+      // Only 10 of 20 come back — 50% missing, well above the 20% threshold.
       entitySet === "bmvcc_equipmentrecords"
-        ? Array.from({ length: 5 }, (_, i) => ({ bmvcc_equipmentrecordid: `g-${i}`, _bmvcc_standort_value: "s1" }))
+        ? Array.from({ length: 10 }, (_, i) => ({ bmvcc_equipmentrecordid: `g-${i}`, _bmvcc_standort_value: "s1" }))
         : []
     );
 
     const result = await runDataverseSync(FIRMA_ID);
 
-    expect(tables["dv_geraete"].size).toBe(10); // nothing deleted
+    expect(tables["dv_geraete"].size).toBe(20); // nothing deleted
     const geraeteSummary = result.entities.find((e) => e.slug === "geraete");
     expect(geraeteSummary?.skippedDueToThreshold).toBe(true);
     expect(result.warnings).toHaveLength(1);
@@ -407,23 +414,23 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
     // QA BUG-2: Standort in Dataverse gelöscht, seine Löschung im Portal von
     // der 20-%-Schwelle gebremst — der Zugang darf trotzdem nicht bleiben.
     it("removes the Zugänge of a Standort that vanished from Dataverse, even if the Standort row is kept by the threshold", async () => {
-      resetTable("dv_standorte", [
-        { id: "s1", firma_id: FIRMA_ID },
-        { id: "s2", firma_id: FIRMA_ID },
-        { id: "s3", firma_id: FIRMA_ID },
-      ]);
+      // 12 known Standorte (above the PROJ-16 minimum of 10); s10–s12 were
+      // deleted in Dataverse: 3 of 12 = 25% > threshold → Standort rows stay.
+      resetTable(
+        "dv_standorte",
+        Array.from({ length: 12 }, (_, i) => ({ id: `s${i + 1}`, firma_id: FIRMA_ID }))
+      );
       resetTable("dv_portalzugaenge", [
         { id: "pz1", kontakt_id: "k1", standort_id: "s1" },
-        { id: "pz3", kontakt_id: "k1", standort_id: "s3" },
+        { id: "pz3", kontakt_id: "k1", standort_id: "s10" },
       ]);
       fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
         if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
         if (entitySet === "bmvcc_organizationlocations") {
-          // s3 was deleted in Dataverse: 1 of 3 = 33% > threshold
-          return [
-            { bmvcc_organizationlocationid: "s1", _bmvcc_bexiofirma_value: FIRMA_ID },
-            { bmvcc_organizationlocationid: "s2", _bmvcc_bexiofirma_value: FIRMA_ID },
-          ];
+          return Array.from({ length: 9 }, (_, i) => ({
+            bmvcc_organizationlocationid: `s${i + 1}`,
+            _bmvcc_bexiofirma_value: FIRMA_ID,
+          }));
         }
         return [];
       });
@@ -435,7 +442,7 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
 
       const result = await runDataverseSync(FIRMA_ID);
 
-      expect(tables["dv_standorte"].has("s3")).toBe(true); // kept by the threshold (pre-existing PROJ-1 behaviour)
+      expect(tables["dv_standorte"].has("s10")).toBe(true); // kept by the threshold (pre-existing PROJ-1 behaviour)
       expect(result.entities.find((e) => e.slug === "standorte")?.skippedDueToThreshold).toBe(true);
       expect(tables["dv_portalzugaenge"].has("pz3")).toBe(false); // but the Zugang is gone
       expect(tables["dv_portalzugaenge"].has("pz1")).toBe(true);
@@ -453,6 +460,143 @@ describe("runDataverseSync with firmaId (PROJ-12)", () => {
 
       expect(tables["dv_portalzugaenge"].has("pz1")).toBe(true);
       expect(result.errors.some((e) => e.includes("standorte"))).toBe(true);
+    });
+  });
+
+  // PROJ-16: Sync pro Standort.
+  describe("Standort-Lauf (PROJ-16)", () => {
+    const STANDORT_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    const STANDORT_B = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+
+    // Dataverse knows Standort A and B of FIRMA_ID; a Standort filter with an
+    // id only matches that one Standort (and only if it belongs to FIRMA_ID).
+    function mockDataverse(geraeteA: string[], zugaengeA: { id: string; kontakt: string }[]) {
+      fetchAllDataverseRecordsMock.mockImplementation(async (entitySet: string, _select: string[], filter?: string) => {
+        if (entitySet === "bmvcc_firmas") return filter?.includes(FIRMA_ID) ? [{ bmvcc_firmaid: FIRMA_ID }] : [];
+        if (entitySet === "bmvcc_organizationlocations") {
+          const alle = [
+            { bmvcc_organizationlocationid: STANDORT_A, _bmvcc_bexiofirma_value: FIRMA_ID },
+            { bmvcc_organizationlocationid: STANDORT_B, _bmvcc_bexiofirma_value: FIRMA_ID },
+          ];
+          if (!filter?.includes(FIRMA_ID)) return [];
+          const idMatch = filter.match(/bmvcc_organizationlocationid eq ([0-9a-f-]+)/);
+          return idMatch ? alle.filter((s) => s.bmvcc_organizationlocationid === idMatch[1]) : alle;
+        }
+        if (entitySet === "bmvcc_artikels") return [{ bmvcc_artikelid: "a1" }];
+        return [];
+      });
+      fetchAllDataverseRecordsForIdsMock.mockImplementation(
+        async (entitySet: string, _select: string[], _col: string, ids: string[]) => {
+          if (entitySet === "bmvcc_equipmentrecords" && ids.includes(STANDORT_A)) {
+            return geraeteA.map((id) => ({ bmvcc_equipmentrecordid: id, _bmvcc_standort_value: STANDORT_A }));
+          }
+          if (entitySet === "bmvcc_portalzugangs" && ids.includes(STANDORT_A)) {
+            return zugaengeA.map((z) => ({ bmvcc_portalzugangid: z.id, _bmvcc_kontakt_value: z.kontakt, _bmvcc_standort_value: STANDORT_A }));
+          }
+          if (entitySet === "bmvcc_kontakts") return ids.map((id) => ({ bmvcc_kontaktid: id, statecode: 0 }));
+          return [];
+        }
+      );
+    }
+
+    function seedPortal() {
+      resetTable("dv_standorte", [
+        { id: STANDORT_A, firma_id: FIRMA_ID },
+        { id: STANDORT_B, firma_id: FIRMA_ID },
+      ]);
+      resetTable("dv_geraete", [
+        { id: "gA1", standort_id: STANDORT_A },
+        { id: "gA2", standort_id: STANDORT_A },
+        { id: "gB1", standort_id: STANDORT_B },
+      ]);
+      resetTable("dv_portalzugaenge", [
+        { id: "pzA", kontakt_id: "k1", standort_id: STANDORT_A },
+        { id: "pzB", kontakt_id: "k1", standort_id: STANDORT_B },
+      ]);
+      resetTable("dv_relationen", [{ id: "r1", firma_id: FIRMA_ID, kontakt_id: "k-rel" }]);
+    }
+
+    it("syncs only Standort A: deletes a vanished Gerät of A, leaves Standort B untouched", async () => {
+      seedPortal();
+      mockDataverse(["gA1"], [{ id: "pzA", kontakt: "k1" }]);
+
+      const result = await runDataverseSync(FIRMA_ID, STANDORT_A);
+
+      expect(tables["dv_geraete"].has("gA1")).toBe(true);
+      expect(tables["dv_geraete"].has("gA2")).toBe(false); // 1 of 2 = 50%, deleted thanks to the minimum
+      expect(tables["dv_geraete"].has("gB1")).toBe(true); // B untouched, although Dataverse returned nothing for B
+      expect(tables["dv_standorte"].has(STANDORT_B)).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    it("removes a revoked Zugang to A but keeps the same Kontakt's Zugang to B", async () => {
+      seedPortal();
+      mockDataverse(["gA1", "gA2"], []);
+
+      await runDataverseSync(FIRMA_ID, STANDORT_A);
+
+      expect(tables["dv_portalzugaenge"].has("pzA")).toBe(false);
+      expect(tables["dv_portalzugaenge"].has("pzB")).toBe(true);
+    });
+
+    it("syncs the Kontakte with a Zugang to A, and leaves the Relationen alone", async () => {
+      seedPortal();
+      mockDataverse(["gA1", "gA2"], [{ id: "pzA", kontakt: "k-neu" }]);
+
+      await runDataverseSync(FIRMA_ID, STANDORT_A);
+
+      expect(tables["dv_kontakte"]?.has("k-neu")).toBe(true);
+      expect(tables["dv_relationen"].has("r1")).toBe(true);
+      expect(fetchAllDataverseRecordsMock.mock.calls.some(([entitySet]) => entitySet === "bmvcc_relations")).toBe(false);
+    });
+
+    it("reports scope with the Standort and fetched: 1 for standorte", async () => {
+      seedPortal();
+      mockDataverse(["gA1", "gA2"], []);
+
+      const result = await runDataverseSync(FIRMA_ID, STANDORT_A);
+
+      expect(result.scope).toEqual({ firmaId: FIRMA_ID, standortId: STANDORT_A });
+      expect(result.entities.find((e) => e.slug === "standorte")?.fetched).toBe(1);
+      expect(result.entities.some((e) => e.slug === "relationen")).toBe(false);
+      expect(tables["dv_artikel"]?.has("a1")).toBe(true); // Artikel as before
+    });
+
+    it("reports standortId null for a Firma run (behaviour unchanged)", async () => {
+      seedPortal();
+      mockDataverse(["gA1", "gA2"], []);
+
+      const result = await runDataverseSync(FIRMA_ID);
+
+      expect(result.scope).toEqual({ firmaId: FIRMA_ID, standortId: null });
+      expect(result.entities.find((e) => e.slug === "standorte")?.fetched).toBe(2);
+    });
+
+    it("rejects a non-GUID or empty standortId before any Dataverse call", async () => {
+      await expect(runDataverseSync(FIRMA_ID, "1 eq 1 or 1 eq 1")).rejects.toBeInstanceOf(InvalidStandortIdError);
+      await expect(runDataverseSync(FIRMA_ID, "")).rejects.toBeInstanceOf(InvalidStandortIdError);
+      expect(fetchAllDataverseRecordsMock).not.toHaveBeenCalled();
+    });
+
+    it("rejects a Standort of another Firma (or unknown) with StandortNotFoundError and writes nothing", async () => {
+      seedPortal();
+      resetTable("dv_firmen", []);
+      mockDataverse(["gA1"], []);
+      const FREMD = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+
+      await expect(runDataverseSync(FIRMA_ID, FREMD)).rejects.toBeInstanceOf(StandortNotFoundError);
+      expect(tables["dv_firmen"].size).toBe(0); // not even the Firma was written
+      expect(tables["dv_geraete"].size).toBe(3);
+      expect(fetchAllDataverseRecordsForIdsMock).not.toHaveBeenCalled();
+    });
+
+    it("moves a Standort to its new Firma when run for the new Firma (Firmenwechsel)", async () => {
+      resetTable("dv_standorte", [{ id: STANDORT_A, firma_id: "alte-firma" }]);
+      mockDataverse([], []);
+
+      await runDataverseSync(FIRMA_ID, STANDORT_A);
+
+      expect(tables["dv_standorte"].get(STANDORT_A)?.firma_id).toBe(FIRMA_ID);
     });
   });
 });

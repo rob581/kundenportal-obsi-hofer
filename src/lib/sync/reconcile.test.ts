@@ -31,4 +31,16 @@ describe("exceedsSafetyThreshold", () => {
   it("is true when everything disappeared", () => {
     expect(exceedsSafetyThreshold(50, 50)).toBe(true);
   });
+
+  // PROJ-16: minimum count before the 20% rule applies.
+  it("is false for small sets (up to 10 known rows), even if everything is missing", () => {
+    expect(exceedsSafetyThreshold(10, 10)).toBe(false);
+    expect(exceedsSafetyThreshold(2, 1)).toBe(false);
+  });
+
+  it("applies the 20% rule from 11 known rows on", () => {
+    expect(exceedsSafetyThreshold(11, 3)).toBe(true);
+    expect(exceedsSafetyThreshold(11, 2)).toBe(false);
+  });
 });
+
