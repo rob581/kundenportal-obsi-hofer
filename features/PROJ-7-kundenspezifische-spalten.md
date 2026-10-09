@@ -63,6 +63,7 @@ Keine offenen Fragen — alle Kernentscheidungen wurden im Interview getroffen.
 | Konfiguration in eigener, vom Dataverse-Sync unabhängiger Supabase-Tabelle (`portal_firma_einstellungen`), nicht in `dv_firmen` | `dv_firmen` wird vom nächtlichen Sync-Job aus Dataverse überschrieben — eine reine Portal-Einstellung dort würde beim nächsten Sync verloren gehen | 2026-09-21 |
 | Spaltenüberschrift für `bmvcc_KundenID` lautet "KundenID" | Nutzerentscheidung im Interview | 2026-09-21 |
 | Keine responsive Sonderbehandlung für Zusatzspalten auf Mobile | Gleiches, bereits akzeptiertes Verhalten wie das bestehende PROJ-3 BUG-1 (horizontales Scrollen statt Umbruch) | 2026-09-21 |
+| Zusatzspalte „Bemerkungen“ heisst ab sofort „Bemerkungen Gerät“ (nur Beschriftung, Schlüssel unverändert) | Abgrenzung zur neuen Standardspalte „Bemerkung Prüfung“, siehe PROJ-3 Nachtrag 2026-10-09 | 2026-10-09 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->

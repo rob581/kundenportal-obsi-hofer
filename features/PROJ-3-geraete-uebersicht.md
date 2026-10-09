@@ -1,12 +1,13 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: Approved
+## Status: Architected
 **Created:** 2026-09-17
-**Last Updated:** 2026-09-17
+**Last Updated:** 2026-10-09 (Refinement: Spalte „Bemerkung Prüfung“)
 
 ## Dependencies
 - Requires: PROJ-1 (Dataverse-Sync-Service) — liefert die Geräte-, Standort- und Firmen-Daten
 - Requires: PROJ-2 (Kunden-Login) — liefert die aktuell ausgewählte Firma, auf die die Geräteliste eingeschränkt wird
+- Betrifft (Nachtrag 2026-10-09): PROJ-7 (Zusatzspalte „Bemerkungen“ wird umbenannt in „Bemerkungen Gerät“), PROJ-8 (CSV-Export erhält die neue Spalte)
 
 ## User Stories
 - Als Kunde möchte ich alle Geräte meiner Firma in einer Liste sehen, damit ich einen Überblick über deren Status habe.
@@ -14,6 +15,7 @@
 - Als Kunde möchte ich nach Gerätename oder Seriennummer suchen können, damit ich ein bestimmtes Gerät schnell finde.
 - Als Kunde möchte ich auf ein Gerät klicken können, um alle verfügbaren Details zu sehen.
 - Als Kunde einer Firma ohne Geräte möchte ich eine klare Meldung sehen, statt einer leeren oder verwirrenden Seite.
+- Als Kunde möchte ich in der Übersicht direkt die Bemerkung aus der letzten Prüfung jedes Geräts sehen, damit ich Hinweise des Prüfers (z. B. Mängel) erkenne, ohne jedes Gerät einzeln zu öffnen (Nachtrag 2026-10-09).
 
 ## Out of Scope
 - Link zu Prüfberichten pro Gerät — folgt, sobald PROJ-4 (Prüfberichte-Liste) existiert, wird dann per `/refine PROJ-3` oder direkt bei PROJ-4 ergänzt
@@ -22,6 +24,8 @@
 - Dashboard-Kennzahlen ("Anzahl Geräte pro Status" etc.) — siehe PROJ-5
 - PDF-Download — siehe PROJ-4
 - Anzeige von Geräten mehrerer Firmen gleichzeitig — nur die aktuell in PROJ-2 ausgewählte Firma
+- Suche oder Filter nach dem Text der Prüfbericht-Bemerkung (Nachtrag 2026-10-09): Suche bleibt bei Seriennummer, Barcode, Lagerort (und KundenID)
+- Bemerkungen älterer Prüfberichte in der Übersicht: nur der aktuelle; ältere stehen auf der Detailseite (PROJ-4)
 
 ## Acceptance Criteria
 
@@ -37,7 +41,21 @@
 - [ ] Angenommen die Geräteliste wird angezeigt, dann ist sie standardmässig nach Datum der letzten Prüfung sortiert (neuestes Datum zuerst); Geräte ohne jemals erfasste Prüfung erscheinen ganz oben
 - [ ] Angenommen die Gerätedaten können nicht geladen werden (z.B. Datenbank kurzzeitig nicht erreichbar), wenn der Fehler auftritt, dann wird eine Fehlermeldung mit "Erneut versuchen"-Button angezeigt und Header/Abmelden bleiben nutzbar
 
+**Nachtrag 2026-10-09 — Spalte „Bemerkung Prüfung“:**
+
+- [ ] Angenommen ein Kunde ruft die Geräte-Übersicht auf, wenn die Tabelle angezeigt wird, dann gibt es für alle Firmen eine zusätzliche Spalte „Bemerkung Prüfung“ direkt nach „Letzte Prüfung“
+- [ ] Angenommen ein Gerät hat Prüfberichte, wenn die Übersicht angezeigt wird, dann zeigt die Spalte die Bemerkung des aktuellen Prüfberichts (= neuestes Prüfdatum, gelöschte Prüfberichte zählen nicht)
+- [ ] Angenommen ein Gerät hat keinen Prüfbericht oder der aktuelle Prüfbericht hat keine Bemerkung, wenn die Übersicht angezeigt wird, dann bleibt die Zelle leer (wie andere fehlende Werte, „—“)
+- [ ] Angenommen die Bemerkung ist länger als zwei Zeilen, wenn die Übersicht angezeigt wird, dann wird sie nach zwei Zeilen mit „…“ gekürzt und der volle Text erscheint beim Darüberfahren mit der Maus; auf der Detailseite steht er vollständig
+- [ ] Angenommen der Kunde exportiert die Geräte-Übersicht als CSV (PROJ-8), wenn die Datei erzeugt wird, dann enthält sie die Spalte „Bemerkung Prüfung“ direkt nach „Letzte Prüfung“ mit dem vollen, ungekürzten Text (Zeilenumbrüche wie bei anderen Freitextfeldern korrekt maskiert)
+- [ ] Angenommen für die Firma ist die Zusatzspalte für die Gerät-Bemerkung eingeschaltet (PROJ-7), wenn Übersicht oder CSV-Export angezeigt bzw. erzeugt werden, dann heisst diese Spalte „Bemerkungen Gerät“ (statt bisher „Bemerkungen“)
+- [ ] Angenommen ein Gerät hatte früher zwei Prüfberichte am selben neuesten Prüfdatum (Altdaten, aktuell 269 Geräte), wenn die Übersicht angezeigt wird, dann erscheint genau eine Bemerkung, und zwar jedes Mal dieselbe: bevorzugt die eines Berichts mit Bemerkung
+
 ## Edge Cases
+- **Bemerkung Prüfung (Nachtrag 2026-10-09):** Das Feld „Letzte Prüfung“ stammt vom Gerät, die Bemerkung vom neuesten Prüfbericht. Weichen die beiden Daten in Dataverse voneinander ab, gilt für die Bemerkung immer der neueste Prüfbericht
+- **Bemerkung Prüfung, mehrzeilig (aktuell 192 Fälle):** Zeilenumbrüche werden in der Übersicht als Leerzeichen dargestellt (zwei Zeilen Platz), vollständig auf der Detailseite und im CSV
+- **Bemerkung Prüfung auf Touch-Geräten:** Ohne Maus gibt es kein Darüberfahren; der volle Text ist auf der Detailseite erreichbar
+- **Standort-Einschränkung (PROJ-15):** Die Spalte zeigt nur Bemerkungen von Geräten, die der Kunde ohnehin sieht; keine zusätzliche Datenfreigabe
 - Ein Gerät hat keinen Standort und damit keinen herstellbaren Firma-Bezug (bekannter Datenqualitäts-Hinweis aus PROJ-1) → erscheint in keiner Kunden-Übersicht, da die Zuordnung Gerät→Standort→Firma fehlt
 - Der Gerätestatus ist in Dataverse ein Freitextfeld ohne festen Wertebereich → die Filter-Optionen werden dynamisch aus den tatsächlich bei dieser Firma vorkommenden Status-Werten gebildet, nicht hart codiert
 - Ein Kunde mit mehreren Firmen wechselt die aktive Firma (PROJ-2) → die Geräteliste zeigt automatisch nur noch Geräte der neu gewählten Firma, Filter/Suche werden zurückgesetzt
@@ -63,6 +81,12 @@
 | Link zu Prüfberichten pro Gerät bewusst nicht in PROJ-3 | PROJ-4 existiert noch nicht — ein Link ins Leere wäre verwirrend; wird nachgezogen | 2026-09-17 |
 | Standard-Sortierung: Datum letzte Prüfung, neueste zuerst, nie geprüfte Geräte ganz oben | Macht Geräte mit dringendstem Handlungsbedarf (nie geprüft) sofort sichtbar | 2026-09-17 |
 | Fehler beim Laden zeigt Fehlermeldung + "Erneut versuchen", keine kaputte Seite | Header/Abmelden bleiben trotzdem nutzbar | 2026-09-17 |
+| Neue Standardspalte „Bemerkung Prüfung“ für alle Firmen, nicht als wählbare Zusatzspalte | Nutzerentscheidung (2026-10-09): Hinweise des Prüfers sind für alle Kunden relevant | 2026-10-09 |
+| „Aktueller Prüfbericht“ = neuestes Prüfdatum (gelöschte ausgenommen); das Archiv-Kennzeichen wird nicht berücksichtigt | Datenprüfung 2026-10-09: nur 1 von 25'399 Prüfberichten ist archiviert, das Kennzeichen trägt keine Bedeutung | 2026-10-09 |
+| Bei mehreren Prüfberichten am selben neuesten Datum genau eine Bemerkung, deterministisch, bevorzugt eine vorhandene | Nutzerentscheidung: künftig ist nur noch ein Prüfbericht pro Tag möglich, die 269 Altfälle brauchen nur eine stabile Regel | 2026-10-09 |
+| In der Übersicht auf zwei Zeilen gekürzt, voller Text beim Darüberfahren und auf der Detailseite | Tabelle bleibt kompakt und gleichmässig hoch | 2026-10-09 |
+| Zusatzspalte „Bemerkungen“ (Gerät, PROJ-7) wird in „Bemerkungen Gerät“ umbenannt; neue Spalte heisst „Bemerkung Prüfung“ | Zwei verschiedene Bemerkungen dürfen nicht gleich heissen; gleiche Benennung wie im geplanten PDF-Export (PROJ-14) | 2026-10-09 |
+| Neue Spalte auch im CSV-Export, ungekürzt, direkt nach „Letzte Prüfung“ | Der Export bildet die Übersicht ab (PROJ-8), Kürzung wäre im Export nur hinderlich | 2026-10-09 |
 
 ### Technical Decisions
 <!-- Added by /architecture -->
@@ -115,6 +139,14 @@ Keine neuen — nutzt die bereits installierten shadcn-Komponenten (Table, Input
 
 ### Datenfund für `/frontend` und `/backend`
 Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842), "keine Freigabe" (1174), "letzte Freigabe"/"Letzte Freigabe" (172+2, uneinheitliche Schreibung), kein Status (53, `null`). Beim Gruppieren für den Filter case-insensitiv vergleichen.
+
+### Nachtrag 2026-10-09 — Spalte „Bemerkung Prüfung“ (Tech Design)
+- **Daten:** Keine neue Speicherung. Die Bemerkung wird beim Laden der Übersicht bzw. des Exports aus den bereits synchronisierten Prüfberichten ermittelt: pro Gerät der nicht gelöschte Bericht mit dem neuesten Prüfdatum. Nur für die Geräte der angezeigten Seite (Übersicht, max. 25) bzw. der Exportzeilen, blockweise wie bei Prüfberichte-Übersicht und Dashboard
+- **Gleicher Tag:** bevorzugt ein Bericht mit nicht-leerer Bemerkung, sonst nach ID; damit jedes Mal dasselbe Ergebnis
+- **Anzeige:** neue Spalte nach „Letzte Prüfung“, Text auf zwei Zeilen begrenzt, voller Text als Tooltip (bestehende Mittel, keine neue Komponente nötig)
+- **Export:** gleiche Ermittlung, voller Text; Escaping wie alle Freitextfelder (PROJ-8)
+- **Umbenennung:** nur die Spaltenbeschriftung der PROJ-7-Zusatzspalte ändert sich; der interne Schlüssel und die Firmen-Einstellungen bleiben gleich, keine Datenmigration
+- **Keine neuen Pakete, keine Migration**
 
 ## Implementation Notes (Frontend)
 
