@@ -1,6 +1,6 @@
 # PROJ-16: Sync pro Standort
 
-## Status: Planned
+## Status: Architected
 **Created:** 2026-10-09
 **Last Updated:** 2026-10-09
 
@@ -96,12 +96,58 @@
 <!-- Added by /architecture -->
 | Decision | Rationale | Date |
 |----------|-----------|------|
+| Standort-Lauf als Variante des bestehenden Firmen-Ablaufs (gleiche Schritte, engerer Bereich), kein zweiter, separater Ablauf | Ein Ablauf, eine Lösch-Logik: der Standort-Lauf erbt automatisch alle bisherigen Absicherungen (GUID-Prüfung, Fehler-Isolation pro Schritt, Zugänge ohne Schwelle, Soft-Delete der Prüfberichte). Zwei getrennte Abläufe würden mit der Zeit auseinanderlaufen | 2026-10-09 |
+| Alle Prüfungen (beide GUIDs, Firma existiert, Standort existiert **und** gehört in Dataverse zur Firma) laufen **vor** dem ersten Schreibvorgang | Ein abgelehnter Aufruf darf nichts verändern (Kriterium). Heute wird die Firma direkt nach ihrer Existenzprüfung geschrieben; die Standort-Prüfung kommt deshalb davor | 2026-10-09 |
+| Der „Bereich“ jedes Schritts wird im Standort-Lauf auf den einen Standort verengt: Standorte = nur dieser; Zugänge und Geräte = nur die dieses Standorts; Prüfberichte = nur die dieser Geräte | Die Lösch-Erkennung vergleicht immer nur innerhalb des Bereichs; was ausserhalb liegt (andere Standorte), wird weder gelesen noch gelöscht. Das ist dieselbe Technik, mit der PROJ-12 andere Firmen schützt | 2026-10-09 |
+| Relationen-Schritt entfällt im Standort-Lauf; Kontakte kommen nur aus den Zugängen dieses Standorts | Product Decision; Relationen hängen an der Firma | 2026-10-09 |
+| Mindestmenge 10 als Ergänzung der bestehenden 20-%-Regel an der einen zentralen Stelle, die für alle Schritte und Läufe entscheidet | Wirkt einheitlich für Firmen- und Standort-Läufe; Zugänge bleiben über ihre bestehende Ausnahme ganz ohne Schwelle | 2026-10-09 |
+| `scope` wird vom Sync-Ergebnis selbst geliefert (nicht nachträglich im Endpoint ergänzt) | Die Angabe beschreibt, was der Sync tatsächlich gefiltert hat; käme sie nur aus den Anfrageparametern, würde sie auch einen wirkungslosen Filter bestätigen — genau das soll das Admin-Tool erkennen können | 2026-10-09 |
+| Fehlerbilder wie bei `firmaId`: ungültige `standortId` → 400, Standort nicht gefunden/andere Firma → 404, jeweils ohne Ops-Mail | Konsistent mit PROJ-12; ein falscher Aufruf aus dem Admin-Tool ist kein Infrastruktur-Problem | 2026-10-09 |
 
 ---
 <!-- Sections below are added by subsequent skills -->
 
 ## Tech Design (Solution Architect)
-_To be added by /architecture_
+
+### A) Component Structure
+Keine Oberfläche. Erweitert wird der bestehende Sync-Endpoint und sein Ablauf:
+
+```
+/api/cron/sync-dataverse?firmaId=…[&standortId=…]   (Auth: CRON_SECRET, unverändert)
++-- Prüfungen vor jedem Schreiben
+|   +-- firmaId und (falls vorhanden) standortId sind GUIDs      -> sonst 400
+|   +-- Firma existiert in Dataverse                             -> sonst 404
+|   +-- Standort existiert und gehört in Dataverse zur Firma     -> sonst 404
+|
++-- Ablauf (gleiche Schritte wie heute, Bereich je nach Lauf)
+    +-- Firma (Stammdaten)                          Firma-Lauf | Standort-Lauf
+    +-- Standorte ............................. alle der Firma | nur dieser
+    +-- Portalzugänge (ohne Schwelle) ......... ihrer Standorte| nur zu diesem
+    +-- Geräte ................................ ihrer Standorte| nur dieses Standorts
+    +-- Prüfberichte .......................... dieser Geräte  | dieser Geräte
+    +-- Relationen ............................ der Firma      | entfällt
+    +-- Kontakte .............. aus Relationen + Zugängen      | nur aus den Zugängen
+    +-- Artikel ............................... alle           | alle
+|
++-- Antwort: bisherige Zusammenfassung + scope { firmaId, standortId | null }
+```
+
+### B) Data Model (plain language)
+Keine neuen Tabellen, keine Migration. Unverändert gespeichert werden Firma, Standorte, Geräte, Prüfberichte, Portalzugänge, Kontakte, Artikel; der Standort-Lauf schreibt nur einen kleineren Ausschnitt davon.
+
+**Lösch-Regel (alle Läufe):** Pro Schritt wird verglichen, was vorher im Bereich bekannt war und was Dataverse jetzt liefert. Fehlendes wird gelöscht (Prüfberichte: als gelöscht markiert), ausser es waren **mehr als 10** Einträge bekannt **und** es fehlen **mehr als 20 %** — dann wird das Löschen übersprungen und eine Warnung gemeldet. Zugänge werden immer gelöscht.
+
+### C) Tech Decisions (für PM erklärt)
+- **Ein Ablauf statt zwei:** Der Standort-Lauf ist derselbe Ablauf wie der Firmen-Lauf, nur mit kleinerem Ausschnitt. So gelten alle bisherigen Sicherheiten automatisch, und spätere Änderungen wirken auf beide Läufe.
+- **Erst prüfen, dann schreiben:** Ein falscher Aufruf verändert nichts, weil alle Prüfungen vor dem ersten Schreiben stattfinden.
+- **Andere Standorte sind unsichtbar für den Lauf:** Der Standort-Lauf vergleicht und löscht nur innerhalb dieses Standorts — was zu anderen Standorten gehört, liegt ausserhalb und wird nicht angefasst.
+- **Ehrliche Rückmeldung:** Die Angabe, wofür übertragen wurde, kommt aus dem Sync selbst, nicht aus der Anfrage. Wirkt der Filter einmal nicht, merkt es das Admin-Tool.
+
+**Inbetriebnahme:** Keine Migration, keine neuen Umgebungsvariablen. Deploy → kurzer Test eines Standort-Laufs (z. B. per Admin-Tool mit noch ausgeschaltetem Schalter nicht möglich, daher manuell per Aufruf mit `CRON_SECRET`, oder nach Absprache Schalter für einen Test setzen) → Rückmeldung an das Admin-Tool, das dann `KUNDENPORTAL_STANDORT_SYNC_AKTIV=true` setzt.
+
+### D) Dependencies
+- Keine neuen Pakete
+- Keine Migration
 
 ## QA Test Results
 _To be added by /qa_
