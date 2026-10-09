@@ -1,6 +1,6 @@
 # PROJ-16: Sync pro Standort
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-10-09
 **Last Updated:** 2026-10-09
 
@@ -241,4 +241,12 @@ Umgesetzt wie im Tech Design. Keine Migration, keine neuen Pakete, keine Oberfl�
 - **Production Ready:** **JA**, Status Approved
 
 ## Deployment
-_To be added by /deploy_
+- **Production URL:** https://obsi-hoferkundenportal.vercel.app
+- **Deployed:** 2026-10-09 (automatisch via Vercel bei Push auf `main`, letzter Code-Commit `e76f5c5`)
+- **Migration:** keine; **Env-Variablen:** keine neuen
+- **Verifiziert:**
+  - Pre-Deployment: `npm test` 244/244, `npm run test:e2e` 38/38, Lint, `tsc --noEmit`, Build grün
+  - Smoke-Test Produktion: `/login` → 200; Sync-Endpoint mit `standortId` ohne Secret → 401
+  - **Live durch den Nutzer** über das Admin-Tool (Schalter `KUNDENPORTAL_STANDORT_SYNC_AKTIV=true` gesetzt): Standort-Lauf ohne Warnung „teilweise“, übrige Standorte der Firma unverändert; neuer Zugang des Testkontakts zu einem zweiten Standort von Cloudcab GmbH im Portal angekommen (rein lesend bestätigt: 2 Zugänge, 1 Firma, 2 Standorte)
+- **Rückmeldung an das Admin-Tool:** 2026-10-09 (Text siehe Chat); Schalter bleibt aktiv
+- **Tag:** `v1.13.0-PROJ-16`
