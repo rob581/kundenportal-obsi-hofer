@@ -227,6 +227,7 @@ Umgesetzt wie im Tech Design. Keine Migration, keine neuen Pakete, keine Oberfl�
 - **Steps to Reproduce:** Standort-Lauf auslösen, bei dem ein Schritt scheitert oder die 20-%-Regel greift → Ops-Mail „Dataverse-Sync: Probleme beim Sync für Firma <firmaId>“; Log-Zeile „Firma-Sync (<firmaId>)“
 - **Erwartet:** Bei einem Standort-Lauf ist auch der Standort erkennbar (z. B. „… für Firma X, Standort Y“), damit der Betreiber weiss, welcher Lauf betroffen war
 - **Priority:** Nice to have
+- **Status:** ✅ Behoben (2026-10-09): Ops-Mail-Betreff „… für Firma X, Standort Y“ bei Standort-Läufen (`route.ts`), Log-Zeile „Firma-Sync (X, Standort Y)“ (`run-sync.ts`); neuer Route-Test; `npm test` 244/244, Lint, `tsc --noEmit`, Build grün
 
 ### Automatisierte Tests
 - `npm test`: 243/243 grün
@@ -235,7 +236,7 @@ Umgesetzt wie im Tech Design. Keine Migration, keine neuen Pakete, keine Oberfl�
 
 ### Summary
 - **Acceptance Criteria:** 19/19 erfüllt (Unit-Tests mit Gegenproben, Code-Review, echter Dataverse-Filter)
-- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low)
+- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low), **behoben**
 - **Security:** keine Findings
 - **Production Ready:** **JA**, Status Approved
 

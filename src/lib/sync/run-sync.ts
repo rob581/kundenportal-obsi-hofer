@@ -215,7 +215,8 @@ export async function runDataverseSync(firmaId: string, standortId?: string): Pr
 
   function recordError(slug: string, error: unknown): void {
     const message = error instanceof Error ? error.message : String(error);
-    console.error(`Firma-Sync (${firmaId}): "${slug}" failed, continuing with remaining entities:`, message);
+    const lauf = standortLauf ? `${firmaId}, Standort ${standortId}` : firmaId;
+    console.error(`Firma-Sync (${lauf}): "${slug}" failed, continuing with remaining entities:`, message);
     errors.push(`"${slug}": ${message}`);
   }
 

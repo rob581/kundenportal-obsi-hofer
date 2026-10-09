@@ -57,7 +57,8 @@ export async function GET(request: Request) {
     const allIssues = [...result.warnings, ...result.errors];
     if (allIssues.length > 0) {
       await sendOpsEmail(
-        `Dataverse-Sync: Probleme beim Sync für Firma ${firmaId}`,
+        // PROJ-16 QA BUG-1: bei einem Standort-Lauf auch den Standort nennen.
+        `Dataverse-Sync: Probleme beim Sync für Firma ${firmaId}${standortId !== undefined ? `, Standort ${standortId}` : ""}`,
         allIssues.join("\n")
       );
     } else if (process.env.CRON_NOTIFY_ON_SUCCESS) {

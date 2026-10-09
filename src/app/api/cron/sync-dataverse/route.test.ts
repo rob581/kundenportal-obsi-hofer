@@ -256,5 +256,22 @@ describe("GET /api/cron/sync-dataverse", () => {
     expect(res.status).toBe(401);
     expect(runDataverseSyncMock).not.toHaveBeenCalled();
   });
+
+  // PROJ-16 QA BUG-1: Ops-Mail nennt bei einem Standort-Lauf auch den Standort.
+  it("names the Standort in the ops email subject for a Standort run", async () => {
+    runDataverseSyncMock.mockResolvedValue({
+      scope: { firmaId: "firma-1", standortId: "standort-1" },
+      entities: [],
+      warnings: [],
+      errors: ['"geraete": fetch failed'],
+    });
+
+    await GET(makeRequest("test-cron-secret", "firma-1", "standort-1"));
+
+    expect(sendOpsEmailMock).toHaveBeenCalledWith(
+      "Dataverse-Sync: Probleme beim Sync für Firma firma-1, Standort standort-1",
+      expect.stringContaining("geraete")
+    );
+  });
 });
 
