@@ -1,6 +1,6 @@
 # PROJ-16: Sync pro Standort
 
-## Status: In Progress
+## Status: Approved
 **Created:** 2026-10-09
 **Last Updated:** 2026-10-09
 
@@ -165,7 +165,79 @@ Umgesetzt wie im Tech Design. Keine Migration, keine neuen Pakete, keine Oberfl�
 - `npm test` 243/243, Lint, `tsc --noEmit` und Build grün
 
 ## QA Test Results
-_To be added by /qa_
+
+**Tested:** 2026-10-09
+**Tester:** QA Engineer (AI)
+**Testmethode:** Code-Review, Unit- und E2E-Suiten, rein lesende Prüfung des neuen Standort-Filters gegen das echte Dataverse. Kein Sync gegen Produktion vor dem Deploy (ein Sync schreibt in die Produktionsdatenbank); Live-Nachweis beim `/deploy` per direktem Aufruf mit `CRON_SECRET`.
+
+### Dataverse (rein lesend, echte Daten)
+- Genau der Filter des Syncs (Standort-ID **und** Firma) wird akzeptiert: richtige Firma → 1 Treffer, falsche Firma → 0, unbekannte Standort-ID → 0; der gemappte Standort trägt die richtige Firma
+- Wirkung des engeren Bereichs an einer echten Firma mit 3 Standorten: Standort-Lauf liest 4 Geräte statt 207 für die ganze Firma
+
+### Acceptance Criteria Status
+**Aufruf und Prüfungen**
+- [x] Gültige `firmaId` + `standortId` → Standort-Lauf: `run-sync.test.ts`, `route.test.ts`
+- [x] Ohne `standortId` exakt wie bisher: alle bestehenden Firma-Lauf-Tests unverändert grün; `scope.standortId` = `null`
+- [x] Leere oder Nicht-GUID-`standortId` → 400, kein Dataverse-Aufruf: `run-sync.test.ts`, `route.test.ts`
+- [x] Standort fehlt oder gehört zu anderer Firma → 404, nichts verändert (auch die Firma nicht): `run-sync.test.ts` + echter Dataverse-Filter (0 Treffer)
+- [x] Firma fehlt → 404 (unverändert, bestehende Tests)
+- [x] Ohne/mit falschem `CRON_SECRET` → 401, auch mit `standortId`: `route.test.ts`
+
+**Umfang eines Standort-Laufs**
+- [x] Firma, Standort A, Geräte von A, Prüfberichte, Zugänge zu A, Kontakte mit Zugang, Artikel: `run-sync.test.ts`
+- [x] Standort B bleibt unverändert (auch trotz anderer Daten in Dataverse): `run-sync.test.ts`; Gegenprobe ohne verengten Bereich schlägt fehl
+- [x] Gelöschtes Gerät von A → entfernt, B unberührt: `run-sync.test.ts`
+- [x] Gelöschter Prüfbericht von A → als gelöscht markiert: gleiche Prüfbericht-Logik wie bisher, Bereich = Geräte von A (Code-Review)
+- [x] Entzogener Zugang zu A weg, Zugang zu B bleibt: `run-sync.test.ts`
+- [x] Kontakt mit Zugang ohne Relation vorhanden: `run-sync.test.ts`
+- [x] Relationen unverändert, kein Abruf: `run-sync.test.ts`
+
+**Rückmeldung**
+- [x] `scope` mit `firmaId`/`standortId` (bzw. `null`): `run-sync.test.ts`, `route.test.ts`
+- [x] `standorte.fetched = 1`: `run-sync.test.ts`
+
+**Lösch-Schwelle**
+- [x] Bis 10 bekannte Einträge wird gelöscht, auch über 20 %: `reconcile.test.ts`, `run-sync.test.ts` (Gegenprobe)
+- [x] Ab 11 gilt die 20-%-Regel: `reconcile.test.ts`, angehobene Schwellen-Tests (20 Geräte, 12 Standorte)
+
+**Firmenwechsel**
+- [x] Standort-Lauf bei der neuen Firma schreibt den Standort um: `run-sync.test.ts` + echter Filter liefert die neue Firma
+
+### Edge Cases Status
+- [x] Standort ohne Geräte/Zugänge: leerer Bereich, vorher bekannte werden entfernt (Mindestmenge)
+- [x] Gerät wechselt von A zu B: Lauf A entfernt es aus A, Lauf B fügt es wieder hinzu (Code-Review, gleiche Logik wie bei Firmenwechseln von Geräten)
+- [x] Kontakt mit Zugang zu A und B: Zugang zu B bleibt (Test)
+- [x] Alter Firmen-Bezug nach Firmenwechsel: Lauf mit alter Firma → 404 (Filter verlangt die Firma)
+- [x] Grosse Mengen: 20-%-Regel ab 11 Einträgen unverändert wirksam (Test)
+- [x] Zugänge immer ohne Schwelle (bestehende Ausnahme, Tests aus PROJ-15 grün)
+- [x] Alte Portal-Version mit `standortId`: Parameter würde ignoriert, `scope` fehlte → vom Admin-Tool erkennbar (deshalb Deploy vor dem Schalter)
+
+**Zusätzlich beobachtet (kein Bug, bewusste Folge der Mindestmenge):** Bei kleinen Mengen gibt es keinen Schutz mehr gegen einen leeren, aber fehlerfreien Dataverse-Abruf. Liefert Dataverse z. B. für eine Firma mit 3 Standorten fälschlich keinen, werden die 3 Standorte und ihre Zugänge im Portal entfernt (Kunden verlieren den Zugang bis zum nächsten Lauf; fail-closed, keine Fremddaten). Fehlgeschlagene Abrufe brechen dagegen weiterhin mit Fehler ab, ohne zu löschen. Entspricht der Product Decision; offene Frage zur Grösse der Mindestmenge bleibt bestehen.
+
+### Security Audit (Red Team)
+- [x] `standortId` wird vor jeder Verwendung in einem Dataverse-Filter als GUID geprüft; Injektionsversuch („1 eq 1 or 1 eq 1“) abgelehnt ohne Dataverse-Aufruf
+- [x] Fremder Standort kann nicht in eine andere Firma „gezogen“ werden: Filter verlangt Standort **und** Firma in Dataverse
+- [x] Auth unverändert (`CRON_SECRET`), auch mit `standortId`
+- [x] Abgelehnte Aufrufe ohne Ops-Mail und ohne Schreibvorgang
+
+### Bugs Found
+
+#### BUG-1: Warn-Mail und Log nennen bei einem Standort-Lauf nur die Firma
+- **Severity:** Low
+- **Steps to Reproduce:** Standort-Lauf auslösen, bei dem ein Schritt scheitert oder die 20-%-Regel greift → Ops-Mail „Dataverse-Sync: Probleme beim Sync für Firma <firmaId>“; Log-Zeile „Firma-Sync (<firmaId>)“
+- **Erwartet:** Bei einem Standort-Lauf ist auch der Standort erkennbar (z. B. „… für Firma X, Standort Y“), damit der Betreiber weiss, welcher Lauf betroffen war
+- **Priority:** Nice to have
+
+### Automatisierte Tests
+- `npm test`: 243/243 grün
+- `npm run test:e2e`: 38/38 grün (Portal auf Port 3100; Port 3000 belegt der Dev-Server des Admin-Tools)
+- Keine neue E2E-Suite: Endpoint ohne Oberfläche, vollständig über Route- und Sync-Tests abgedeckt
+
+### Summary
+- **Acceptance Criteria:** 19/19 erfüllt (Unit-Tests mit Gegenproben, Code-Review, echter Dataverse-Filter)
+- **Bugs Found:** 1 (0 critical, 0 high, 0 medium, 1 low)
+- **Security:** keine Findings
+- **Production Ready:** **JA**, Status Approved
 
 ## Deployment
 _To be added by /deploy_
