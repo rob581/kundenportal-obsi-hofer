@@ -1,6 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getZuPruefenCutoff } from "./zu-pruefen";
-import type { Geraet, GeraeteQuery, GeraeteResult } from "./types";
+import type { Geraet, GeraeteQuery, GeraeteResult, StandortOption } from "./types";
 import type { FirmaScope } from "@/lib/auth/current-firma";
 
 const PAGE_SIZE = 25;
@@ -208,6 +208,20 @@ export async function getStandorteFuerFirma(scope: FirmaScope) {
 
 // Shared with src/lib/dashboard/queries.ts (see PROJ-5 Tech Design: reuse
 // this resolution instead of duplicating it) — just the IDs, no names.
+// PROJ-3 Nachtrag 2: Auswahl für den Standort-Filter (alphabetisch) und die
+// Einschränkung auf einen gewählten Standort. Ein Wert, der nicht unter den
+// freigegebenen Standorten ist, ergibt bewusst eine leere Menge — über die
+// Adresse lässt sich so nie ein fremder Standort einblenden.
+function toStandortOptions(standorte: { id: string; name: string | null }[]): StandortOption[] {
+  return standorte
+    .map((s) => ({ id: s.id, name: s.name?.trim() ? s.name : "(ohne Namen)" }))
+    .sort((a, b) => a.name.localeCompare(b.name, "de"));
+}
+
+function filterStandort<T extends { id: string }>(standorte: T[], standortId: string | undefined): T[] {
+  return standortId ? standorte.filter((s) => s.id === standortId) : standorte;
+}
+
 export async function getStandortIdsFuerFirma(scope: FirmaScope): Promise<string[]> {
   const standorte = await getStandorteFuerFirma(scope);
   return standorte.map((s) => s.id);
@@ -243,14 +257,16 @@ function applyGeraeteFilters<T extends { ilike: (...args: any[]) => T; or: (...a
 // embed the join — we resolve the Firma's Standort-IDs first, then query
 // Geräte against that ID list.
 export async function getGeraeteList(scope: FirmaScope, query: GeraeteQuery): Promise<GeraeteResult> {
-  const standorte = await getStandorteFuerFirma(scope);
+  const freigegeben = await getStandorteFuerFirma(scope);
+  const standortOptions = toStandortOptions(freigegeben);
+  const standorte = filterStandort(freigegeben, query.standortId);
   const standortIds = standorte.map((s) => s.id);
   const standortNamen = new Map(standorte.map((s) => [s.id, s.name]));
 
   const page = Math.max(1, query.seite ?? 1);
 
   if (standortIds.length === 0) {
-    return { items: [], total: 0, page, pageSize: PAGE_SIZE, statusOptions: [] };
+    return { items: [], total: 0, page, pageSize: PAGE_SIZE, statusOptions: [], standortOptions };
   }
 
   const supabase = getSupabaseAdmin();
@@ -305,7 +321,7 @@ export async function getGeraeteList(scope: FirmaScope, query: GeraeteQuery): Pr
     )
   );
 
-  return { items, total: count ?? items.length, page, pageSize: PAGE_SIZE, statusOptions };
+  return { items, total: count ?? items.length, page, pageSize: PAGE_SIZE, statusOptions, standortOptions };
 }
 
 // The scope comes from the caller's own session/cookie (never from the URL),
@@ -362,9 +378,9 @@ export async function getGeraetById(id: string, scope: FirmaScope): Promise<Gera
 // (siehe applyGeraeteFilters), damit Übersicht und Export nie auseinanderlaufen.
 export async function getGeraeteExportRows(
   scope: FirmaScope,
-  filters: Pick<GeraeteQuery, "status" | "suche" | "zuPruefen" | "sucheKundenId">
+  filters: Pick<GeraeteQuery, "status" | "suche" | "zuPruefen" | "sucheKundenId" | "standortId">
 ): Promise<Geraet[]> {
-  const standorte = await getStandorteFuerFirma(scope);
+  const standorte = filterStandort(await getStandorteFuerFirma(scope), filters.standortId);
   const standortIds = standorte.map((s) => s.id);
   const standortNamen = new Map(standorte.map((s) => [s.id, s.name]));
 

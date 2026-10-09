@@ -27,6 +27,8 @@ export async function GET(request: Request) {
   const status = searchParams.get("status") ?? undefined;
   const suche = searchParams.get("suche") ?? undefined;
   const zuPruefen = searchParams.get("zuPruefen") === "1";
+  // PROJ-3 Nachtrag 2: nur wirksam für freigegebene Standorte (siehe queries.ts).
+  const standortId = searchParams.get("standort") || undefined;
 
   // Gleiches defensives Fail-open wie /uebersicht (siehe PROJ-7): eine nicht
   // ladbare Konfiguration exportiert einfach ohne Zusatzspalten, statt den
@@ -41,7 +43,7 @@ export async function GET(request: Request) {
   const sucheKundenId = zusatzspalten.some((spalte) => spalte.key === "kundenId");
 
   try {
-    const items = await getGeraeteExportRows(scope, { status, suche, zuPruefen, sucheKundenId });
+    const items = await getGeraeteExportRows(scope, { status, suche, zuPruefen, sucheKundenId, standortId });
     const csv = buildGeraeteExportCsv(items, zusatzspalten);
     const datum = new Date().toISOString().slice(0, 10);
 

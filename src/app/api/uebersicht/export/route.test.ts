@@ -111,6 +111,21 @@ describe("GET /api/uebersicht/export", () => {
     });
   });
 
+  // PROJ-3 Nachtrag 2: Standort-Filter wird an den Export weitergegeben.
+  it("passes the standort query param through to getGeraeteExportRows", async () => {
+    getCurrentUserEmailMock.mockResolvedValue("test@example.com");
+    getPortalAccessMock.mockResolvedValue({ contactId: "k1", firmaIds: ["f1"] });
+    getCurrentFirmaIdMock.mockResolvedValue("f1");
+    getGeraeteExportRowsMock.mockResolvedValue([]);
+
+    await GET(makeRequest("?standort=st-a"));
+
+    expect(getGeraeteExportRowsMock).toHaveBeenCalledWith(
+      { firmaId: "f1", standortIds: ["st-a"] },
+      expect.objectContaining({ standortId: "st-a" })
+    );
+  });
+
   it("returns 500 without crashing when the export query fails", async () => {
     getCurrentUserEmailMock.mockResolvedValue("test@example.com");
     getPortalAccessMock.mockResolvedValue({ contactId: "k1", firmaIds: ["f1"] });

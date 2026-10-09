@@ -35,7 +35,12 @@ export type GeraeteQuery = {
   // Nur true, wenn die Firma die Zusatzspalte "kundenId" aktiviert hat (siehe
   // PROJ-7) — Suche über ein für die Firma unsichtbares Feld wäre verwirrend.
   sucheKundenId?: boolean;
+  // PROJ-3 Nachtrag 2: auf einen Standort einschränken. Wird nur angewendet,
+  // wenn er unter den freigegebenen Standorten der Firma ist — sonst leer.
+  standortId?: string;
 };
+
+export type StandortOption = { id: string; name: string };
 
 export type GeraeteResult = {
   items: Geraet[];
@@ -43,4 +48,7 @@ export type GeraeteResult = {
   page: number;
   pageSize: number;
   statusOptions: string[];
+  // PROJ-3 Nachtrag 2: alle freigegebenen Standorte der Firma, alphabetisch —
+  // Filter und Spalte erscheinen nur bei mehr als einem.
+  standortOptions: StandortOption[];
 };

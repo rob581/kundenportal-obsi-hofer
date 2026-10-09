@@ -36,7 +36,7 @@ function formatDatum(iso: string | null): string {
 export default async function UebersichtPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; suche?: string; seite?: string; zuPruefen?: string }>;
+  searchParams: Promise<{ status?: string; suche?: string; seite?: string; zuPruefen?: string; standort?: string }>;
 }) {
   const scope = await getCurrentFirmaScope();
   const currentFirmaId = scope.firmaId;
@@ -69,12 +69,16 @@ export default async function UebersichtPage({
       seite,
       zuPruefen: params.zuPruefen === "1",
       sucheKundenId,
+      standortId: params.standort || undefined,
     });
   } catch {
     loadError = "Die Gerätedaten konnten nicht geladen werden.";
   }
 
   const totalPages = result ? Math.ceil(result.total / result.pageSize) : 0;
+  // PROJ-3 Nachtrag 2: Standort-Filter und -Spalte nur bei mehr als einem
+  // freigegebenen Standort der Firma.
+  const mehrereStandorte = (result?.standortOptions.length ?? 0) > 1;
 
   // Export übernimmt dieselben Filter wie die aktuelle Ansicht, aber nie die
   // Seite — er umfasst laut Spec immer alle gefilterten Geräte, nicht nur
@@ -83,6 +87,7 @@ export default async function UebersichtPage({
   if (params.status) exportParams.set("status", params.status);
   if (params.suche) exportParams.set("suche", params.suche);
   if (params.zuPruefen) exportParams.set("zuPruefen", params.zuPruefen);
+  if (params.standort) exportParams.set("standort", params.standort);
 
   return (
     <div>
@@ -107,7 +112,11 @@ export default async function UebersichtPage({
         ) : (
           <>
             <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <GeraeteFilterBar statusOptions={result!.statusOptions} sucheKundenId={sucheKundenId} />
+              <GeraeteFilterBar
+                statusOptions={result!.statusOptions}
+                sucheKundenId={sucheKundenId}
+                standortOptions={mehrereStandorte ? result!.standortOptions : []}
+              />
               <ExportCsvButton
                 href={`/api/uebersicht/export?${exportParams.toString()}`}
                 disabled={result!.total === 0}
@@ -117,7 +126,7 @@ export default async function UebersichtPage({
             {result!.total === 0 ? (
               <Card>
                 <CardContent className="py-10 text-center text-sm text-muted-foreground">
-                  {params.suche || params.status
+                  {params.suche || params.status || params.standort
                     ? `Keine Ergebnisse${params.suche ? ` für "${params.suche}"` : ""}.`
                     : "Für Ihre Firma sind noch keine Geräte hinterlegt. Bei Fragen kontaktieren Sie OBSI Hofer GmbH."}
                 </CardContent>
@@ -131,6 +140,7 @@ export default async function UebersichtPage({
                         <TableRow>
                           <TableHead>Gerät</TableHead>
                           <TableHead>Status</TableHead>
+                          {mehrereStandorte && <TableHead>Standort</TableHead>}
                           <TableHead>Lagerort</TableHead>
                           <TableHead>Letzte Prüfung</TableHead>
                           <TableHead>Bemerkung Prüfung</TableHead>
@@ -159,6 +169,7 @@ export default async function UebersichtPage({
                                 "—"
                               )}
                             </TableCell>
+                            {mehrereStandorte && <TableCell>{geraet.standortName ?? "—"}</TableCell>}
                             <TableCell>{geraet.lagerort ?? "—"}</TableCell>
                             <TableCell>{formatDatum(geraet.letztePruefung)}</TableCell>
                             {/* PROJ-3 Nachtrag: max. zwei Zeilen, voller Text als Tooltip */}

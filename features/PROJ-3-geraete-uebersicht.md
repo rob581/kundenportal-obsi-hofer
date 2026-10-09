@@ -1,6 +1,6 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: Architected
+## Status: In Progress
 **Created:** 2026-09-17
 **Last Updated:** 2026-10-09 (Refinements: Spalte „Bemerkung Prüfung“; Standort-Filter und -Spalte)
 
@@ -198,6 +198,16 @@ Echte Status-Werte über alle 8243 Geräte (Stand 2026-09-17): "Freigabe" (6842)
 - **Tests:** `queries.test.ts` +7 (`getAktuellePruefBemerkungen`: neuestes Datum, gelöschte ignoriert, leere Bemerkung des aktuellen Berichts → null, kein Bericht, gleicher Tag deterministisch mit Vorrang der Bemerkung, mehr als 1000 Zeilen, Befüllung in Liste und Export; Mock um `.is()` erweitert); `export-csv.test.ts` Kopfzeile/Zeile angepasst + Test für ungekürzte, mehrzeilige Bemerkung direkt nach „Letzte Prüfung“; `zusatzspalten.test.ts` Test für „Bemerkungen Gerät“. Gegenprobe: ohne die Vorrangregel bei gleichem Tag schlägt der entsprechende Test fehl (der Test wurde dafür so angelegt, dass die ID-Regel allein nicht reicht)
 - `npm test` 228/228, Lint, `tsc --noEmit` und Build grün
 - **Nicht lokal im Browser geprüft:** Die Übersicht ist nur mit echtem Login erreichbar; die Darstellung wird beim Deploy live geprüft
+
+### Nachtrag 2 2026-10-09 — Standort-Filter und Spalte (Umsetzung)
+- `src/lib/geraete/queries.ts`: `getGeraeteList` liefert zusätzlich `standortOptions` (alle freigegebenen Standorte der Firma aus `getStandorteFuerFirma(scope)`, alphabetisch, leere Namen „(ohne Namen)“); optionaler `standortId` in `GeraeteQuery` schränkt Liste und `getGeraeteExportRows` auf diesen Standort ein — nur wenn er unter den freigegebenen ist, sonst leere Menge (manipulierte Adresse zeigt nichts). Status-Optionen beziehen sich auf den gefilterten Bereich
+- `src/lib/geraete/types.ts`: `standortId` in `GeraeteQuery`, `StandortOption`, `standortOptions` in `GeraeteResult`
+- `src/components/geraete-filter-bar.tsx`: zusätzliches shadcn-`Select` „Alle Standorte“/Standort (nur wenn Optionen übergeben werden), Adress-Parameter `standort`, Filterwechsel setzt die Seite zurück
+- `src/app/(protected)/uebersicht/page.tsx`: Filter und Spalte „Standort“ (vor „Lagerort“) nur bei mehr als einem Standort; Export-Knopf gibt `standort` weiter; Leermeldung berücksichtigt den Filter
+- `src/app/api/uebersicht/export/route.ts`: liest `standort` und gibt ihn an den Export weiter
+- **Tests:** `queries.test.ts` +6 (Optionen alphabetisch ohne fremde Firma, Einschränkung bei vollständigen Optionen, manipulierte Adresse/fremde Firma → leer, UND-Verknüpfung, Export, „(ohne Namen)“); bestehender Leer-Test um `standortOptions` ergänzt; Export-Routen-Test für die Weitergabe. Gegenprobe: ohne die Einschränkung schlagen 4 Filter-Tests fehl
+- `npm test` 251/251, Lint, `tsc --noEmit` und Build grün
+- **Nicht lokal im Browser geprüft** (nur mit echtem Login erreichbar) — Live-Prüfung beim Deploy; Testkontakt hat bereits zwei Standorte bei Cloudcab GmbH
 
 ## Implementation Notes (Backend)
 

@@ -200,7 +200,7 @@ describe("getGeraeteList", () => {
 
     const result = await getGeraeteList(F_UNKNOWN, {});
 
-    expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 25, statusOptions: [] });
+    expect(result).toEqual({ items: [], total: 0, page: 1, pageSize: 25, statusOptions: [], standortOptions: [] });
   });
 
   it("deduplicates status options case-insensitively across the whole Firma", async () => {
@@ -668,3 +668,83 @@ describe("getAktuellePruefBemerkungen", () => {
     expect(liste.items.find((g) => g.id === "g2")?.pruefBemerkung).toBeNull();
   });
 });
+
+// PROJ-3 Nachtrag 2: Standort-Filter und Auswahl.
+describe("Standort-Filter (PROJ-3 Nachtrag 2)", () => {
+  const STANDORT_A2 = "st-a2";
+  const BEIDE = { firmaId: "f1", standortIds: [STANDORT_A, STANDORT_A2] };
+
+  function seed() {
+    seedZweiFirmen();
+    tableData.dv_standorte = [
+      ...tableData.dv_standorte,
+      { id: STANDORT_A2, name: "Ablage Bern", firma_id: "f1" },
+    ];
+    const vorlage = tableData.dv_geraete.find((g) => g.id === "g1")!;
+    tableData.dv_geraete = [
+      ...tableData.dv_geraete,
+      { ...vorlage, id: "g-a2", seriennummer: "BE-0001", standort_id: STANDORT_A2 },
+    ];
+  }
+
+  it("lists all released Standorte of the Firma alphabetically as filter options", async () => {
+    seed();
+
+    const result = await getGeraeteList(BEIDE, {});
+
+    expect(result.standortOptions).toEqual([
+      { id: STANDORT_A2, name: "Ablage Bern" },
+      { id: STANDORT_A, name: "Hauptlager Zürich" },
+    ]);
+    // Standort B of firma f2 is in the scope list but never offered.
+    expect(result.standortOptions.some((o) => o.id === STANDORT_B)).toBe(false);
+  });
+
+  it("restricts the list to the chosen Standort, keeping the options complete", async () => {
+    seed();
+
+    const result = await getGeraeteList(BEIDE, { standortId: STANDORT_A2 });
+
+    expect(result.items.map((g) => g.id)).toEqual(["g-a2"]);
+    expect(result.standortOptions).toHaveLength(2);
+  });
+
+  it("shows nothing for a Standort the customer has no Zugang to (manipulated URL)", async () => {
+    seed();
+
+    const fremd = await getGeraeteList({ firmaId: "f1", standortIds: [STANDORT_A] }, { standortId: STANDORT_A2 });
+    const andereFirma = await getGeraeteList(BEIDE, { standortId: STANDORT_B });
+
+    expect(fremd.items).toEqual([]);
+    expect(andereFirma.items).toEqual([]);
+    expect(andereFirma.standortOptions).toHaveLength(2);
+  });
+
+  it("combines the Standort filter with the other filters (AND)", async () => {
+    seed();
+
+    const result = await getGeraeteList(BEIDE, { standortId: STANDORT_A, suche: "BE-0001" });
+
+    expect(result.items).toEqual([]);
+  });
+
+  it("applies the Standort filter to the export rows as well", async () => {
+    seed();
+
+    const items = await getGeraeteExportRows(BEIDE, { standortId: STANDORT_A2 });
+    const fremd = await getGeraeteExportRows({ firmaId: "f1", standortIds: [STANDORT_A] }, { standortId: STANDORT_A2 });
+
+    expect(items.map((g) => g.id)).toEqual(["g-a2"]);
+    expect(fremd).toEqual([]);
+  });
+
+  it("names a Standort without a name '(ohne Namen)' in the options", async () => {
+    seed();
+    tableData.dv_standorte = tableData.dv_standorte.map((s) => (s.id === STANDORT_A2 ? { ...s, name: null } : s));
+
+    const result = await getGeraeteList(BEIDE, {});
+
+    expect(result.standortOptions.find((o) => o.id === STANDORT_A2)?.name).toBe("(ohne Namen)");
+  });
+});
+
