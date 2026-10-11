@@ -1,6 +1,6 @@
 # PROJ-3: Geräte-Übersicht
 
-## Status: Approved
+## Status: Deployed
 **Created:** 2026-09-17
 **Last Updated:** 2026-10-09 (Refinements: Spalte „Bemerkung Prüfung“; Standort-Filter und -Spalte)
 
@@ -447,3 +447,9 @@ Seit der ursprünglichen Freigabe (oben) gab es mehrere Nutzerwunsch-Änderungen
 - **Migration:** keine
 - **Verifiziert:** `npm test` 228/228, `npm run test:e2e` 38/38, Lint, `tsc --noEmit`, Build grün; Smoke-Test `/login` → 200, `/uebersicht` ohne Sitzung → 307. **Live durch den Nutzer:** neue Spalte inkl. Kürzung und Tooltip, „Bemerkungen Gerät“ in Zusatzspalte und Detailseite, CSV-Export mit ungekürzter Spalte nach „Letzte Prüfung“
 - **Tag:** `v1.12.0-PROJ-3`
+
+**Nachtrag 2 2026-10-09 — Standort-Filter und Spalte „Standort“:**
+- **Deployed:** 2026-10-09 (automatisch via Vercel bei Push auf `main`, letzter Code-Commit `9b08a90` inkl. QA-BUG-1-Fix)
+- **Migration:** keine
+- **Verifiziert:** `npm test` 253/253, `npm run test:e2e` 38/38, Lint, `tsc --noEmit`, Build grün; Smoke-Test `/login` → 200, `/uebersicht` ohne Sitzung → 307. **Live durch den Nutzer (2026-10-11)** mit dem Testkontakt (Cloudcab GmbH, 2 Standorte): Filter und Spalte sichtbar, Filter pro Standort, CSV-Export folgt dem Filter, Status-Feld bleibt beim Standort-Wechsel gefüllt
+- **Tag:** `v1.14.0-PROJ-3`
