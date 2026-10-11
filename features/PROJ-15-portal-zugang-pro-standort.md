@@ -316,6 +316,6 @@ Umgesetzt wie im Tech Design. Kein Frontend-Anteil.
   - Smoke-Test Produktion: `/login` → 200; `/dashboard` und `/api/uebersicht/export` ohne Sitzung → 307 auf `/login`
   - **Live durch den Nutzer** nach Sync der 3 Firmen mit Zugängen über das Admin-Tool: Login der bestehenden Kontakte wie bisher; Teil-Freigabe (ein Standort einer Firma mit 3 Standorten) zeigt nur diesen Standort; Entzug + Sync → „Kein Zugang“
 - **Wirkung:** Harter Umstieg. Zugang und sichtbare Standorte kommen seit diesem Deployment ausschliesslich aus `bmvcc_portalzugang`; das Häkchen `bmvcc_kundenportal` wird vom Portal weder gelesen noch abgefragt
-- **Nachgelagert:** Portal-Spalte `dv_kontakte.ist_portal_freigegeben` kann in einer späteren Migration entfernt werden (wird nicht mehr genutzt)
+- **Nachgelagert:** Portal-Spalte `dv_kontakte.ist_portal_freigegeben` kann in einer späteren Migration entfernt werden (wird nicht mehr genutzt) → **erledigt 2026-10-11:** Migration `0014_kontakte_portal_freigabe_entfernen.sql` (Ausführung durch den Nutzer im Supabase SQL Editor)
 - **Rückmeldung an das Admin-Tool:** am 2026-10-09 vorbereitet (Text siehe Chat); das Admin-Tool kann `bmvcc_kundenportal` ab jetzt als Übergangsfeld behandeln
 - **Tag:** `v1.11.0-PROJ-15`

@@ -14,7 +14,7 @@ export type PortalAccess = {
 // Portalzugang (dv_portalzugaenge, gepflegt im Admin-Tool) to a Standort
 // that belongs to a Firma. The visible Firmen are the Firmen of those
 // Standorte — neither dv_relationen nor the old PROJ-13 checkbox
-// (ist_portal_freigegeben) is consulted anymore. Anything else — unknown
+// (column ist_portal_freigegeben, removed in migration 0014) is consulted anymore. Anything else — unknown
 // email, inactive contact, no (valid) Zugang — means no access, and callers
 // must show the same generic "Kein Zugang" message for all of these (see
 // spec Decision Log: don't reveal which case it was).
