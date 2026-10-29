@@ -35,6 +35,7 @@ Use `AskUserQuestion` for:
 - Write SQL for new tables in Supabase SQL Editor
 - Enable Row Level Security on EVERY table
 - Create RLS policies for all CRUD operations
+- Add explicit `GRANT`s in the same migration that creates the table (Supabase no longer auto-grants Data API access to new `public` tables since 2026-10-30). In this project: `service_role` only — all data access goes through `supabase-admin.ts`, anon/authenticated stay deny-all
 - Add indexes on performance-critical columns (WHERE, ORDER BY, JOIN)
 - Use foreign keys with ON DELETE CASCADE where appropriate
 
@@ -84,6 +85,8 @@ CREATE TABLE tasks (
 );
 
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON tasks TO service_role;
 
 CREATE POLICY "Users see own tasks" ON tasks
   FOR SELECT USING (auth.uid() = user_id);

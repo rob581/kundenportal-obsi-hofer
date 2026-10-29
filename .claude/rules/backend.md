@@ -10,6 +10,7 @@ paths:
 ## Database (Supabase)
 - ALWAYS enable Row Level Security on every table
 - Create RLS policies for SELECT, INSERT, UPDATE, DELETE
+- ALWAYS add explicit table GRANTs in the same migration that creates the table — Supabase no longer auto-grants new `public` tables (since 2026-10-30). Here: `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO service_role;` only
 - Add indexes on columns used in WHERE, ORDER BY, and JOIN clauses
 - Use foreign keys with ON DELETE CASCADE where appropriate
 - Never skip RLS - security first

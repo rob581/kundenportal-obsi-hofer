@@ -5,6 +5,7 @@
 - [ ] Database tables created in Supabase
 - [ ] Row Level Security enabled on ALL new tables
 - [ ] RLS policies created for SELECT, INSERT, UPDATE, DELETE
+- [ ] Explicit GRANT to service_role in the same migration that creates the table
 - [ ] Indexes created on performance-critical columns
 - [ ] Foreign keys set with appropriate ON DELETE behavior
 - [ ] All planned API endpoints implemented in `/src/app/api/`
