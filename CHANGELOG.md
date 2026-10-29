@@ -2,6 +2,10 @@
 
 Alle für Kunden und Betrieb relevanten Änderungen am Kundenportal. Neueste Version zuerst. Versionen entsprechen den Git-Tags.
 
+## [1.14.1] – 2026-10-29 · Betrieb
+### Geändert
+- Die Datenbank-Migrationen vergeben die Zugriffsrechte auf alle Tabellen jetzt ausdrücklich. Grund ist, dass Supabase das ab dem 30.10.2026 für neue Tabellen nicht mehr automatisch macht. Ein Neuaufbau der Datenbank (neues Projekt, Preview-Branch) funktioniert dadurch weiterhin. Für Kunden ändert sich nichts.
+
 ## [1.14.0] – 2026-10-11 · PROJ-3 Geräte-Übersicht
 ### Neu
 - Die Geräte-Übersicht hat eine Spalte „Standort“ und einen Filter, mit dem sich die Liste auf einen Standort einschränken lässt.
